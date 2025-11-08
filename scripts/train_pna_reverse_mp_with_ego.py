@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import time
 import torch
 import torch.nn as nn
 from torch_geometric.loader import NeighborLoader
@@ -16,7 +17,7 @@ BEST_MODEL_PATH = "./checkpoints/pna_reverse_mp_with_ego"
 MODEL_NAME = "pna_reverse_mp_with_ego"
 
 # Train configs
-USE_EGO_IDS = True
+USE_EGO_IDS = False
 BATCH_SIZE = 32
 EGO_DIM = BATCH_SIZE 
 
@@ -172,6 +173,7 @@ def run_pna(seed, tasks, device):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    start_ts = time.perf_counter() 
 
     # Define the sub-tasks
     tasks = ["deg-in","deg-out","fan-in","fan-out","C2","C3","C4","C5","C6","S-G","B-C"]
@@ -192,6 +194,8 @@ def main():
     row = " | ".join(f"{n}: {100*m:.2f}±{100*s:.2f}%" for n, m, s in zip(tasks, mean_f1.tolist(), std_f1.tolist()))
     print("Per-task (mean±std over 5 runs):", row)
 
+    runtime_sec = time.perf_counter() - start_ts
+
     # Append F1 scores to CSV
     append_f1_score_to_csv(
         out_csv="./results/metrics/f1_scores.csv",
@@ -200,7 +204,8 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name="PNA reverse MP with ego IDs",
+        model_name=f"PNA reverse MP with mini batch training & ego IDs={USE_EGO_IDS}",
+        runtime_seconds=runtime_sec,
     )
 
 

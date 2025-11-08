@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import os, csv
-from datetime import datetime
+import os
+import csv
+from datetime import datetime, timedelta
 import pandas as pd
 from pathlib import Path
 
@@ -35,31 +36,66 @@ def compute_label_percentages(
     return pct
 
 
+def _fmt_runtime_hhmmss(seconds: float) -> str:
+    # Robust, clamps negatives to 0
+    seconds = max(0.0, float(seconds))
+    td = timedelta(seconds=round(seconds))
+    # Format as HH:MM:SS (e.g., "01:23:45")
+    total_seconds = int(td.total_seconds())
+    h = total_seconds // 3600
+    m = (total_seconds % 3600) // 60
+    s = total_seconds % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
 def append_f1_score_to_csv(
     out_csv: str,
     tasks: list[str],
-    mean_f1,  
-    std_f1,   
+    mean_f1,
+    std_f1,
     macro_mean_percent: float,
     seeds: list[int],
     model_name: str = "PNA baseline",
+    runtime_seconds: float | None = None,   # <— NEW (optional)
 ):
     """
-    Append a single row with mean/std per task (in %), macro mean (in %), and metadata.
+    Append a single row with mean/std per task (in %), macro mean (in %), runtime, and metadata.
     Creates the CSV (with header) if it doesn't exist.
+    If the CSV exists without a 'runtime' column, this will append that column for new rows.
     """
     # Ensure directory exists (if any)
     dir_ = os.path.dirname(out_csv)
     if dir_:
         os.makedirs(dir_, exist_ok=True)
 
-    # Build header
+    # Build the default header for this run
     mean_cols = [f"{t}_mean_pct" for t in tasks]
     std_cols  = [f"{t}_std_pct"  for t in tasks]
-    header = (
+    default_header = (
         ["timestamp_iso", "model", "n_runs", "seeds", "macro_mean_pct"]
-        + mean_cols + std_cols
+        + mean_cols + std_cols + ["runtime"]  # <— include runtime by default
     )
+
+    # See if file already exists and if it has a header; keep compatibility
+    file_exists = os.path.exists(out_csv)
+    if file_exists:
+        existing_header = None
+        try:
+            with open(out_csv, "r", newline="") as f_in:
+                r = csv.reader(f_in)
+                existing_header = next(r, None)
+        except Exception:
+            existing_header = None
+
+        if existing_header:
+            # Ensure 'runtime' is present at least at the end
+            header = list(existing_header)
+            if "runtime" not in header:
+                header = header + ["runtime"]
+        else:
+            header = default_header
+    else:
+        header = default_header
 
     # Prepare row values
     mean_pct = (mean_f1 * 100.0).tolist()
@@ -75,12 +111,16 @@ def append_f1_score_to_csv(
         **{c: round(v, 2) for c, v in zip(std_cols,  std_pct)},
     }
 
+    # Add runtime field (string "HH:MM:SS"); if missing, leave empty
+    row["runtime"] = _fmt_runtime_hhmmss(runtime_seconds) if runtime_seconds is not None else ""
+
     # Write (create header if file doesn't exist)
-    file_exists = os.path.exists(out_csv)
     with open(out_csv, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=header)
+        w = csv.DictWriter(f, fieldnames=header, extrasaction="ignore")
         if not file_exists:
             w.writeheader()
+        # If the existing file lacked 'runtime', DictWriter will write an extra column at the end
+        # (older rows won't have it, which is OK for CSV readers).
         w.writerow(row)
 
 
