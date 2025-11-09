@@ -56,7 +56,7 @@ def append_f1_score_to_csv(
     macro_mean_percent: float,
     seeds: list[int],
     model_name: str = "PNA baseline",
-    runtime_seconds: float | None = None,   # <— NEW (optional)
+    runtime_seconds: float | None = None,   
 ):
     """
     Append a single row with mean/std per task (in %), macro mean (in %), runtime, and metadata.

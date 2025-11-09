@@ -26,7 +26,7 @@ NUM_EPOCHS = 100
 def check_and_strip_self_loops(data, name):
     ei = data.edge_index
     has_loops = bool((ei[0] == ei[1]).any())
-    print(f"[{name}] self-loops? {has_loops}")
+    #print(f"[{name}] self-loops? {has_loops}")
     if has_loops:
         ei_clean, ea_clean = remove_self_loops(ei, getattr(data, "edge_attr", None))
         data.edge_index = ei_clean
