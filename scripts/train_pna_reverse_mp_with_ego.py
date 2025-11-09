@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import time
+from datetime import datetime
 import torch
 import torch.nn as nn
 from torch_geometric.loader import NeighborLoader
@@ -73,8 +74,11 @@ def build_hetero_neighbor_loader(hetero_data, batch_size, num_layers, fanout, de
     )
 
 
-def run_pna(seed, tasks, device):
+def run_pna(seed, tasks, device, run_id):
     set_seed(seed)
+
+    model_dir = os.path.join(BEST_MODEL_PATH, f"run_{run_id}_seed{seed}")
+    os.makedirs(model_dir, exist_ok=True)
 
     train_data, val_data, test_data = load_datasets()
 
@@ -150,8 +154,10 @@ def run_pna(seed, tasks, device):
     )
 
     # Training loop
+    best_ckpt_path = os.path.join(model_dir, "best_model.pt")
+
     best_val = float("inf")
-    for epoch in range(1, NUM_EPOCHS + 1):  # a few more epochs helps stabilize F1
+    for epoch in range(1, NUM_EPOCHS + 1):
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, _, val_f1 = evaluate_epoch(model, valid_loader, criterion, device)
 
@@ -161,19 +167,21 @@ def run_pna(seed, tasks, device):
 
         if val_loss < best_val:
             best_val = val_loss
-            torch.save(model.state_dict(), os.path.join(BEST_MODEL_PATH, f"best_pna_reverse_mp_seed{seed}.pt"))
+            torch.save(model.state_dict(), best_ckpt_path)
 
         # Print training and validation results after each epoch
         print(f"[seed {seed}] Epoch {epoch:03d} | train {train_loss:.4f} | val {val_loss:.4f} | val macro-minF1 {100*val_macro:.2f}%")
 
-    # Save the best model and evaluate on test dataset
-    model.load_state_dict(torch.load(os.path.join(BEST_MODEL_PATH, f"best_pna_reverse_mp_seed{seed}.pt"), map_location=device))
+    # load the best model from this run
+    model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
     test_loss, _, test_f1 = evaluate_epoch(model, test_loader, criterion, device)
-    return test_loss, test_f1  
+    return test_loss, test_f1
 
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     start_ts = time.perf_counter() 
 
     # Define the sub-tasks
@@ -182,7 +190,7 @@ def main():
     seeds = [0,1,2,3,4]
     test_f1_scores = []
     for s in seeds:
-        _, test_f1 = run_pna(s, tasks, device)
+        _, test_f1 = run_pna(s, tasks, device, run_id=run_id)
         test_f1_scores.append(test_f1.cpu())
 
     all_f1 = torch.stack(test_f1_scores, dim=0)        
