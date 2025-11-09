@@ -74,6 +74,35 @@ def build_hetero_neighbor_loader(hetero_data, batch_size, num_layers, fanout, de
     )
 
 
+def build_full_eval_loader(hetero_data, batch_size, num_layers, device=None):
+    """
+    Covers ALL nodes as seeds and expands with ALL neighbors up to `num_layers`.
+    This yields exact full-graph metrics without holding the whole graph at once.
+    """
+    fanout_all = [-1] * num_layers  # -1 => take all neighbors at that hop
+    num_neighbors = {
+        ('n','fwd','n'): fanout_all,
+        ('n','rev','n'): fanout_all,
+    }
+
+    use_cuda = (device is not None and device.type == "cuda")
+    num_workers = max(1, os.cpu_count() // 2)
+
+    return NeighborLoader(
+        hetero_data,
+        num_neighbors=num_neighbors,
+        input_nodes=('n', torch.arange(hetero_data['n'].num_nodes)),
+        batch_size=batch_size,
+        shuffle=False,                 # deterministic, cover each node once
+        drop_last=False,
+        pin_memory=use_cuda,
+        num_workers=num_workers,
+        persistent_workers=True,
+        prefetch_factor=2,
+        filter_per_worker=True,
+    )
+
+
 def run_pna(seed, tasks, device, run_id):
     set_seed(seed)
 
@@ -116,8 +145,10 @@ def run_pna(seed, tasks, device, run_id):
 
     if USE_EGO_IDS:
         ego_dim = EGO_DIM
+        print("Training with Ego IDs...")
     else:
         ego_dim = 0
+        print("Training without Ego IDs...")
     
     model = PNANetReverseMP(
         in_dim=in_dim,
@@ -136,8 +167,12 @@ def run_pna(seed, tasks, device, run_id):
     train_loader = build_hetero_neighbor_loader(train_h, BATCH_SIZE, num_layers, fanout=[10, 4], device=device) # 1st hop 10, 2nd hop 4
 
     # For validation and test, again use hetero neighbor loader for consistency
-    valid_loader = build_hetero_neighbor_loader(val_h,   BATCH_SIZE, num_layers, fanout=[10, 4], device=device)
-    test_loader  = build_hetero_neighbor_loader(test_h,  BATCH_SIZE, num_layers, fanout=[10, 4], device=device)
+    # valid_loader = build_hetero_neighbor_loader(val_h,   BATCH_SIZE, num_layers, fanout=[10, 4], device=device)
+    # test_loader  = build_hetero_neighbor_loader(test_h,  BATCH_SIZE, num_layers, fanout=[10, 4], device=device)
+
+    # For validation and test, use the full graph (no neighbor sampling)
+    valid_loader = build_full_eval_loader(val_h,  BATCH_SIZE, num_layers, device=device)
+    test_loader  = build_full_eval_loader(test_h, BATCH_SIZE, num_layers, device=device)
 
     # Define optimizer and loss functions
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4) # Define optimizer as Adam
