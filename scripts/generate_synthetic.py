@@ -18,6 +18,26 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
 # Here define the global variables
 BASE_SEED = 42 
 
+def check_port_columns(data, name="data"):
+    assert data.edge_attr is not None, f"{name}: edge_attr is None"
+    E, F = data.edge_attr.shape
+    print(f"[{name}] edges={E}  edge_attr_dim={F}")
+
+    # by construction in add_ports(): the last 2 columns are [in_port, out_port]
+    in_col, out_col = F - 2, F - 1
+    in_ports  = data.edge_attr[:, in_col].long()
+    out_ports = data.edge_attr[:, out_col].long()
+
+    print(f"[{name}] in_port  min={int(in_ports.min())}  max={int(in_ports.max())}")
+    print(f"[{name}] out_port min={int(out_ports.min())} max={int(out_ports.max())}")
+
+    # check first 5 edges for sanity
+    ei = data.edge_index
+    for i in range(min(5, ei.size(1))):
+        u, v = int(ei[0, i]), int(ei[1, i])
+        print(f"  e#{i}: {u}->{v} | in_port={int(in_ports[i])} out_port={int(out_ports[i])}")
+
+
 def define_subtasks_and_thresholds():
     """
     Define subtasks and thresholds based on the reported numbers in Table 3 of the original paper.
@@ -114,6 +134,11 @@ def main():
 
     set_seed(split_seeds["test"])
     te = make_sim().generate_pytorch_graph().add_ports()
+
+    # Check that generated graphs have expected structure
+    check_port_columns(tr, "train")
+    check_port_columns(va, "val")
+    check_port_columns(te, "test")
 
     functions, thresholds, names = define_subtasks_and_thresholds()
 
