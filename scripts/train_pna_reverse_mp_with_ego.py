@@ -21,7 +21,13 @@ MODEL_NAME = "pna_reverse_mp_with_ego"
 USE_EGO_IDS = True
 BATCH_SIZE = 32
 EGO_DIM = BATCH_SIZE 
+PORT_EMB_DIM = 8 # TODO: it is a hyperparameter, can be tuned (try 16 as well)
 NUM_EPOCHS = 100
+
+def max_port_cols(d):
+        in_col, out_col = d.edge_attr.size(-1) - 2, d.edge_attr.size(-1) - 1
+        return int(d.edge_attr[:, in_col].max().item()), int(d.edge_attr[:, out_col].max().item())
+
 
 def check_and_strip_self_loops(data, name):
     ei = data.edge_index
@@ -121,6 +127,14 @@ def run_pna(seed, tasks, device, run_id):
     val_data = ensure_node_features(val_data)
     test_data = ensure_node_features(test_data)
 
+    # Find maximum port in and out degrees
+    tr_in_max, tr_out_max = max_port_cols(train_data)
+    va_in_max, va_out_max = max_port_cols(val_data)
+    te_in_max, te_out_max = max_port_cols(test_data)
+
+    in_port_vocab_size  = max(tr_in_max,  va_in_max,  te_in_max)  + 1
+    out_port_vocab_size = max(tr_out_max, va_out_max, te_out_max) + 1
+
     # Convert the data into HeteroData format
     # using forward and backward edge relations
     train_h = make_bidirected_hetero(train_data)
@@ -160,6 +174,9 @@ def run_pna(seed, tasks, device, run_id):
         dropout=0.1,
         ego_dim=ego_dim, # pass ego dimension
         combine="sum",   # other aggregation options: 'mean' or 'max'
+        in_port_vocab_size=in_port_vocab_size,
+        out_port_vocab_size=out_port_vocab_size,
+        port_emb_dim=PORT_EMB_DIM,
     ).to(device)
 
     # Load the hetero datasets

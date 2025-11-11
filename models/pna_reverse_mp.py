@@ -32,12 +32,29 @@ class PNANetReverseMP(nn.Module):
         post_layers: int = 1,
         divide_input: bool = False,
         combine: str = "sum",   # how to combine relations in HeteroConv - possible values: 'sum', 'mean', or 'max'
+        in_port_vocab_size=0,
+        out_port_vocab_size=0, 
+        port_emb_dim=0,
     ):
         super().__init__()
         if aggregators is None:
             aggregators = ["mean", "min", "max", "std"]
         if scalers is None:
             scalers = ["amplification", "attenuation", "identity"]
+
+        self.in_port_vocab_size  = int(in_port_vocab_size)
+        self.out_port_vocab_size = int(out_port_vocab_size)
+        self.port_emb_dim        = int(port_emb_dim)
+
+        self.in_port_emb  = None
+        self.out_port_emb = None
+        edge_dim = 0
+        if self.in_port_vocab_size > 0 and self.port_emb_dim > 0:
+            self.in_port_emb = nn.Embedding(self.in_port_vocab_size,  self.port_emb_dim)
+            edge_dim += self.port_emb_dim
+        if self.out_port_vocab_size > 0 and self.port_emb_dim > 0:
+            self.out_port_emb = nn.Embedding(self.out_port_vocab_size, self.port_emb_dim)
+            edge_dim += self.port_emb_dim
 
         self.ego_dim = int(ego_dim)
         self.input = nn.Linear(in_dim + self.ego_dim, hidden_dim)
@@ -59,6 +76,7 @@ class PNANetReverseMP(nn.Module):
                     pre_layers=pre_layers,
                     post_layers=post_layers,
                     divide_input=divide_input,
+                    edge_dim=edge_dim if edge_dim > 0 else None,
                 ),
                 # Define PNA with in-degree histogram of the reversed graph.
                 ('n','rev','n'): PNAConv(
@@ -71,6 +89,7 @@ class PNANetReverseMP(nn.Module):
                     pre_layers=pre_layers,
                     post_layers=post_layers,
                     divide_input=divide_input,
+                    edge_dim=edge_dim if edge_dim > 0 else None,
                 ),
             }
             self.convs.append(HeteroConv(conv_dict, aggr=combine))
@@ -88,16 +107,40 @@ class PNANetReverseMP(nn.Module):
         if isinstance(x_dict, torch.Tensor):
             x_dict = {'n': x_dict}
         return x_dict, edge_index_dict
+    
+    def _edge_ports_to_attr(self, edge_attr_dict):
+        """
+        Expect edge_attr_dict[('n','fwd','n')] and edge_attr_dict[('n','rev','n')]
+        each of shape [E_rel, 2] with columns [in_port, out_port] as prepared in make_bidirected_hetero().
+        Returns dict of float tensors [E_rel, edge_dim] for PNA.
+        """
+        if self.in_port_emb is None and self.out_port_emb is None:
+            return None
 
-    def forward(self, x_dict, edge_index_dict):
+        out = {}
+        for rel, ea in edge_attr_dict.items():
+            # ea: [E, 2] longs: [in_port, out_port]
+            assert ea.dim() == 2 and ea.size(-1) == 2, "Expect [in_port, out_port]"
+            in_ids  = ea[:, 0].long()
+            out_ids = ea[:, 1].long()
+            parts = []
+            if self.in_port_emb is not None:
+                parts.append(self.in_port_emb(in_ids))
+            if self.out_port_emb is not None:
+                parts.append(self.out_port_emb(out_ids))
+            out[rel] = torch.cat(parts, dim=-1).float()  # [E, edge_dim]
+        return out
+
+    def forward(self, x_dict, edge_index_dict, *, edge_attr_dict=None):
         x_dict, edge_index_dict = self._ensure_dicts(x_dict, edge_index_dict)
-
         x = x_dict['n']
         x = F.relu(self.input(x))
 
+        # Build edge attrs for PNA from (in_port, out_port)
+        pna_edge_attrs = self._edge_ports_to_attr(edge_attr_dict) if edge_attr_dict is not None else None
+
         for conv, bn in zip(self.convs, self.bns):
-            # HeteroConv expects dicts
-            out_dict = conv({'n': x}, edge_index_dict)
+            out_dict = conv({'n': x}, edge_index_dict, edge_attr=pna_edge_attrs)
             x = out_dict['n']
             x = bn(x)
             x = F.relu(x)

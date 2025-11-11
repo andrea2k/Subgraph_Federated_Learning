@@ -173,6 +173,27 @@ def train_epoch(model, loader, optimizer, criterion, device):
             x_in, y_true, batch, is_hetero, model
         )
 
+        # Assemble per-relation edge_attr dict [in_port, out_port]
+        edge_attr_dict = None
+        if is_hetero:
+            edge_attr_dict = {}
+            for rel in [('n','fwd','n'), ('n','rev','n')]:
+                if 'edge_attr' in batch[rel]:
+                    # expected shape [E_rel, 2] with dtype long
+                    ea = batch[rel].edge_attr
+                    if ea.dtype != torch.long:
+                        ea = ea.long()
+                    edge_attr_dict[rel] = ea
+
+        # Print port information
+        if not getattr(model, "_port_dbg_printed", False):
+            if edge_attr_dict:
+                f_ea, r_ea = edge_attr_dict[('n','fwd','n')], edge_attr_dict[('n','rev','n')]
+                print(f"[PORT] fwd edge_attr: {tuple(f_ea.shape)} (dtype={f_ea.dtype}) | rev edge_attr: {tuple(r_ea.shape)}")
+            else:
+                print("[PORT] edge_attr_dict missing (did make_bidirected_hetero set edge_attr?)")
+            model._port_dbg_printed = True
+
         # Print training mode (full-batch or mini-batch)
         if not getattr(model, "_mode_printed", False):
             mode = "mini-batch (seed-only)" if B is not None else "full-batch"
@@ -188,7 +209,7 @@ def train_epoch(model, loader, optimizer, criterion, device):
             model._ego_dbg_printed = True
 
         optimizer.zero_grad()
-        out = model(x_in_aug, edge_in)  # works for both paths
+        out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
         out_used = out[:B] if B is not None else out
 
         loss = criterion(out_used, y_used.float())
@@ -225,7 +246,19 @@ def evaluate_epoch(model, loader, criterion, device):
             x_in, y_true, batch, is_hetero, model
         )
 
-        out = model(x_in_aug, edge_in)
+        # Assemble per-relation edge_attr dict [in_port, out_port]
+        edge_attr_dict = None
+        if is_hetero:
+            edge_attr_dict = {}
+            for rel in [('n','fwd','n'), ('n','rev','n')]:
+                if 'edge_attr' in batch[rel]:
+                    # expected shape [E_rel, 2] with dtype long
+                    ea = batch[rel].edge_attr
+                    if ea.dtype != torch.long:
+                        ea = ea.long()
+                    edge_attr_dict[rel] = ea
+
+        out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
         out_used = out[:B] if B is not None else out
 
         loss = criterion(out_used, y_used.float())
