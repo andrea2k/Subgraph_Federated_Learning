@@ -107,13 +107,13 @@ def main():
 
     logging.info("Generating train/val/test graphs (independent random circulant graphs).")
     set_seed(split_seeds["train"])
-    tr = make_sim().generate_pytorch_graph()
+    tr = make_sim().generate_pytorch_graph().add_ports()
 
     set_seed(split_seeds["val"])
-    va = make_sim().generate_pytorch_graph()
+    va = make_sim().generate_pytorch_graph().add_ports()
 
     set_seed(split_seeds["test"])
-    te = make_sim().generate_pytorch_graph()
+    te = make_sim().generate_pytorch_graph().add_ports()
 
     functions, thresholds, names = define_subtasks_and_thresholds()
 
