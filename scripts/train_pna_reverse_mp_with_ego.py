@@ -422,7 +422,7 @@ def main():
 
     mode_str = "mini-batch" if USE_MINI_BATCH else "full-batch"
     print(f"\nPNA reverse message passing with {mode_str} training, "
-        f"port numbers, & ego IDs={USE_EGO_IDS} — macro minority F1 over 5 runs: {macro_mean:.2f}%")
+        f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS} — macro minority F1 over 5 runs: {macro_mean:.2f}%")
     
     row = " | ".join(
         f"{n}: {100*m:.2f}±{100*s:.2f}%"

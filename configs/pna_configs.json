@@ -26,15 +26,11 @@
   "pna_baseline": {
     "model_name": "pna_baseline",
     "best_model_path": "./checkpoints/pna_baseline",
-
     "num_epochs": 100,
-    "batch_size": null,
-    "use_ego_ids": false,
-    "ego_dim": 0,
 
     "default_hparams": {
       "hidden_dim": 64,
-      "num_layers": 6,
+      "num_layers": 2,
       "dropout": 0.1,
       "lr": 0.001,
       "weight_decay": 0.0001,
