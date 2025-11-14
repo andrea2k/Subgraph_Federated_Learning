@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import torch
 import torch.nn as nn
 from torch_geometric.utils import degree
@@ -9,11 +10,36 @@ from utils.seed import set_seed
 from utils.train_utils import load_datasets, ensure_node_features, train_epoch, evaluate_epoch
 from models.pna_baseline import PNANet
 
-BEST_MODEL_PATH = "./checkpoints/pna_baseline"
-MODEL_NAME = "pna_baseline"
+CONFIG_PATH = "./configs/pna_configs.json"
+
+with open(CONFIG_PATH, "r") as f:
+    ALL_CONFIG = json.load(f)
+
+CONFIG = ALL_CONFIG["pna_baseline"]
+
+MODEL_NAME = CONFIG["model_name"]
+BEST_MODEL_PATH = CONFIG["best_model_path"]
+
+NUM_EPOCHS = CONFIG["num_epochs"]
+DEFAULT_HPARAMS = CONFIG["default_hparams"]
 
 def run_pna(seed, tasks, device):
     set_seed(seed)
+
+    # Default hyperparameters
+    cfg = {
+        "num_epochs": NUM_EPOCHS,
+        **DEFAULT_HPARAMS,
+    }
+
+    print(cfg)
+
+    num_epochs = cfg["num_epochs"]
+    num_layers = cfg["num_layers"]
+    hidden_dim = cfg["hidden_dim"]
+    dropout = cfg["dropout"]
+    lr = cfg["lr"]
+    weight_decay = cfg["weight_decay"]
 
     train_data, val_data, test_data = load_datasets()
 
@@ -30,11 +56,11 @@ def run_pna(seed, tasks, device):
     out_dim = train_data.y.size(-1)
     model = PNANet(
         in_dim=in_dim, 
-        hidden_dim=64, 
+        hidden_dim=hidden_dim, 
         out_dim=out_dim, 
         deg=deg_hist, 
-        num_layers=6, 
-        dropout=0.1
+        num_layers=num_layers, 
+        dropout=dropout
     ).to(device)
 
     # Load the datasets
@@ -44,7 +70,7 @@ def run_pna(seed, tasks, device):
     test_loader  = [test_data]
 
     # Define optimizer and loss functions
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4) # Define optimizer as Adam
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay) # Define optimizer as Adam
     criterion = nn.BCEWithLogitsLoss() # Define loss as binary cross-entropy (preferred for multi-label classification task we have here)
 
     os.makedirs(BEST_MODEL_PATH, exist_ok=True)
@@ -59,7 +85,7 @@ def run_pna(seed, tasks, device):
 
     # Training loop
     best_val = float("inf")
-    for epoch in range(1, 101):  # a few more epochs helps stabilize F1
+    for epoch in range(1, num_epochs):  # a few more epochs helps stabilize F1
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, _, val_f1 = evaluate_epoch(model, valid_loader, criterion, device)
 
