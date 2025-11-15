@@ -26,6 +26,8 @@
   "pna_baseline": {
     "model_name": "pna_baseline",
     "best_model_path": "./checkpoints/pna_baseline",
+
+    "use_mini_batch": false,
     "num_epochs": 100,
 
     "default_hparams": {
