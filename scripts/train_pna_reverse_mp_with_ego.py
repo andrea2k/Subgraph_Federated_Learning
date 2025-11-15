@@ -439,7 +439,7 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name=f"PNA reverse MP with {mode_str} training, port numbers, & ego IDs={USE_EGO_IDS}",
+        model_name=f"PNA reverse MP with {mode_str} training, port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}",
         runtime_seconds=runtime_sec,
     )
 
