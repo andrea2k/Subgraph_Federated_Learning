@@ -1,4 +1,4 @@
-# Federated_Graph_Learning
+# Subgraph_Federated_Learning
 
 A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
 
@@ -134,8 +134,4 @@ Additional hyperparameters apply to the extended model:
 - ego-embedding dimension: **32**
 - port-embedding dimension: **8**
 
-All configurations are available under:
-
-```
-configs/pna_configs.json
-```
+All configurations are available in `.configs/pna_configs.json` file.
