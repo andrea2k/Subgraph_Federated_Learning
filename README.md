@@ -1,4 +1,4 @@
-# Federated_Graph_Learning
+# Subgraph_Federated_Learning
 
 A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
 
