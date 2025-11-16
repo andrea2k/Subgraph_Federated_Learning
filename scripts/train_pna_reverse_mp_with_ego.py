@@ -172,7 +172,6 @@ def run_pna(seed, tasks, device, run_id, **hparams):
 
     print("Training with hyperparameters:")
     print(cfg)
-    print(f"[TRAIN MODE] use_mini_batch={use_mini_batch}")
 
     model_dir = os.path.join(BEST_MODEL_PATH, f"run_{run_id}_seed{seed}")
     os.makedirs(model_dir, exist_ok=True)
@@ -228,18 +227,18 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     # Set ego IDs
     if use_ego_ids:
         ego_dim = train_batch_size if cfg.get("ego_dim") is None else cfg["ego_dim"]
-        print(f"Training with Ego IDs... ego_dim={ego_dim}")
+        #print(f"Training with Ego IDs... ego_dim={ego_dim}")
     else:
         ego_dim = 0
-        print("Training without Ego IDs...")
+        #print("Training without Ego IDs...")
 
     # Define the model
     in_dim = train_h['n'].x.size(-1) if 'x' in train_h['n'] else 1
     out_dim = train_h['n'].y.size(-1)
 
-    print(f"Number of layers using in training: {num_layers}")
-    print(f"Number of hops for NeighborLoader: {num_hops}")
-    print(f"Neighbors per hop: {neighbors_per_hop}")
+    # print(f"Number of layers using in training: {num_layers}")
+    # print(f"Number of hops for NeighborLoader: {num_hops}")
+    # print(f"Neighbors per hop: {neighbors_per_hop}")
 
     model = PNANetReverseMP(
         in_dim=in_dim,
@@ -409,6 +408,7 @@ def main():
     )
 
     seeds = [0, 1, 2, 3, 4]
+    # seeds = [0] # for testing
     test_f1_scores = []
     for s in seeds:
         _, test_f1 = run_pna(s, tasks, device, run_id=run_id, **base_hparams)
