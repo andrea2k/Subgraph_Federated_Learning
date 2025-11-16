@@ -2,5 +2,3 @@ __pycache__/
 .DS_Store
 gcn_utils.py
 simulator.py
-pna_iterative_reverse_mp.py
-train_pna_iterative_reverse_mp.py
