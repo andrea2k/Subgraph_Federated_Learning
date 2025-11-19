@@ -210,18 +210,27 @@ def run_pna(seed, tasks, device, run_id, **hparams):
         num_nodes=train_data.num_nodes,
     )
 
+    # Compute per-task pos_weight if enabled
+    auto_pos_weight = None
+    if isinstance(minority_class_weight, str) and minority_class_weight == "auto":
+        y_train = train_h['n'].y.float()
+        pos_counts = y_train.sum(dim=0)                 # [num_tasks]
+        neg_counts = (1.0 - y_train).sum(dim=0)         # [num_tasks]
+        eps = 1e-8
+        auto_pos_weight = neg_counts / (pos_counts + eps)
+
     # Decide batch sizes depending on mini-batch vs full-batch mode
     if use_mini_batch:
         train_batch_size = batch_size
         val_batch_size   = batch_size
         test_batch_size  = batch_size
-        print(f"[TRAIN MODE] mini-batch | B={train_batch_size}")
+        # print(f"[TRAIN MODE] mini-batch | B={train_batch_size}")
     else:
         train_batch_size = train_h['n'].num_nodes
         val_batch_size   = val_h['n'].num_nodes
         test_batch_size  = test_h['n'].num_nodes
-        print(f"[TRAIN MODE] FULL-BATCH | "
-            f"train B={train_batch_size}, val B={val_batch_size}, test B={test_batch_size}")
+        # print(f"[TRAIN MODE] FULL-BATCH | "
+        #     f"train B={train_batch_size}, val B={val_batch_size}, test B={test_batch_size}")
         
     # Set ego IDs
     if use_ego_ids:
@@ -254,11 +263,11 @@ def run_pna(seed, tasks, device, run_id, **hparams):
         port_emb_dim=(port_emb_dim if use_port_ids else 0),
     ).to(device)
 
-    print(
-        f"[PORT] enabled={use_port_ids} "
-        f"vocab_in={in_port_vocab_size} vocab_out={out_port_vocab_size} "
-        f"emb_dim={(port_emb_dim if use_port_ids else 0)}"
-    )
+    # print(
+    #     f"[PORT] enabled={use_port_ids} "
+    #     f"vocab_in={in_port_vocab_size} vocab_out={out_port_vocab_size} "
+    #     f"emb_dim={(port_emb_dim if use_port_ids else 0)}"
+    # )
 
     if use_mini_batch:
         # Mini-batch training + mini-batch validation/test
@@ -316,12 +325,20 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     )
 
     # Minority class weighting via pos_weight
-    if minority_class_weight is not None:
+    if isinstance(minority_class_weight, str) and minority_class_weight == "auto":
+        # Use per-task pos_weight computed from training labels
+        assert auto_pos_weight is not None, "auto_pos_weight should have been computed above"
+        criterion = nn.BCEWithLogitsLoss(pos_weight=auto_pos_weight.to(device))
+        print("Using automatic per-task minority weighting:", auto_pos_weight.tolist())
+    elif minority_class_weight is not None:
+        # Use a uniform scalar pos_weight across all tasks
         pos_weight = torch.full((out_dim,), float(minority_class_weight), device=device)
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-        print(f"Using minority class weight: {minority_class_weight}")
+        print(f"Using uniform minority class weight: {minority_class_weight}")
     else:
+        # No weighting
         criterion = nn.BCEWithLogitsLoss()
+        print("Using unweighted BCEWithLogitsLoss.")
 
     os.makedirs(BEST_MODEL_PATH, exist_ok=True)
 
@@ -391,7 +408,7 @@ def main():
     base_hparams = dict(
         num_layers=DEFAULT_HPARAMS["num_layers"],
         neighbors_per_hop=DEFAULT_HPARAMS["neighbors_per_hop"],
-        minority_class_weight=None,  
+        minority_class_weight=DEFAULT_HPARAMS["minority_class_weight"],  
         use_ego_ids=USE_EGO_IDS,
         use_mini_batch=USE_MINI_BATCH,
         batch_size=BATCH_SIZE,
