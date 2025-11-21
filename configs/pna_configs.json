@@ -3,6 +3,12 @@
     "model_name": "pna_reverse_mp_with_port_and_ego",
     "best_model_path": "./checkpoints/pna_reverse_mp_with_port_and_ego",
 
+    "minority_class_weight_info": {
+      "null": "no class weighting",
+      "auto": "compute per-task class weights from training labels per sub-task",
+      "number": "use uniform scalar pos_weight for all tasks (e.g. 2.0)"
+    },
+
     "use_ego_ids": true,
     "use_port_ids": true,
     "use_mini_batch": true,
@@ -11,15 +17,9 @@
     "num_epochs": 100,
 
     "default_hparams": {
-      "minority_class_weight_info": {
-        "null": "no class weighting",
-        "auto": "compute per-task class weights from training labels per sub-task",
-        "number": "use uniform scalar pos_weight for all tasks (e.g. 2.0)"
-      },
-
       "ego_dim": null,
-      "num_layers": 3,
-      "neighbors_per_hop": [15, 10, 5],
+      "num_layers": 2,
+      "neighbors_per_hop": [10, 4],
       "hidden_dim": 64,
       "dropout": 0.1,
       "lr": 0.001,

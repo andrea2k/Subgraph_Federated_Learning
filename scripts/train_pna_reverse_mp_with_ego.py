@@ -169,8 +169,7 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     weight_decay = cfg["weight_decay"]
     minority_class_weight = cfg["minority_class_weight"]
 
-    print("Training with hyperparameters:")
-    print(cfg)
+    print(f"Training with hyperparameters:{cfg}")
 
     model_dir = os.path.join(BEST_MODEL_PATH, f"run_{run_id}_seed{seed}")
     os.makedirs(model_dir, exist_ok=True)
@@ -329,7 +328,7 @@ def run_pna(seed, tasks, device, run_id, **hparams):
         # Use per-task pos_weight computed from training labels
         assert auto_pos_weight is not None, "auto_pos_weight should have been computed above"
         criterion = nn.BCEWithLogitsLoss(pos_weight=auto_pos_weight.to(device))
-        print("Using automatic per-task minority weighting:", auto_pos_weight.tolist())
+        print(f"Using automatic per-task minority weighting: {auto_pos_weight.tolist()}")
     elif minority_class_weight is not None:
         # Use a uniform scalar pos_weight across all tasks
         pos_weight = torch.full((out_dim,), float(minority_class_weight), device=device)
