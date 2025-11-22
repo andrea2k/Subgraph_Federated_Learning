@@ -64,7 +64,7 @@ From the repo root:
 
 ```bash
 # Generate graphs and labels
-python3 -m scripts.generate_synthetic
+python3 -m scripts.data.generate_synthetic
 ```
 
 After step (1), you’ll find `train.pt`, `val.pt`, `test.pt`, and `y_sums.csv` under `./data/`. The `label_percentages.csv` will be saved under `./results/metrics/`.
@@ -83,7 +83,7 @@ The baseline model uses the original PNAConv layers from PyTorch Geometric and i
 To train and evaluate the baseline model:
 
 ```bash
-python3 -m scripts.train_pna_baseline
+python3 -m scripts.training.train_pna_baseline
 ```
 
 The baseline model:
@@ -109,7 +109,7 @@ This extended version incorporates several adaptations designed to improve patte
 To train and evaluate this model:
 
 ```bash
-python3 -m scripts.train_pna_reverse_mp_with_ego
+python3 -m scripts.training.train_pna_reverse_mp_with_ego
 ```
 
 This version serves as the foundation for future **federated** extensions.
