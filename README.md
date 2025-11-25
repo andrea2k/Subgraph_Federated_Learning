@@ -47,7 +47,7 @@ Graph instances are **reproducible**. A single `BASE_SEED` deterministically der
 
 ### Default Generation Settings
 
-The default config (see the generator script `scripts/generate_synthetic.py`) follows the paper’s setup:
+The default config (see the generator script `scripts/data/generate_synthetic.py`) follows the paper’s setup:
 
 - Nodes `n = 8192`
 - Average degree `d = 6`
