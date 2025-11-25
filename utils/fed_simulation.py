@@ -7,6 +7,18 @@ import pymetis as metis
 
 from utils.fed_partitioning import get_subgraph_pyg_data
 
+"""
+The implementation of the Label Imbalance Split (LIS) simulation strategy  
+for the Metis-based and Louvain-based data partitioning techniques is adapted 
+from the GitHub repository of the "OpenFGL: A Comprehensive Benchmark for 
+Federated Graph Learning" paper by Li et al., (2024). 
+
+In the original OpenFGL implementation, at the label distribution clustering step, 
+both partitioning techniques assume that each node has a single class label. 
+However, in the global graph generated for this work, each node has 11 binary labels.
+To address this, the original code is modified to account for this multi-label scenario.
+"""
+
 def metis_label_imbalance_split(global_data: Data,
                                 num_clients: int,
                                 metis_num_coms: int):
