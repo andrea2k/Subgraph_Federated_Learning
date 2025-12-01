@@ -21,7 +21,8 @@ To address this, the original code is modified to account for this multi-label s
 
 def metis_label_imbalance_split(global_data: Data,
                                 num_clients: int,
-                                metis_num_coms: int):
+                                metis_num_coms: int,
+                                seed: int | None = None):
     """
     Metis-based Label Imbalance Split for a single big graph
     with multi-task labels y in {0,1}^{N x T}.
@@ -70,7 +71,7 @@ def metis_label_imbalance_split(global_data: Data,
         clustering_data[com_id, :] = dist
 
     # 4) KMeans: communities -> clients
-    kmeans = KMeans(n_clusters=num_clients, n_init="auto")
+    kmeans = KMeans(n_clusters=num_clients, n_init="auto", random_state=seed)
     clustering_labels = kmeans.fit_predict(clustering_data)
 
     client_indices = {cid: [] for cid in range(num_clients)}
@@ -93,7 +94,8 @@ def metis_label_imbalance_split(global_data: Data,
 
 def louvain_label_imbalance_split(global_data: Data,
                                   num_clients: int,
-                                  resolution: float = 1.0):
+                                  resolution: float = 1.0,
+                                  seed: int | None = None):
     """
     Louvain-based Label Imbalance Split for a single big graph
     with multi-task labels y in {0,1}^{N x T}.
@@ -110,7 +112,8 @@ def louvain_label_imbalance_split(global_data: Data,
     adj_csr = to_scipy_sparse_matrix(global_data.edge_index, num_nodes=num_nodes)
     louvain = Louvain(modularity="newman",
                       resolution=resolution,
-                      return_aggregate=True)
+                      return_aggregate=True,
+                      random_state=seed)
     com_assignments = louvain.fit_predict(adj_csr)  # community ID per node
 
     # 2) Build per-community label distributions (vectors of length num_classes)
@@ -139,7 +142,7 @@ def louvain_label_imbalance_split(global_data: Data,
         clustering_data[com_id, :] = dist
 
     # 4) KMeans over communities by label distribution
-    kmeans = KMeans(n_clusters=num_clients, n_init="auto")
+    kmeans = KMeans(n_clusters=num_clients, n_init="auto", random_state=seed)
     clustering_labels = kmeans.fit_predict(clustering_data)  # community -> client
 
     # 5) Aggregate communities into clients
