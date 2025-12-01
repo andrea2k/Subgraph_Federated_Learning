@@ -122,7 +122,7 @@ This extended version incorporates several adaptations designed to improve patte
 To train and evaluate this model:
 
 ```bash
-python3 -m scripts.training.train_pna_reverse_mp_with_ego
+python3 -m scripts.training.train_pna_reverse_mp
 ```
 
 This version serves as the foundation for future **federated** extensions.
