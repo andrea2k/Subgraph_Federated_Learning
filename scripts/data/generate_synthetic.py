@@ -43,17 +43,17 @@ def define_subtasks_and_thresholds():
     Define subtasks and thresholds based on the reported numbers in Table 3 of the original paper.
 
     Order of subtasks below defines the column order of output y:
-      0  deg_in (>3)
-      1  deg_out (>3)
-      2  fan_in (>3)
-      3  fan_out (>3)
+      0  deg_in (>3): number of incoming edges should be >3
+      1  deg_out (>3): number of outgoing edges should be >3
+      2  fan_in (>3): number of distinct incoming nodes should be >3
+      3  fan_out (>3): number of distinct outgoing nodes should be >3
       4  C2  (directed 2-cycle)
       5  C3
       6  C4
       7  C5
       8  C6
-      9  Scatter-Gather 
-      10 Biclique 
+      9  Scatter-Gather: a pattern where information from one side of the graph is broadcast out (“scatter”) and then recombined (“gather”) at another node, or vice versa
+      10 Biclique: a bipartite-like pattern
     """
     functions = [
         deg_in, deg_out, fan_in, fan_out,
@@ -107,7 +107,6 @@ def main():
     num_graphs = 1  # one connected component generator call per data split to prevent data leakeage
     generator = "chordal"  # describes the random-circulant-like generator mentioned in the paper (to my understanding)
     bidirectional = False  # have a directed multigraph (needed for directed cycles)
-    max_time = n    # TODO: defined this parameter arbitrarily (not sure what it means)
 
     # Build simulator once per split to ensure independent graphs, as described in the paper
     def make_sim():
@@ -115,10 +114,9 @@ def main():
             num_nodes=n,
             avg_degree=d,
             num_edges=None,
-            max_time=max_time,
             network_type="type1",
             readout="node",
-            node_feats=False,
+            node_feats=False,   # for simplicity, ignore node features
             bidirectional=bidirectional,
             delta=r,                
             num_graphs=num_graphs,
