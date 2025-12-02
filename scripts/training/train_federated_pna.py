@@ -419,7 +419,7 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name=f"PNA reverse MP {mode_str}, port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}",
+        model_name=f"PNA reverse MP {mode_str}, num_clients={NUM_CLIENTS} ,local_epochs={base_hparams['local_epochs']}, client_fraction={base_hparams['client_fraction']}",
         runtime_seconds=runtime_sec,
     )
 
