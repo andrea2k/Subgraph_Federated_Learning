@@ -7,10 +7,10 @@
   },
 
   "fed_learning_configs": {
-    "partition_strategy": "louvain imbalance split",
+    "partition_strategy": "metis imbalance split",
     "global_epochs": 100,
     "local_epochs": 1,
-    "client_fraction": 0.2,
+    "client_fraction": 0.5,
     "algorithm": "fedavg",
     "base_seed": 0
   }
