@@ -3,7 +3,7 @@ import os
 import logging
 import torch
 
-from simulator import (
+from scripts.data.simulator import (
     GraphSimulator,
     deg_in, deg_out, fan_in, fan_out,
     Cn_check, SG2_check, BP2_check,   
