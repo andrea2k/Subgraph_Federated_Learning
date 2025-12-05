@@ -5,7 +5,7 @@ from torch_geometric.utils import to_scipy_sparse_matrix, to_networkx
 from torch_geometric.data import Data
 import pymetis as metis
 
-from utils.fed_partitioning import get_subgraph_pyg_data
+from utils.fed_partitioning import get_subgraph_pyg_data, zipf_assign_communities_to_clients
 
 """
 The implementation of the Label Imbalance Split (LIS) simulation strategy  
@@ -18,6 +18,109 @@ both partitioning techniques assume that each node has a single class label.
 However, in the global graph generated for this work, each node has 11 binary labels.
 To address this, the original code is modified to account for this multi-label scenario.
 """
+
+def metis_original_split(global_data: Data,
+                         num_clients: int,
+                         metis_num_coms: int,
+                         seed: int | None = None,
+                         alpha: float = 1.2,
+                         return_node_indices: bool = False):
+    """
+    Metis-based original subgraph-FL split (structure-only, no label handling)
+    with Zipf-skewed client sizes.
+    """
+    print("Conducting subgraph-FL Metis (original, Zipf-skewed) simulation...")
+
+    # convert to NetworkX and partition with Metis
+    graph_nx = to_networkx(global_data, to_undirected=True)
+    _, membership = metis.part_graph(metis_num_coms, graph_nx)
+    membership = np.array(membership)  # shape [num_nodes], value = com_id
+
+    # build structural communities
+    communities = {com_id: [] for com_id in range(metis_num_coms)}
+    for node_id, com_id in enumerate(membership):
+        com_id = int(com_id)
+        communities[com_id].append(node_id)
+
+    # zipf-skewed, label-agnostic assignment of communities to clients
+    client_indices = zipf_assign_communities_to_clients(
+        communities=communities,
+        num_clients=num_clients,
+        alpha=alpha,
+        seed=seed,
+    )
+
+    # if the user only wants the node indices, return them without computing local subgraphs
+    if return_node_indices:
+        return [sorted(client_indices[cid]) for cid in range(num_clients)]
+
+    # else, build local subgraphs
+    local_data = []
+    for client_id in range(num_clients):
+        node_list = sorted(client_indices[client_id])
+        local_subgraph = get_subgraph_pyg_data(global_data, node_list)
+        if local_subgraph.edge_index.numel() == 0:
+            # TODO: if no edges, we can add random edges or leave as empty
+            pass
+        local_data.append(local_subgraph)
+
+    return local_data
+
+
+def louvain_original_split(global_data: Data,
+                           num_clients: int,
+                           resolution: float = 1.0,
+                           seed: int | None = None,
+                           alpha: float = 1.2,
+                           return_node_indices: bool = False):
+    """
+    Louvain-based original subgraph-FL split (structure-only, no label handling)
+    with Zipf-skewed client sizes.
+    """
+    print("Conducting subgraph-FL Louvain (original, Zipf-skewed) simulation...")
+
+    num_nodes = global_data.num_nodes
+
+    # louvain communities on the adjacency
+    adj_csr = to_scipy_sparse_matrix(global_data.edge_index, num_nodes=num_nodes)
+    louvain = Louvain(modularity="newman",
+                      resolution=resolution,
+                      return_aggregate=True,
+                      random_state=seed)
+    com_assignments = louvain.fit_predict(adj_csr)  # community ID per node
+
+    # build structural communities (no labels involved)
+    communities = {}
+    for node_id, com_id in enumerate(com_assignments):
+        com_id = int(com_id)
+        if com_id not in communities:
+            communities[com_id] = []
+        communities[com_id].append(node_id)
+
+    # zipf-skewed assignment to clients
+    client_indices = zipf_assign_communities_to_clients(
+        communities=communities,
+        num_clients=num_clients,
+        alpha=alpha,
+        seed=seed,
+    )
+
+    # if the user only wants the node indices, return them without computing local subgraphs
+    if return_node_indices:
+        return [sorted(client_indices[cid]) for cid in range(num_clients)]
+
+    # else, build local subgraphs
+    local_data = []
+    for client_id in range(num_clients):
+        node_list = sorted(client_indices[client_id])
+        local_subgraph = get_subgraph_pyg_data(global_data, node_list)
+        if local_subgraph.edge_index.numel() == 0:
+            # TODO: if no edges, we can add random edges or leave as empty
+            pass
+        local_data.append(local_subgraph)
+
+    return local_data
+
 
 def metis_label_imbalance_split(global_data: Data,
                                 num_clients: int,
@@ -93,7 +196,7 @@ def metis_label_imbalance_split(global_data: Data,
         node_list = sorted(client_indices[client_id])
         local_subgraph = get_subgraph_pyg_data(global_data, node_list)
         if local_subgraph.edge_index.numel() == 0:
-            # optional: add random edges if you want connectivity
+            # TODO: if no edges, we can add random edges or leave as empty
             pass
         local_data.append(local_subgraph)
 
@@ -173,9 +276,8 @@ def louvain_label_imbalance_split(global_data: Data,
         node_list = sorted(client_indices[client_id])
         local_subgraph = get_subgraph_pyg_data(global_data, node_list)
         if local_subgraph.edge_index.numel() == 0:
-            # if no edges, you can optionally add random edges or leave as empty
+            # TODO: if no edges, we can add random edges or leave as empty
             pass
         local_data.append(local_subgraph)
 
     return local_data
-

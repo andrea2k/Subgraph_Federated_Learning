@@ -169,7 +169,10 @@ def main():
     logging.info("Saved train/val/test GraphData objects.")
 
     # Log the seeds used
-    with open(os.path.join(out_dir, "seeds.txt"), "w") as f:
+    seeds_out_dir = "./data/seeds"
+    os.makedirs(labels_out_dir, exist_ok=True)
+
+    with open(os.path.join(seeds_out_dir, "global_data_seeds.txt"), "w") as f:
         for k, v in split_seeds.items():
             f.write(f"{k}:{v}\n")
 

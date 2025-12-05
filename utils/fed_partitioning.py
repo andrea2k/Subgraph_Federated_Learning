@@ -4,6 +4,38 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import subgraph
 
+def zipf_assign_communities_to_clients(communities: dict,
+                                        num_clients: int,
+                                        alpha: float = 1.2,
+                                        seed: int | None = None):
+    """
+    Assigns each community to a client using a Zipf-like skew:
+
+        P(client = i) ∝ 1 / (i + 1)^alpha
+
+    So client 0 is most likely to receive communities, client 1 a bit less,
+    etc. This creates heterogeneous client sizes (big vs small clients).
+    """
+    rng = np.random.default_rng(seed)
+
+    com_ids = list(communities.keys())
+    rng.shuffle(com_ids)  # randomize community ids for extra variability
+
+    # zipf-like probabilities over client ids
+    ranks = np.arange(1, num_clients + 1, dtype=float)  
+    probs = 1.0 / (ranks ** alpha)
+    probs = probs / probs.sum()  
+
+    client_indices = {cid: [] for cid in range(num_clients)}
+
+    for com_id in com_ids:
+        # sample a client according to the Zipf-like distribution
+        cid = int(rng.choice(num_clients, p=probs))
+        client_indices[cid].extend(communities[com_id])
+
+    return client_indices
+
+
 def graphdata_to_pyg(data_g):
     """
     Convert your GraphData object into a torch_geometric.data.Data
