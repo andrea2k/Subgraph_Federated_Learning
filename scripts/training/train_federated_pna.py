@@ -79,6 +79,11 @@ if PARTITION_STRATEGY == "louvain imbalance split":
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_imbalance_splits"
 elif PARTITION_STRATEGY == "metis imbalance split":
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_imbalance_splits"
+elif PARTITION_STRATEGY == "louvain original":              # with zipf-skewed client sizes
+    FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits"
+elif PARTITION_STRATEGY == "metis original":                # with zipf-skewed client sizes
+    FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits"
+
 
 def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     """
