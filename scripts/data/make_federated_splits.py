@@ -16,7 +16,7 @@ CONFIG = ALL_CONFIG["federated_dataset_simulation"]
 
 NUM_CLIENTS = CONFIG["num_clients"]
 LOUVAIN_RESOLUTION = CONFIG["louvain_resolution"]
-METIS_NUM_COMS = CONFIG["metis_num_coms"]  # taken to be greater than num of clients to ensure at least one community per client
+METIS_NUM_COMS = CONFIG["metis_num_coms"] # typically >= NUM_CLIENTS
 BASE_SEED = CONFIG.get("base_seed", 0)
 
 
@@ -55,21 +55,47 @@ def main():
         return_node_indices=True,
     )
 
-    louvain_orig_node_splits = louvain_original_split(
+    # Louvain-based original splits with Zipf-skewed client sizes
+    louvain_orig_node_splits_skewed = louvain_original_split(
         global_data,
         num_clients=NUM_CLIENTS,
         resolution=LOUVAIN_RESOLUTION,
         seed=split_seeds["louvain"],
         alpha=1.5,              # skewness increases as alpha increases
+        client_assignment="zipf",
         return_node_indices=True,
     )
 
-    metis_orig_node_splits = metis_original_split(
+    # Metis-based original splits with Zipf-skewed client sizes
+    metis_orig_node_splits_skewed = metis_original_split(
         global_data,
         num_clients=NUM_CLIENTS,
         metis_num_coms=METIS_NUM_COMS,
         seed=split_seeds["metis"],
         alpha=1.5,
+        client_assignment="zipf",
+        return_node_indices=True,
+    )
+
+    # Louvain-based original splits with equal client sizes
+    louvain_orig_node_splits_equal = louvain_original_split(
+        global_data,
+        num_clients=NUM_CLIENTS,
+        resolution=LOUVAIN_RESOLUTION,
+        seed=split_seeds["louvain"],
+        alpha=1.5,              # skewness increases as alpha increases
+        client_assignment="equal",
+        return_node_indices=True,
+    )
+
+    # Metis-based original splits with equal client sizes
+    metis_orig_node_splits_equal = metis_original_split(
+        global_data,
+        num_clients=NUM_CLIENTS,
+        metis_num_coms=METIS_NUM_COMS,
+        seed=split_seeds["metis"],
+        alpha=1.5,
+        client_assignment="equal",
         return_node_indices=True,
     )
 
@@ -78,8 +104,11 @@ def main():
     louvain_clients = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in louvain_node_splits]
     metis_clients = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in metis_node_splits]
 
-    louvain_orig_clients = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in louvain_orig_node_splits]
-    metis_orig_clients = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in metis_orig_node_splits]
+    louvain_orig_clients_skewed = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in louvain_orig_node_splits_skewed]
+    metis_orig_clients_skewed = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in metis_orig_node_splits_skewed]
+
+    louvain_orig_clients_equal = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in louvain_orig_node_splits_equal]
+    metis_orig_clients_equal = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in metis_orig_node_splits_equal]
 
     # save federated splits with label imbalance
     louvain_dir = "./data/fed_louvain_imbalance_splits"
@@ -98,10 +127,21 @@ def main():
     os.makedirs(louvain_orig_dir, exist_ok=True)
     os.makedirs(metis_orig_dir, exist_ok=True)
 
-    for cid, data in enumerate(louvain_orig_clients):
+    for cid, data in enumerate(louvain_orig_clients_equal):
         torch.save(data, os.path.join(louvain_orig_dir, f"client_{cid}.pt"))
-    for cid, data in enumerate(metis_orig_clients):
+    for cid, data in enumerate(metis_orig_clients_equal):
         torch.save(data, os.path.join(metis_orig_dir, f"client_{cid}.pt"))
+
+    # save original federated splits with Zipf-skewed client sizes
+    louvain_orig_zipf_dir = "./data/fed_louvain_splits_zipf_skewed"
+    metis_orig_zipf_dir = "./data/fed_metis_splits_zipf_skewed"
+    os.makedirs(louvain_orig_zipf_dir, exist_ok=True)
+    os.makedirs(metis_orig_zipf_dir, exist_ok=True)
+
+    for cid, data in enumerate(louvain_orig_clients_skewed):
+        torch.save(data, os.path.join(louvain_orig_zipf_dir, f"client_{cid}.pt"))
+    for cid, data in enumerate(metis_orig_clients_skewed):
+        torch.save(data, os.path.join(metis_orig_zipf_dir, f"client_{cid}.pt"))
 
     # Log the seeds used
     out_dir = "./data/seeds"

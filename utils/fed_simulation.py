@@ -5,7 +5,7 @@ from torch_geometric.utils import to_scipy_sparse_matrix, to_networkx
 from torch_geometric.data import Data
 import pymetis as metis
 
-from utils.fed_partitioning import get_subgraph_pyg_data, zipf_assign_communities_to_clients
+from utils.fed_partitioning import get_subgraph_pyg_data, zipf_assign_communities_to_clients, equal_assign_communities_to_clients
 
 """
 The implementation of the Label Imbalance Split (LIS) simulation strategy  
@@ -24,12 +24,17 @@ def metis_original_split(global_data: Data,
                          metis_num_coms: int,
                          seed: int | None = None,
                          alpha: float = 1.2,
+                         client_assignment: str = "zipf",
                          return_node_indices: bool = False):
     """
     Metis-based original subgraph-FL split (structure-only, no label handling)
     with Zipf-skewed client sizes.
+
+    Supports two client-assignment strategies:
+      - 'zipf'   : Zipf-skewed client sizes (realistic, heavy-tailed)
+      - 'equal'  : Approximately equal-sized clients (controlled setting)
     """
-    print("Conducting subgraph-FL Metis (original, Zipf-skewed) simulation...")
+    print(f"Conducting subgraph-FL Metis (original, {client_assignment}-assigned) simulation...")
 
     # convert to NetworkX and partition with Metis
     graph_nx = to_networkx(global_data, to_undirected=True)
@@ -37,18 +42,28 @@ def metis_original_split(global_data: Data,
     membership = np.array(membership)  # shape [num_nodes], value = com_id
 
     # build structural communities
-    communities = {com_id: [] for com_id in range(metis_num_coms)}
+    communities: dict[int, list[int]] = {com_id: [] for com_id in range(metis_num_coms)}
     for node_id, com_id in enumerate(membership):
         com_id = int(com_id)
         communities[com_id].append(node_id)
 
-    # zipf-skewed, label-agnostic assignment of communities to clients
-    client_indices = zipf_assign_communities_to_clients(
-        communities=communities,
-        num_clients=num_clients,
-        alpha=alpha,
-        seed=seed,
-    )
+    # assign communities to clients according to the chosen strategy
+    if client_assignment == "zipf":
+        client_indices = zipf_assign_communities_to_clients(
+            communities=communities,
+            num_clients=num_clients,
+            alpha=alpha,
+            seed=seed,
+        )
+    elif client_assignment == "equal":
+        # alpha is ignored in the equal-sized case
+        client_indices = equal_assign_communities_to_clients(
+            communities=communities,
+            num_clients=num_clients,
+            seed=seed,
+        )
+    else:
+        raise ValueError(f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'.")
 
     # if the user only wants the node indices, return them without computing local subgraphs
     if return_node_indices:
@@ -72,38 +87,55 @@ def louvain_original_split(global_data: Data,
                            resolution: float = 1.0,
                            seed: int | None = None,
                            alpha: float = 1.2,
+                           client_assignment: str = "zipf",
                            return_node_indices: bool = False):
     """
     Louvain-based original subgraph-FL split (structure-only, no label handling)
     with Zipf-skewed client sizes.
+
+    Supports two client-assignment strategies:
+      - 'zipf'   : Zipf-skewed client sizes (realistic, heavy-tailed)
+      - 'equal'  : Approximately equal-sized clients (controlled setting)
     """
-    print("Conducting subgraph-FL Louvain (original, Zipf-skewed) simulation...")
+    print(f"Conducting subgraph-FL Louvain (original, {client_assignment}-assigned) simulation...")
 
     num_nodes = global_data.num_nodes
 
-    # louvain communities on the adjacency
+    # Louvain communities on the adjacency
     adj_csr = to_scipy_sparse_matrix(global_data.edge_index, num_nodes=num_nodes)
-    louvain = Louvain(modularity="newman",
-                      resolution=resolution,
-                      return_aggregate=True,
-                      random_state=seed)
+    louvain = Louvain(
+        modularity="newman",
+        resolution=resolution,
+        return_aggregate=True,
+        random_state=seed,
+    )
     com_assignments = louvain.fit_predict(adj_csr)  # community ID per node
 
     # build structural communities (no labels involved)
-    communities = {}
+    communities: dict[int, list[int]] = {}
     for node_id, com_id in enumerate(com_assignments):
         com_id = int(com_id)
         if com_id not in communities:
             communities[com_id] = []
         communities[com_id].append(node_id)
 
-    # zipf-skewed assignment to clients
-    client_indices = zipf_assign_communities_to_clients(
-        communities=communities,
-        num_clients=num_clients,
-        alpha=alpha,
-        seed=seed,
-    )
+    # assign communities to clients according to the chosen strategy
+    if client_assignment == "zipf":
+        client_indices = zipf_assign_communities_to_clients(
+            communities=communities,
+            num_clients=num_clients,
+            alpha=alpha,
+            seed=seed,
+        )
+    elif client_assignment == "equal":
+        # alpha is ignored in the equal-sized case
+        client_indices = equal_assign_communities_to_clients(
+            communities=communities,
+            num_clients=num_clients,
+            seed=seed,
+        )
+    else:
+        raise ValueError(f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'.")
 
     # if the user only wants the node indices, return them without computing local subgraphs
     if return_node_indices:

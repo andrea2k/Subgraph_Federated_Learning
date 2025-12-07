@@ -4,6 +4,35 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import subgraph
 
+def equal_assign_communities_to_clients(
+    communities: dict[int, list[int]],
+    num_clients: int,
+    seed: int | None = None):
+    """
+    Assign communities to clients to get approximately equal-sized clients.
+
+    Algorithm used for this purpose is greedy bin-packing: sort communities by size in desc order, 
+    then iteratively assign each community to the client with the smallest current total size.
+    """
+    rng = np.random.default_rng(seed)
+
+    # shuffle communities
+    com_items = list(communities.items())
+    rng.shuffle(com_items)
+    com_items.sort(key=lambda x: len(x[1]), reverse=True)
+
+    client_indices: dict[int, list[int]] = {cid: [] for cid in range(num_clients)}
+    client_sizes = np.zeros(num_clients, dtype=int)
+
+    for _, nodes in com_items:
+        # assign to the client with the smallest current size
+        cid = int(np.argmin(client_sizes))
+        client_indices[cid].extend(nodes)
+        client_sizes[cid] += len(nodes)
+
+    return client_indices
+
+
 def zipf_assign_communities_to_clients(communities: dict,
                                         num_clients: int,
                                         alpha: float = 1.2,
