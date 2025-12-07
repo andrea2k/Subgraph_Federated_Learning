@@ -1,6 +1,13 @@
-# Subgraph_Federated_Learning
+# Subgraph Federated Learning
 
-- [Subgraph_Federated_Learning](#subgraph_federated_learning)
+A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
+
+This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis- and Louvain-based splitting strategies, and trains centralized or federated PNA-based models for financial crime detection.
+
+## Table of Contents
+
+- [Subgraph Federated Learning](#subgraph-federated-learning)
+  - [Table of Contents](#table-of-contents)
   - [Synthetic Graph Generation](#synthetic-graph-generation)
     - [Label Tasks](#label-tasks)
     - [Default Generation Settings for Synthetic Graph](#default-generation-settings-for-synthetic-graph)
@@ -19,10 +26,6 @@
       - [Federated Dataset Simulation](#federated-dataset-simulation)
       - [Federated Learning Hyperparameters](#federated-learning-hyperparameters)
   - [Reproducibility](#reproducibility)
-
-A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
-
-This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis- and Louvain-based splitting strategies, and trains centralized or federated PNA-based models for financial crime detection.
 
 ## Synthetic Graph Generation
 
