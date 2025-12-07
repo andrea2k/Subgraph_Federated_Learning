@@ -79,11 +79,22 @@ if PARTITION_STRATEGY == "louvain imbalance split":
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_imbalance_splits"
 elif PARTITION_STRATEGY == "metis imbalance split":
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_imbalance_splits"
-elif PARTITION_STRATEGY == "louvain original":              # with zipf-skewed client sizes
-    FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits"
-elif PARTITION_STRATEGY == "metis original":                # with zipf-skewed client sizes
+elif PARTITION_STRATEGY == "louvain original":              
+    FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits"             # with equal client sizes
+elif PARTITION_STRATEGY == "metis original":                
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits"
-
+elif PARTITION_STRATEGY == "louvain original skewed":              # with zipf-skewed client sizes
+    FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits_zipf_skewed"
+elif PARTITION_STRATEGY == "metis original skewed":                
+    FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
+else:
+    raise ValueError(
+        f"Unknown partition_strategy='{PARTITION_STRATEGY}'. "
+        "Expected one of: "
+        "['louvain imbalance split', 'metis imbalance split', "
+        "'louvain original', 'metis original', "
+        "'louvain original skewed', 'metis original skewed']"
+    )
 
 def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     """
