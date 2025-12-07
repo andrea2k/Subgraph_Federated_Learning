@@ -1,7 +1,6 @@
 import os
 import json
 import torch
-from torch_geometric.data import Data
 
 from utils.seed import set_seed, derive_seed
 from utils.fed_partitioning import graphdata_to_pyg, get_subgraph_pyg_data
@@ -83,7 +82,6 @@ def main():
         num_clients=NUM_CLIENTS,
         resolution=LOUVAIN_RESOLUTION,
         seed=split_seeds["louvain"],
-        alpha=1.5,              # skewness increases as alpha increases
         client_assignment="equal",
         return_node_indices=True,
     )
@@ -94,7 +92,6 @@ def main():
         num_clients=NUM_CLIENTS,
         metis_num_coms=METIS_NUM_COMS,
         seed=split_seeds["metis"],
-        alpha=1.5,
         client_assignment="equal",
         return_node_indices=True,
     )
