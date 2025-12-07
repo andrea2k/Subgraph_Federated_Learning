@@ -1,31 +1,29 @@
-# Subgraph Federated Learning
+# Subgraph Federated Learning <!-- omit in toc -->
 
 A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
 
 This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis- and Louvain-based splitting strategies, and trains centralized or federated PNA-based models for financial crime detection.
 
-## Table of Contents
+## Table of Contents <!-- omit in toc -->
 
-- [Subgraph Federated Learning](#subgraph-federated-learning)
-  - [Table of Contents](#table-of-contents)
-  - [Synthetic Graph Generation](#synthetic-graph-generation)
-    - [Label Tasks](#label-tasks)
-    - [Default Generation Settings for Synthetic Graph](#default-generation-settings-for-synthetic-graph)
-    - [How to Generate Synthetic Graph](#how-to-generate-synthetic-graph)
-  - [Federated Subgraph Partitioning](#federated-subgraph-partitioning)
-    - [Original Splits (Equal-Sized Clients)](#original-splits-equal-sized-clients)
-    - [Original Splits (Zipf-Skewed Clients)](#original-splits-zipf-skewed-clients)
-    - [Label-Imbalance Splits (LIS-Based)](#label-imbalance-splits-lis-based)
-    - [How to Generate Splits](#how-to-generate-splits)
-  - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
-    - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
-    - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
-    - [3. Training Configuration](#3-training-configuration)
-  - [PNA Training Under Federated Setting](#pna-training-under-federated-setting)
-    - [Federated Learning Configuration](#federated-learning-configuration)
-      - [Federated Dataset Simulation](#federated-dataset-simulation)
-      - [Federated Learning Hyperparameters](#federated-learning-hyperparameters)
-  - [Reproducibility](#reproducibility)
+- [Synthetic Graph Generation](#synthetic-graph-generation)
+  - [Label Tasks](#label-tasks)
+  - [Default Generation Settings for Synthetic Graph](#default-generation-settings-for-synthetic-graph)
+  - [How to Generate Synthetic Graph](#how-to-generate-synthetic-graph)
+- [Federated Subgraph Partitioning](#federated-subgraph-partitioning)
+  - [Original Splits (Equal-Sized Clients)](#original-splits-equal-sized-clients)
+  - [Original Splits (Zipf-Skewed Clients)](#original-splits-zipf-skewed-clients)
+  - [Label-Imbalance Splits (LIS-Based)](#label-imbalance-splits-lis-based)
+  - [How to Generate Federated Splits](#how-to-generate-federated-splits)
+- [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
+  - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
+  - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
+  - [3. Training Configuration](#3-training-configuration)
+- [PNA Training Under Federated Setting](#pna-training-under-federated-setting)
+  - [Federated Learning Configuration](#federated-learning-configuration)
+    - [Federated Dataset Simulation](#federated-dataset-simulation)
+    - [Federated Learning Hyperparameters](#federated-learning-hyperparameters)
+- [Reproducibility](#reproducibility)
 
 ## Synthetic Graph Generation
 
@@ -108,7 +106,7 @@ These splits are useful for benchmarking federated learning performance.
 
 ---
 
-### How to Generate Splits
+### How to Generate Federated Splits
 
 From the repository root:
 
