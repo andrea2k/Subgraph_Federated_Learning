@@ -2,11 +2,11 @@
 
 A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
 
-This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis/Louvain, and trains centralized or federated PNA-based models for multi-task subgraph detection.
+This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis- and Louvain-based splitting strategies, and trains centralized or federated PNA-based models for financial crime detection.
 
 ## Synthetic Graph Generation
 
-This repository includes a **synthetic subgraph-detection dataset** used for benchmarking graph models for the pattern detection task. The graphs and labels are generated following the pseudocode/configurations described in **_Provably Powerful Graph Neural Networks for Directed Multigraphs_** (Egressy et al., 2023).
+This repository includes a **synthetic subgraph-detection dataset** used for benchmarking graph models for the pattern detection task. The graphs and labels are generated following the pseudocode and configurations described in [Provably Powerful Graph Neural Networks for Directed Multigraphs](https://arxiv.org/abs/2306.11586) (Egressy et al., 2023).
 
 ### Label Tasks
 
@@ -28,7 +28,7 @@ Each node is labeled for the presence of the following patterns (11 sub-tasks):
 
 ### Default Generation Settings for Synthetic Graph
 
-The default config (see the generator script `scripts/data/generate_synthetic.py`) follows the paper’s setup:
+The default generation config (see the generator script `scripts/data/generate_synthetic.py`) follows the paper’s setup:
 
 - Nodes `n = 8192`
 - Average degree `d = 6`
@@ -39,7 +39,7 @@ The default config (see the generator script `scripts/data/generate_synthetic.py
 
 ---
 
-### How to Generate
+### How to Generate Synthetic Graph
 
 From the repository root, run:
 
@@ -53,7 +53,7 @@ This command generates the synthetic pattern-detection graphs and saves the foll
 - `./data/val.pt`
 - `./data/test.pt`
 - `./data/y_sums.csv` — positive-label counts per sub-task
-- `./results/metrics/label_percentages.csv` — label percentages for sanity checking against the original paper statistics
+- `./results/metrics/label_percentages.csv` — label percentages for sanity checking against the statistics reported by the original paper
 
 ## Federated Subgraph Partitioning
 
@@ -63,7 +63,7 @@ In the federated setting, each client is represented by a subgraph of the global
 - **Louvain:** modularity-based community detection
 
 Both follow the methodology of
-**_OpenFGL: A Comprehensive Benchmark for Federated Graph Learning_** (Li et al., 2024), extended here for multi-task labels.
+[OpenFGL: A Comprehensive Benchmark for Federated Graph Learning](https://arxiv.org/abs/2408.16288) (Li et al., 2024), extended here for multi-task labels.
 
 ### Original Splits (Equal-Sized Clients)
 
@@ -81,7 +81,7 @@ These splits model strongly **non-uniform client sizes**, common in real-world n
 ### Label-Imbalance Splits (LIS-Based)
 
 We also provide **label-imbalance–aware** splits following the OpenFGL LIS strategy. Communities are clustered by their multi-task label distributions and grouped to reduce extreme label skew across clients.
-These splits are useful for controlled experiments where label imbalance should be minimized.
+These splits are useful for benchmarking federated learning performance.
 
 ---
 
@@ -115,7 +115,7 @@ The training script selects the appropriate directory automatically using:
 This repository provides two implementations of the **Principal Neighborhood Aggregation (PNA)** model, one baseline version using standard message passing, and an enhanced version that incorporates **Reverse Message Passing**, **Ego IDs**, **Port IDs**, and **mini-batch neighborhood sampling** for scalable training.
 
 Both implementations follow the PNA architecture introduced in
-**_Principal Neighbourhood Aggregation for Graph Nets_** (Corso et al., 2020).
+[Principal Neighbourhood Aggregation for Graph Nets](https://arxiv.org/abs/2004.05718) (Corso et al., 2020).
 
 ### 1. Baseline PNA (Full-Batch Training)
 
@@ -159,7 +159,7 @@ This version serves as the foundation for future **federated** extensions.
 
 ### 3. Training Configuration
 
-Both PNA variants share the following core hyperparameters (taken from `default_hparams`):
+Both PNA variants share the following core hyperparameters:
 
 - **`hidden_dim = 64`**
   Dimensionality of node embeddings throughout the network.
@@ -176,7 +176,7 @@ Both PNA variants share the following core hyperparameters (taken from `default_
 - **`weight_decay = 0.0001`**
   L2 regularization strength to prevent overfitting.
 
-Additional hyperparameters apply to the **`reverse_mp_with_port_and_ego`** mini-batch model:
+Additional hyperparameters apply to the extended PNA model with reverse message passing:
 
 - **`batch_size = 32`**
   Number of seed nodes sampled per mini-batch.
@@ -205,12 +205,12 @@ python3 -m scripts.training.train_federated_pna
 
 ### Federated Learning Configuration
 
-The federated setting introduces additional hyperparameters governing both the **client-generation process** and the **federated training procedure**. This section documents the default configuration used throughout the experiments, along with a brief rationale for each choice.
+The federated setting introduces additional hyperparameters governing both the **federated splits generation** and the **federated training procedure**. This section documents the default configuration used throughout the experiments, along with a brief rationale for each choice.
 
 #### Federated Dataset Simulation
 
 - **`num_clients = 32`**
-  The 8,192-node global graph is partitioned into 32 subgraphs, yielding approximately 256 nodes per client.
+  The 8192-node global graph is partitioned into 32 subgraphs, yielding approximately 256 nodes per client.
   This creates a **realistically challenging** federated scenario: clients are small enough to introduce non-IID behavior but large enough to support stable local training.
 
 - **`louvain_resolution = 1.0`**
@@ -260,6 +260,6 @@ This ensures:
 
 - **Synthetic graphs** (`train.pt`, `val.pt`, `test.pt`) are identical across runs.
 - **Federated subgraph partitions** (Metis/Louvain, equal-sized, Zipf-skewed, LIS) are reproduced exactly.
-- **Training runs**—centralized and federated—are stable and repeatable, including model initialization, mini-batch sampling, and client sampling.
+- **Training runs** (both centralized and federated) are stable and repeatable, including model initialization, mini-batch sampling, and client sampling.
 
 Changing the `BASE_SEED` produces a new, independent experiment instance while preserving internal consistency across all components.
