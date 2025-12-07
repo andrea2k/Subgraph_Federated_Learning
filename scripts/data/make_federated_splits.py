@@ -16,7 +16,7 @@ CONFIG = ALL_CONFIG["federated_dataset_simulation"]
 
 NUM_CLIENTS = CONFIG["num_clients"]
 LOUVAIN_RESOLUTION = CONFIG["louvain_resolution"]
-METIS_NUM_COMS = CONFIG["metis_num_coms"]  # taken to be greater than NUM_CLIENTS
+METIS_NUM_COMS = CONFIG["metis_num_coms"]  # taken to be greater than num of clients to ensure at least one community per client
 BASE_SEED = CONFIG.get("base_seed", 0)
 
 
