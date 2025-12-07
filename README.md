@@ -2,21 +2,11 @@
 
 A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
 
+This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis/Louvain, and trains centralized or federated PNA-based models for multi-task subgraph detection.
+
 ## Synthetic Graph Generation
 
 This repository includes a **synthetic subgraph-detection dataset** used for benchmarking graph models for the pattern detection task. The graphs and labels are generated following the pseudocode/configurations described in **_Provably Powerful Graph Neural Networks for Directed Multigraphs_** (Egressy et al., 2023).
-
-### What’s Included
-
-- Three splits: **train**, **val**, **test**
-- Saved as PyTorch tensors under `./data/`:
-
-  - `train.pt`, `val.pt`, `test.pt` objects with node-level labels
-  - `y_sums.csv` — per-split counts of positive labels per sub-task
-
-- Per-split label percentages and mean across splits are stored under `./results/metrics/`, useful to sanity-check against the paper’s reported marginals.
-
----
 
 ### Label Tasks
 
@@ -36,16 +26,7 @@ Each node is labeled for the presence of the following patterns (11 sub-tasks):
 
 ---
 
-### Reproducibility
-
-Graph instances are **reproducible**. A single `BASE_SEED` deterministically derives distinct seeds for each split (train/val/test), ensuring:
-
-- different graphs **within** a run for the splits,
-- identical graphs **across** runs with the same `BASE_SEED`.
-
----
-
-### Default Generation Settings
+### Default Generation Settings for Synthetic Graph
 
 The default config (see the generator script `scripts/data/generate_synthetic.py`) follows the paper’s setup:
 
@@ -53,53 +34,58 @@ The default config (see the generator script `scripts/data/generate_synthetic.py
 - Average degree `d = 6`
 - Radius parameter `r = 11.1`
 - Directed multigraphs (for directed cycles)
-- Generator: “chordal” / random-circulant-like
+- Generator: `chordal` / random-circulant-like
 - One connected component per split (prevents data leakage)
 
 ---
 
 ### How to Generate
 
-From the repo root:
+From the repository root, run:
 
 ```bash
 python3 -m scripts.data.generate_synthetic
 ```
 
-After step (1), you’ll find `train.pt`, `val.pt`, `test.pt`, and `y_sums.csv` under `./data/`. The `label_percentages.csv` will be saved under `./results/metrics/`.
+This command generates the synthetic pattern-detection graphs and saves the following files:
+
+- `./data/train.pt`
+- `./data/val.pt`
+- `./data/test.pt`
+- `./data/y_sums.csv` — positive-label counts per sub-task
+- `./results/metrics/label_percentages.csv` — label percentages for sanity checking against the original paper statistics
 
 ## Federated Subgraph Partitioning
 
-In the subgraph federated learning setting, each client is modeled as a subgraph extracted from a larger global graph. To simulate such clients, we apply two community-detection–based graph partitioning techniques to the global synthetic pattern-detection graph:
+In the federated setting, each client is represented by a subgraph of the global synthetic graph. We use two community-detection–based partitioning techniques:
 
-- **Metis-based split:** balanced k-way graph partitioning
-- **Louvain-based split:** modularity-based community detection
+- **Metis:** balanced k-way graph partitioning
+- **Louvain:** modularity-based community detection
 
-Both approaches follow the methodology described in
-**_OpenFGL: A Comprehensive Benchmark for Federated Graph Learning_** (Li et al., 2024).
+Both follow the methodology of
+**_OpenFGL: A Comprehensive Benchmark for Federated Graph Learning_** (Li et al., 2024), extended here for multi-task labels.
 
-### Original Splits (Zipf-Skewed Client Sizes)
+### Original Splits (Equal-Sized Clients)
 
-To better reflect real-world financial crime detection environments, where institutions differ widely in size, we extend the original Metis and Louvain strategies with a **Zipf-skewed community assignment**. This mechanism ensures:
+The default experimental setup uses **approximately equal-sized clients**. After detecting communities, we assign them to clients using a greedy bin-packing strategy, producing subgraphs with similar node counts. This provides a controlled and stable federated environment for evaluating performance differences between centralized and decentralized training.
 
-- a few large clients (analogous to large banks), and
-- many small clients (smaller institutions),
+### Original Splits (Zipf-Skewed Clients)
 
-which aligns with the heavy-tailed distribution of entity sizes commonly observed in financial networks.
+To simulate more realistic financial crime settings with different client sizes, we additionally support **Zipf-skewed** splits. Communities are assigned to clients according to a Zipf-like distribution, producing:
 
-### Label-Imbalance Splits (Controlled Setting)
+- a few large clients,
+- many small clients.
 
-For comparison, we also generate an easier and more controlled federated setup using **label imbalance handling**.
-Here, communities are reassigned to clients based on their multi-task label distributions (following the OpenFGL LIS strategy), without Zipf-based skew.
+These splits model strongly **non-uniform client sizes**, common in real-world networks.
 
-These splits are useful for:
+### Label-Imbalance Splits (LIS-Based)
 
-- validating the correctness of the federated learning pipeline,
-- studying model behavior under balanced label and client-size distributions.
+We also provide **label-imbalance–aware** splits following the OpenFGL LIS strategy. Communities are clustered by their multi-task label distributions and grouped to reduce extreme label skew across clients.
+These splits are useful for controlled experiments where label imbalance should be minimized.
 
 ---
 
-### How to Generate Federated Splits
+### How to Generate Splits
 
 From the repository root:
 
@@ -107,12 +93,22 @@ From the repository root:
 python3 -m scripts.data.make_federated_splits
 ```
 
-This command produces four sets of federated datasets:
+This produces six datasets under `./data/`:
 
-- `fed_louvain_splits/` — Louvain (original, Zipf-skewed)
-- `fed_metis_splits/` — Metis (original, Zipf-skewed)
-- `fed_louvain_imbalance_splits/` — Louvain with label imbalance handling
-- `fed_metis_imbalance_splits/` — Metis with label imbalance handling
+- `fed_louvain_splits/` — Louvain, equal-sized
+- `fed_metis_splits/` — Metis, equal-sized
+- `fed_louvain_splits_zipf_skewed/` — Louvain, Zipf-skewed
+- `fed_metis_splits_zipf_skewed/` — Metis, Zipf-skewed
+- `fed_louvain_imbalance_splits/` — Louvain, label-imbalance handling
+- `fed_metis_imbalance_splits/` — Metis, label-imbalance handling
+
+The training script selects the appropriate directory automatically using:
+
+```json
+"partition_strategy": "<strategy_name>"
+```
+
+(e.g., `"metis original"`, `"louvain original skewed"`, `"metis imbalance split"`)
 
 ## Principal Neighborhood Aggregation (PNA)
 
@@ -227,7 +223,14 @@ The federated setting introduces additional hyperparameters governing both the *
 
 - **`partition_strategy`**
   Selects the partitioning strategy used in the experiment.
-  Available options are: _metis original_, _louvain original_, _metis imbalance split_, and _louvain imbalance split_.
+  Supported options:
+
+  - `metis original`
+  - `louvain original`
+  - `metis original skewed`
+  - `louvain original skewed`
+  - `metis imbalance split`
+  - `louvain imbalance split`
 
 - **`global_epochs = 100`**
   The total number of global training rounds.
@@ -242,3 +245,21 @@ The federated setting introduces additional hyperparameters governing both the *
   Specifies the federated learning algorithm used in the experiment.
 
 All configurations are available in `.configs/fed_configs.json` file.
+
+## Reproducibility
+
+All datasets, federated splits, and training results in this repository are **fully reproducible**.
+
+The entire pipeline uses a shared seed-derivation mechanism:
+
+- A global `BASE_SEED` is defined in the config.
+- Each script calls `set_seed(BASE_SEED)`.
+- Task-specific seeds (e.g., `"train"`, `"val"`, `"louvain"`, `"metis"`) are deterministically obtained via `derive_seed(BASE_SEED, tag)`.
+
+This ensures:
+
+- **Synthetic graphs** (`train.pt`, `val.pt`, `test.pt`) are identical across runs.
+- **Federated subgraph partitions** (Metis/Louvain, equal-sized, Zipf-skewed, LIS) are reproduced exactly.
+- **Training runs**—centralized and federated—are stable and repeatable, including model initialization, mini-batch sampling, and client sampling.
+
+Changing the `BASE_SEED` produces a new, independent experiment instance while preserving internal consistency across all components.
