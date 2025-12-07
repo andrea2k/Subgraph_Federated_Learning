@@ -1,16 +1,16 @@
 {
   "federated_dataset_simulation": {
-    "num_clients": 10,
+    "num_clients": 32,
     "louvain_resolution": 1.0,
-    "metis_num_coms": 40,
+    "metis_num_coms": 32,
     "base_seed": 0
   },
 
   "fed_learning_configs": {
-    "partition_strategy": "louvain original",
+    "partition_strategy": "metis original",
     "global_epochs": 100,
-    "local_epochs": 1,
-    "client_fraction": 0.2,
+    "local_epochs": 2,
+    "client_fraction": 1.0,
     "algorithm": "fedavg",
     "base_seed": 0
   }
