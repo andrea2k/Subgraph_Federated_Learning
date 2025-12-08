@@ -1,7 +1,9 @@
 import os
 import json
+import csv
 import torch
 
+from utils.metrics import write_fed_split_sizes
 from utils.seed import set_seed, derive_seed
 from utils.fed_partitioning import graphdata_to_pyg, get_subgraph_pyg_data
 from utils.fed_simulation import louvain_label_imbalance_split, metis_label_imbalance_split, louvain_original_split, metis_original_split
@@ -107,6 +109,20 @@ def main():
     louvain_orig_clients_equal = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in louvain_orig_node_splits_equal]
     metis_orig_clients_equal = [get_subgraph_pyg_data(global_data, node_idx) for node_idx in metis_orig_node_splits_equal]
 
+    size_file = "./data/client_sizes.csv"
+    os.makedirs("./data", exist_ok=True)
+
+    print("Saving client subgraph sizes...")
+    with open(size_file, mode="w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["split_type", "client_id", "num_nodes", "num_edges"])
+        write_fed_split_sizes(writer, "louvain_imbalance", louvain_clients)
+        write_fed_split_sizes(writer, "metis_imbalance", metis_clients)
+        write_fed_split_sizes(writer, "louvain_equal", louvain_orig_clients_equal)
+        write_fed_split_sizes(writer, "metis_equal", metis_orig_clients_equal)
+        write_fed_split_sizes(writer, "louvain_zipf_skewed", louvain_orig_clients_skewed)
+        write_fed_split_sizes(writer, "metis_zipf_skewed", metis_orig_clients_skewed)
+
     # save federated splits with label imbalance
     louvain_dir = "./data/fed_louvain_imbalance_splits"
     metis_dir = "./data/fed_metis_imbalance_splits"
@@ -118,7 +134,7 @@ def main():
     for cid, data in enumerate(metis_clients):
         torch.save(data, os.path.join(metis_dir, f"client_{cid}.pt"))
 
-    # save original federated splits
+    # save original federated splits with equal client sizes
     louvain_orig_dir = "./data/fed_louvain_splits"
     metis_orig_dir = "./data/fed_metis_splits"
     os.makedirs(louvain_orig_dir, exist_ok=True)

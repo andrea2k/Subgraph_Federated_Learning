@@ -114,22 +114,27 @@ From the repository root:
 python3 -m scripts.data.make_federated_splits
 ```
 
-This produces six datasets under `./data/`:
+This produces **six federated split directories** (each containing per-client `.pt` files) **plus a client size summary** under `./data/`:
 
 - `fed_louvain_splits/` — Louvain, equal-sized
 - `fed_metis_splits/` — Metis, equal-sized
 - `fed_louvain_splits_zipf_skewed/` — Louvain, Zipf-skewed
 - `fed_metis_splits_zipf_skewed/` — Metis, Zipf-skewed
-- `fed_louvain_imbalance_splits/` — Louvain, label-imbalance handling
-- `fed_metis_imbalance_splits/` — Metis, label-imbalance handling
+- `fed_louvain_imbalance_splits/` — Louvain with label-imbalance handling
+- `fed_metis_imbalance_splits/` — Metis with label-imbalance handling
 
-The training script selects the appropriate directory automatically using:
+Additionally:
+
+- `client_sizes.csv` — Number of nodes and edges for each client across all split types
+
+The training script automatically selects the appropriate directory using:
 
 ```json
 "partition_strategy": "<strategy_name>"
 ```
 
-(e.g., `"metis original"`, `"louvain original skewed"`, `"metis imbalance split"`)
+Examples:
+`"metis original"`, `"louvain original skewed"`, `"metis imbalance"`
 
 ## Principal Neighborhood Aggregation (PNA)
 
@@ -245,13 +250,7 @@ The federated setting introduces additional hyperparameters governing both the *
 - **`partition_strategy`**
   Selects the partitioning strategy used in the experiment.
   Supported options:
-
-  - `metis original`
-  - `louvain original`
-  - `metis original skewed`
-  - `louvain original skewed`
-  - `metis imbalance split`
-  - `louvain imbalance split`
+  `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`
 
 - **`global_epochs = 100`**
   The total number of global training rounds.

@@ -75,9 +75,9 @@ def get_fl_classes(algorithm: str):
 # Load the correct client and server classes based on selected algorithm 
 ClientClass, ServerClass = get_fl_classes(ALGORITHM)
 
-if PARTITION_STRATEGY == "louvain imbalance split":
+if PARTITION_STRATEGY == "louvain imbalance":
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_imbalance_splits"
-elif PARTITION_STRATEGY == "metis imbalance split":
+elif PARTITION_STRATEGY == "metis imbalance":
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_imbalance_splits"
 elif PARTITION_STRATEGY == "louvain original":              
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits"             # with equal client sizes
@@ -91,7 +91,7 @@ else:
     raise ValueError(
         f"Unknown partition_strategy='{PARTITION_STRATEGY}'. "
         "Expected one of: "
-        "['louvain imbalance split', 'metis imbalance split', "
+        "['louvain imbalance', 'metis imbalance', "
         "'louvain original', 'metis original', "
         "'louvain original skewed', 'metis original skewed']"
     )

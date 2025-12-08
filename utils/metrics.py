@@ -167,3 +167,15 @@ def append_epoch_csv(csv_path: str,
 
     with open(csv_path, "a", newline="") as f:
         csv.writer(f).writerow(row)
+
+
+def write_fed_split_sizes(writer, split_type: str, client_list):
+    for cid, data in enumerate(client_list):
+        # number of nodes
+        if hasattr(data, "num_nodes") and data.num_nodes is not None:
+            num_nodes = int(data.num_nodes)
+        else:
+            num_nodes = data.x.size(0)
+        # number of edges 
+        num_edges = data.edge_index.size(1) if getattr(data, "edge_index", None) is not None else 0
+        writer.writerow([split_type, cid, num_nodes, num_edges])
