@@ -367,24 +367,22 @@ def save_federated_clients(
     # mapping
     torch.save(node_to_client.cpu(), os.path.join(split_dir, "node_to_client.pt"))
 
-    # sizes
-    num_clients = int(node_to_client.max().item()) + 1
-    with open(os.path.join(split_dir, "client_sizes.csv"), "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["client_id", "num_nodes"])
-        for c in range(num_clients):
-            w.writerow([c, int((node_to_client == c).sum().item())])
-
     # per-client graphs
     clients_out = os.path.join(split_dir, "clients")
     os.makedirs(clients_out, exist_ok=True)
 
-    # client_graphs list may skip empty clients; save by iterating ids again for determinism
+    num_clients = int(node_to_client.max().item()) + 1
+
+    client_stats = []  # list of (client_id, num_nodes, num_edges)
+
     for c in range(num_clients):
         node_idx = torch.where(node_to_client == c)[0]
-        if node_idx.numel() == 0:
+        num_nodes = int(node_idx.numel())
+        if num_nodes == 0:
+            client_stats.append((c, 0, 0))
             continue
-        # rebuild client graph to keep filenames aligned with client IDs
+
+        # induced subgraph for this client's nodes
         eidx, eattr = subgraph(
             node_idx,
             global_data.edge_index,
@@ -392,6 +390,8 @@ def save_federated_clients(
             relabel_nodes=True,
             num_nodes=global_data.num_nodes,
         )
+        num_edges = int(eidx.size(1))
+
         gd = GraphData(
             x=global_data.x[node_idx].clone(),
             y=global_data.y[node_idx].clone(),
@@ -400,3 +400,11 @@ def save_federated_clients(
             readout=global_data.readout,
         )
         torch.save(gd, os.path.join(clients_out, f"client_{c:04d}.pt"))
+
+        client_stats.append((c, num_nodes, num_edges))
+
+    # sizes
+    with open(os.path.join(split_dir, "client_sizes.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["client_id", "num_nodes", "num_edges"])
+        w.writerows(client_stats)
