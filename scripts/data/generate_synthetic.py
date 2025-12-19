@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 import os
+import json
 import logging
 import torch
 
-from scripts.data.simulator import (
-    GraphSimulator,
-    deg_in, deg_out, fan_in, fan_out,
-    Cn_check, SG2_check, BP2_check,   
-)
-from utils.gcn_utils import GraphData  
+from scripts.data.simulator import GraphSimulator
 from utils.metrics import compute_label_percentages
 from utils.seed import set_seed, derive_seed
+
+from utils.fed_motif_splitting import (
+    define_subtasks_thresholds_and_witness_builders,
+    set_y_with_labels_and_witnesses,
+    assign_clients_from_witnesses,
+    save_federated_clients
+)
+
+FED_CONFIG_PATH = "./configs/fed_configs.json"
+
+with open(FED_CONFIG_PATH, "r") as f:
+    ALL_FED_CONFIG = json.load(f)
+
+FED_DATA_CONFIG = ALL_FED_CONFIG["federated_dataset_simulation"]
+NUM_CLIENTS = FED_DATA_CONFIG["num_clients"]
 
 # Print logs on the terminal screen
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
@@ -36,46 +47,6 @@ def check_port_columns(data, name="data"):
     for i in range(min(5, ei.size(1))):
         u, v = int(ei[0, i]), int(ei[1, i])
         print(f"  e#{i}: {u}->{v} | in_port={int(in_ports[i])} out_port={int(out_ports[i])}")
-
-
-def define_subtasks_and_thresholds():
-    """
-    Define subtasks and thresholds based on the reported numbers in Table 3 of the original paper.
-
-    Order of subtasks below defines the column order of output y:
-      0  deg_in (>3): number of incoming edges should be >3
-      1  deg_out (>3): number of outgoing edges should be >3
-      2  fan_in (>3): number of distinct incoming nodes should be >3
-      3  fan_out (>3): number of distinct outgoing nodes should be >3
-      4  C2  (directed 2-cycle)
-      5  C3
-      6  C4
-      7  C5
-      8  C6
-      9  Scatter-Gather: a pattern where information from one side of the graph is broadcast out (“scatter”) and then recombined (“gather”) at another node, or vice versa
-      10 Biclique: a bipartite-like pattern
-    """
-    functions = [
-        deg_in, deg_out, fan_in, fan_out,
-        Cn_check(2), Cn_check(3), Cn_check(4), Cn_check(5), Cn_check(6),
-        SG2_check,
-        BP2_check,
-    ]
-
-    # Paper thresholds: degree and fan tasks have a fixed threshold of >3
-    # Cycle tasks are binary (they either exist or don't exist)
-    thresholds = [3, 3, 3, 3, None, None, None, None, None, None, None]
-    func_names = [
-        "deg_in>3", "deg_out>3", "fan_in>3", "fan_out>3",
-        "cycle2", "cycle3", "cycle4", "cycle5", "cycle6",
-        "scatter_gather", "biclique",
-    ]
-    return functions, thresholds, func_names
-
-
-def set_y_with_labels(funcs, thresh, data: GraphData):
-    data.set_y(funcs, thresh)
-    return data
 
 
 def write_label_stats(path, names, datasets):
@@ -138,12 +109,49 @@ def main():
     check_port_columns(va, "val")
     check_port_columns(te, "test")
 
-    functions, thresholds, names = define_subtasks_and_thresholds()
+    # Label + witness extraction
+    label_only_funcs, label_only_thresholds, motif_builders, names, thresholds = \
+        define_subtasks_thresholds_and_witness_builders(
+            cycle_max_instances_per_k=None,  # set e.g. 5000 if cycle enumeration is slow
+            sg_max_instances=None,
+            bp_max_instances=None,
+        )
 
-    logging.info("Computing labels with paper thresholds for train/val/test splits.")
-    tr = set_y_with_labels(functions, thresholds, tr)
-    va = set_y_with_labels(functions, thresholds, va)
-    te = set_y_with_labels(functions, thresholds, te)
+    logging.info("Computing labels + witnesses for train/val/test splits.")
+    tr, tr_w = set_y_with_labels_and_witnesses(tr, label_only_funcs, label_only_thresholds, motif_builders)
+    va, va_w = set_y_with_labels_and_witnesses(va, label_only_funcs, label_only_thresholds, motif_builders)
+    te, te_w = set_y_with_labels_and_witnesses(te, label_only_funcs, label_only_thresholds, motif_builders)
+
+    # Sanity checks: witnesses must imply positive labels
+    # Sanity checks: witnesses must imply positive labels (task-semantic aware)
+    name_to_col = {name: i for i, name in enumerate(names)}
+
+    def _check_witnesses(data, witnesses, split_name):
+        for task, insts in witnesses.items():
+            col = name_to_col[task]
+
+            # only check a few to keep it cheap
+            for inst in insts[:10]:
+                if task.startswith("cycle"):
+                    # cycle witness contains only cycle nodes; all must be labeled
+                    for u in inst:
+                        assert data.y[u, col] == 1, (
+                            f"[{split_name}] Witness-label mismatch: "
+                            f"node {u} in {task} witness but y[{u},{col}] != 1"
+                        )
+                elif task in {"scatter_gather", "biclique"}:
+                    # witness = (..., i) where only i is labeled positive by SG2/BP2 definition
+                    i = int(inst[-1])
+                    assert data.y[i, col] == 1, (
+                        f"[{split_name}] Witness-label mismatch: "
+                        f"gather node {i} in {task} witness but y[{i},{col}] != 1"
+                    )
+                else:
+                    raise ValueError(f"Unknown witness task: {task}")
+
+    _check_witnesses(tr, tr_w, "train")
+    _check_witnesses(va, va_w, "val")
+    _check_witnesses(te, te_w, "test")
 
     out_dir = "./data"
     os.makedirs(out_dir, exist_ok=True)
@@ -162,6 +170,35 @@ def main():
         add_mean=True,
     )
     logging.info("Wrote label percentages to %s", os.path.join(labels_out_dir, "label_percentages.csv"))
+
+    # Federated splits from witnesses
+    fed_root = os.path.join(out_dir, "fed_witness_splits")
+    os.makedirs(fed_root, exist_ok=True)
+
+    tr_node_to_client = assign_clients_from_witnesses(
+        num_nodes=tr.num_nodes,
+        witnesses=tr_w,
+        num_clients=NUM_CLIENTS,
+        seed=split_seeds["train"],
+    )
+    va_node_to_client = assign_clients_from_witnesses(
+        num_nodes=va.num_nodes,
+        witnesses=va_w,
+        num_clients=NUM_CLIENTS,
+        seed=split_seeds["val"],
+    )
+    te_node_to_client = assign_clients_from_witnesses(
+        num_nodes=te.num_nodes,
+        witnesses=te_w,
+        num_clients=NUM_CLIENTS,
+        seed=split_seeds["test"],
+    )
+
+    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client)
+    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client)
+    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client)
+
+    logging.info("Saved federated witness splits under %s", fed_root)
     
     torch.save(tr, os.path.join(out_dir, "train.pt"))
     torch.save(va, os.path.join(out_dir, "val.pt"))
@@ -170,7 +207,7 @@ def main():
 
     # Log the seeds used
     seeds_out_dir = "./data/seeds"
-    os.makedirs(labels_out_dir, exist_ok=True)
+    os.makedirs(seeds_out_dir, exist_ok=True)
 
     with open(os.path.join(seeds_out_dir, "global_data_seeds.txt"), "w") as f:
         for k, v in split_seeds.items():
