@@ -29,7 +29,8 @@ with open(FED_CONFIG_PATH, "r") as f:
 
 PNA_CONFIG = ALL_PNA_CONFIG["reverse_mp_with_port_and_ego"]
 FED_CONFIG = ALL_FED_CONFIG["fed_learning_configs"]
-FED_DATA_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
+COMMUNITY_SPLITS_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
+PARTITION_AWARE_SPLITS_CONFIG = ALL_FED_CONFIG["partition_aware_splits"]
 
 ALGORITHM = FED_CONFIG["algorithm"]  # e.g. "fedavg"
 
@@ -43,9 +44,6 @@ BATCH_SIZE = PNA_CONFIG["batch_size"]
 PORT_EMB_DIM = PNA_CONFIG["port_emb_dim"]
 
 DEFAULT_HPARAMS = PNA_CONFIG["default_hparams"]
-
-NUM_CLIENTS = FED_DATA_CONFIG["num_clients"]
-BASE_SEED = FED_DATA_CONFIG["base_seed"]
 
 PARTITION_STRATEGY = FED_CONFIG["partition_strategy"]
 GLOBAL_EPOCHS = FED_CONFIG["global_epochs"]      # number of global communication rounds
@@ -75,6 +73,10 @@ def get_fl_classes(algorithm: str):
 # Load the correct client and server classes based on selected algorithm 
 ClientClass, ServerClass = get_fl_classes(ALGORITHM)
 
+# Initialize number of clients and base seed using community splits config
+NUM_CLIENTS = COMMUNITY_SPLITS_CONFIG["num_clients"]
+BASE_SEED = COMMUNITY_SPLITS_CONFIG["base_seed"]
+
 if PARTITION_STRATEGY == "louvain imbalance":
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_imbalance_splits"
 elif PARTITION_STRATEGY == "metis imbalance":
@@ -87,13 +89,18 @@ elif PARTITION_STRATEGY == "louvain original skewed":              # with zipf-s
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_splits_zipf_skewed"
 elif PARTITION_STRATEGY == "metis original skewed":                
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
+elif PARTITION_STRATEGY == "partition aware":
+    FED_TRAIN_SPLITS_DIR = "./data/fed_witness_splits/train/clients"
+    NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
+    BASE_SEED = PARTITION_AWARE_SPLITS_CONFIG["base_seed"]
 else:
     raise ValueError(
         f"Unknown partition_strategy='{PARTITION_STRATEGY}'. "
         "Expected one of: "
         "['louvain imbalance', 'metis imbalance', "
         "'louvain original', 'metis original', "
-        "'louvain original skewed', 'metis original skewed']"
+        "'louvain original skewed', 'metis original skewed', "
+        "'partition aware']"
     )
 
 def run_federated_experiment(seed, tasks, device, run_id, **hparams):
@@ -137,7 +144,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     client_fraction = cfg["client_fraction"]    # fraction of clients per round, domain:(0,1]
 
     print(f"[FL-SETUP] Algorithm={ALGORITHM}")
-    print(f"[FL-SETUP] Hyperparameters: {cfg}")
+    print(f"[FL-SETUP] PNA model hyperparameters: {cfg}")
     print(
         f"[FL-SETUP] num_clients={NUM_CLIENTS}, "
         f"num_rounds={num_rounds}, local_epochs={local_epochs}, "
@@ -221,12 +228,15 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     print(f"[FL-SETUP] Loading federated train splits from {FED_TRAIN_SPLITS_DIR}")
     client_graphs = []
     for cid in range(NUM_CLIENTS):
-        path = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid}.pt")
+        # supports both naming styles; prefers 4-digit
+        p1 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid:04d}.pt")
+        p2 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid}.pt")
+        path = p1 if os.path.exists(p1) else p2
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Missing client graph for cid={cid}. Tried:\n  {p1}\n  {p2}"
+            )
         client_graphs.append(torch.load(path, weights_only=False))
-
-    assert len(client_graphs) == NUM_CLIENTS, (
-        f"Expected {NUM_CLIENTS} client graphs, got {len(client_graphs)}"
-    )
 
     args = SimpleNamespace(
         task="node_cls",

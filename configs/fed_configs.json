@@ -12,7 +12,7 @@
   },
 
   "fed_learning_configs": {
-    "partition_strategy": "metis original",
+    "partition_strategy": "partition aware",
     "global_epochs": 100,
     "local_epochs": 1,
     "client_fraction": 1.0,

@@ -175,7 +175,8 @@ class NodeClsTask:
         if isinstance(self.minority_class_weight, str) and self.minority_class_weight == "auto":
             assert auto_pos_weight is not None
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=auto_pos_weight.to(self.device))
-            print(f"[{name}] Using automatic per-task minority weighting: {auto_pos_weight.tolist()}")
+            #print(f"[{name}] Using automatic per-task minority weighting: {auto_pos_weight.tolist()}")
+            print(f"[{name}] Using automatic per-task minority weighting")
         elif self.minority_class_weight is not None:
             pos_weight = torch.full((out_dim,), float(self.minority_class_weight), device=self.device)
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
