@@ -29,7 +29,7 @@ with open(FED_CONFIG_PATH, "r") as f:
 
 PNA_CONFIG = ALL_PNA_CONFIG["reverse_mp_with_port_and_ego"]
 FED_CONFIG = ALL_FED_CONFIG["fed_learning_configs"]
-FED_DATA_CONFIG = ALL_FED_CONFIG["federated_dataset_simulation"]
+FED_DATA_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
 
 ALGORITHM = FED_CONFIG["algorithm"]  # e.g. "fedavg"
 

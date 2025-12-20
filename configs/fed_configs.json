@@ -1,9 +1,14 @@
 {
-  "federated_dataset_simulation": {
-    "num_clients": 10,
+  "louvain_and_metis_splits": {
+    "num_clients": 32,
     "louvain_resolution": 1.0,
     "metis_num_coms": 32,
     "base_seed": 0
+  },
+
+  "partition_aware_splits": {
+    "num_clients": 10,
+    "base_seed": 42
   },
 
   "fed_learning_configs": {

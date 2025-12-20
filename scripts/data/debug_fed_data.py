@@ -7,7 +7,7 @@ FED_CONFIG_PATH = "./configs/fed_configs.json"
 with open(FED_CONFIG_PATH, "r") as f:
     ALL_FED_CONFIG = json.load(f)
 
-FED_DATA_CONFIG = ALL_FED_CONFIG["federated_dataset_simulation"]
+FED_DATA_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
 NUM_CLIENTS = FED_DATA_CONFIG["num_clients"]
 
 FED_TRAIN_SPLITS_DIR = "./data/fed_louvain"  # or fed_metis

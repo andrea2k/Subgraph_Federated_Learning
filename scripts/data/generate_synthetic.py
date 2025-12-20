@@ -21,14 +21,14 @@ FED_CONFIG_PATH = "./configs/fed_configs.json"
 with open(FED_CONFIG_PATH, "r") as f:
     ALL_FED_CONFIG = json.load(f)
 
-FED_DATA_CONFIG = ALL_FED_CONFIG["federated_dataset_simulation"]
+FED_DATA_CONFIG = ALL_FED_CONFIG["partition_aware_splits"]
 NUM_CLIENTS = FED_DATA_CONFIG["num_clients"]
 
 # Print logs on the terminal screen
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
 
 # Here define the global variables
-BASE_SEED = 42 
+BASE_SEED = FED_DATA_CONFIG["base_seed"] 
 
 def check_port_columns(data, name="data"):
     assert data.edge_attr is not None, f"{name}: edge_attr is None"

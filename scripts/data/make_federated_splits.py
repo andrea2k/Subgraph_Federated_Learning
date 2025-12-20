@@ -13,7 +13,7 @@ CONFIG_PATH = "./configs/fed_configs.json"
 with open(CONFIG_PATH, "r") as f:
     ALL_CONFIG = json.load(f)
 
-CONFIG = ALL_CONFIG["federated_dataset_simulation"]
+CONFIG = ALL_CONFIG["louvain_and_metis_splits"]
 
 NUM_CLIENTS = CONFIG["num_clients"]
 LOUVAIN_RESOLUTION = CONFIG["louvain_resolution"]
