@@ -12,7 +12,8 @@ from utils.fed_motif_splitting import (
     define_subtasks_thresholds_and_witness_builders,
     set_y_with_labels_and_witnesses,
     assign_clients_from_witnesses,
-    save_federated_clients
+    save_federated_clients,
+    write_witness_split_sanity,
 )
 
 FED_CONFIG_PATH = "./configs/fed_configs.json"
@@ -192,6 +193,22 @@ def main():
         witnesses=te_w,
         num_clients=NUM_CLIENTS,
         seed=split_seeds["test"],
+    )
+
+    write_witness_split_sanity(
+        out_csv=os.path.join(fed_root, "train", "witness_split_sanity.csv"),
+        node_to_client=tr_node_to_client,
+        witnesses=tr_w,
+    )
+    write_witness_split_sanity(
+        out_csv=os.path.join(fed_root, "val", "witness_split_sanity.csv"),
+        node_to_client=va_node_to_client,
+        witnesses=va_w,
+    )
+    write_witness_split_sanity(
+        out_csv=os.path.join(fed_root, "test", "witness_split_sanity.csv"),
+        node_to_client=te_node_to_client,
+        witnesses=te_w,
     )
 
     save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client)

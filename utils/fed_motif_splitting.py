@@ -357,6 +357,8 @@ def build_client_graphs(
     return client_graphs
 
 
+# --- Saving federated splits and csv files for witness-level split sanity check ---
+
 def save_federated_clients(
     split_dir: str,
     global_data: "GraphData",
@@ -408,3 +410,65 @@ def save_federated_clients(
         w = csv.writer(f)
         w.writerow(["client_id", "num_nodes", "num_edges"])
         w.writerows(client_stats)
+
+
+def write_witness_split_sanity(
+    out_csv: str,
+    node_to_client: torch.Tensor,
+    witnesses: Dict[str, List[Tuple[int, ...]]],
+    max_instances_per_task: int = 10000,
+):
+    """
+    Writes a CSV summarizing, per task, how well witnesses are split across clients.
+
+    For each witness instance:
+      - k = number of nodes in witness tuple
+      - distinct_clients = number of distinct client IDs among those nodes
+      - perfect_split = (distinct_clients == k) if num_clients >= k else (distinct_clients == num_clients)
+    """
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+
+    num_clients = int(node_to_client.max().item()) + 1
+
+    rows = []
+    for task, insts in witnesses.items():
+        insts = insts[:max_instances_per_task]
+        total = len(insts)
+        if total == 0:
+            rows.append([task, 0, 0, 0.0, 0.0, 0])
+            continue
+
+        perfect = 0
+        distinct_sum = 0
+        min_distinct = 10**9
+
+        for inst in insts:
+            clients = [int(node_to_client[int(u)].item()) for u in inst]
+            distinct = len(set(clients))
+            distinct_sum += distinct
+            min_distinct = min(min_distinct, distinct)
+
+            target = min(len(inst), num_clients)
+            if distinct == target:
+                perfect += 1
+
+        rows.append([
+            task,
+            total,
+            perfect,
+            perfect / total,
+            distinct_sum / total,
+            min_distinct,
+        ])
+
+    with open(out_csv, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "task",
+            "num_witnesses_checked",
+            "num_perfectly_split",
+            "perfect_split_rate",
+            "avg_distinct_clients_per_witness",
+            "min_distinct_clients_seen",
+        ])
+        w.writerows(rows)
