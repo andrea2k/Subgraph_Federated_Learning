@@ -19,7 +19,7 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
   - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
     - [Motivation](#motivation)
     - [How to Generate Pattern-Aware Splits](#how-to-generate-pattern-aware-splits)
-    - [Sanity Checking Pattern Dispersion](#sanity-checking-pattern-dispersion)
+    - [Sanity Checking Pattern Dispersion Across Clients](#sanity-checking-pattern-dispersion-across-clients)
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
   - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
   - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
@@ -159,7 +159,7 @@ The witness-based strategy addresses this by enforcing **instance-level subtask 
 
 > Nodes participating in the same structural pattern are, whenever possible, assigned to different clients.
 
-This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime scenario.
+This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime setting.
 
 ---
 
@@ -180,14 +180,14 @@ produces an additional federated split directory `./data/fed_witness_splits/` wi
 
 ---
 
-#### Sanity Checking Pattern Dispersion
+#### Sanity Checking Pattern Dispersion Across Clients
 
-To verify correct splitting behavior, the **witness-level dispersion statistics** are computed.
+To verify correct splitting behavior, the **dispersion statistics** are computed.
 
 For each pattern type, the following metrics are reported:
 
 - number of pattern instances evaluated,
-- fraction of instances achieving **maximal dispersion** across clients,
+- fraction of instances achieving maximal dispersion across clients,
 - average number of distinct clients per pattern instance,
 - worst-case (minimum) dispersion observed.
 
@@ -195,7 +195,7 @@ These statistics confirm that:
 
 - small patterns (e.g., 2- and 3-cycles) are almost always perfectly split,
 - larger patterns are consistently distributed across multiple clients,
-- no pattern type collapses into single-client concentration.
+- no pattern ends up entirely within a single client.
 
 This provides strong empirical validation that the federated split respects **pattern-level heterogeneity**.
 
