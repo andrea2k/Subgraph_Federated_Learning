@@ -14,7 +14,7 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
   - [Community-Detection-Based Partitioning](#community-detection-based-partitioning)
     - [Original Splits (Equal-Sized Clients)](#original-splits-equal-sized-clients)
     - [Original Splits (Zipf-Skewed Clients)](#original-splits-zipf-skewed-clients)
-    - [Label-Imbalance Splits (LIS-Based)](#label-imbalance-splits-lis-based)
+    - [Label-Controlled Splits (Imbalance-Handled)](#label-controlled-splits-imbalance-handled)
     - [How to Generate Metis- and Louvain-based Splits](#how-to-generate-metis--and-louvain-based-splits)
   - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
     - [Motivation](#motivation)
@@ -106,10 +106,9 @@ To simulate more realistic financial crime settings with different client sizes,
 
 These splits model strongly **non-uniform client sizes**, common in real-world networks.
 
-#### Label-Imbalance Splits (LIS-Based)
+#### Label-Controlled Splits (Imbalance-Handled)
 
-We also provide **label-imbalance–aware** splits following the OpenFGL LIS strategy. Communities are clustered by their multi-task label distributions and grouped to reduce extreme label skew across clients.
-These splits are useful for benchmarking federated learning performance.
+We also provide **label-controlled (imbalance-handled)** splits following the OpenFGL label-distribution clustering strategy. Communities are clustered based on their multi-task label distributions and grouped to explicitly reduce extreme label skew across clients. These splits are intended for **controlled benchmarking**, where label distributions and task difficulty are kept comparable across clients.
 
 ---
 
@@ -127,8 +126,8 @@ This produces **six federated split directories** (each containing per-client `.
 - `fed_metis_splits/` — Metis, equal-sized
 - `fed_louvain_splits_zipf_skewed/` — Louvain, Zipf-skewed
 - `fed_metis_splits_zipf_skewed/` — Metis, Zipf-skewed
-- `fed_louvain_imbalance_splits/` — Louvain with label-imbalance handling
-- `fed_metis_imbalance_splits/` — Metis with label-imbalance handling
+- `fed_louvain_imbalance_splits/` — Louvain, label-controlled (imbalance-handled)
+- `fed_metis_imbalance_splits/` — Metis, label-controlled (imbalance-handled)
 
 Additionally:
 
@@ -155,7 +154,7 @@ Unlike Metis- or Louvain-based approaches, which operate purely on graph topolog
 
 In realistic federated financial crime detection settings, illicit activity patterns are often **distributed across institutions** rather than localized within a single organization. Community-based partitioning can unintentionally concentrate entire subgraph patterns within a single client, making the federated task artificially easy.
 
-The witness-based strategy addresses this by enforcing **instance-level subtask pattern dispersion**:
+The witness-based strategy addresses this by enforcing **instance-level pattern dispersion**:
 
 > Nodes participating in the same structural pattern are, whenever possible, assigned to different clients.
 
