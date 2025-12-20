@@ -49,7 +49,7 @@ PARTITION_STRATEGY = FED_CONFIG["partition_strategy"]
 GLOBAL_EPOCHS = FED_CONFIG["global_epochs"]      # number of global communication rounds
 GLOBAL_LOCAL_EPOCHS = FED_CONFIG["local_epochs"] # client epochs per round
 CLIENT_FRACTION = FED_CONFIG["client_fraction"]  # fraction of clients per round, domain:(0,1]
-
+BASE_SEED = FED_CONFIG["base_seed"]
 
 def get_fl_classes(algorithm: str):
     """
@@ -75,7 +75,6 @@ ClientClass, ServerClass = get_fl_classes(ALGORITHM)
 
 # Initialize number of clients and base seed using community splits config
 NUM_CLIENTS = COMMUNITY_SPLITS_CONFIG["num_clients"]
-BASE_SEED = COMMUNITY_SPLITS_CONFIG["base_seed"]
 
 if PARTITION_STRATEGY == "louvain imbalance":
     FED_TRAIN_SPLITS_DIR = "./data/fed_louvain_imbalance_splits"
@@ -92,7 +91,6 @@ elif PARTITION_STRATEGY == "metis original skewed":
 elif PARTITION_STRATEGY == "partition aware":
     FED_TRAIN_SPLITS_DIR = "./data/fed_witness_splits/train/clients"
     NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
-    BASE_SEED = PARTITION_AWARE_SPLITS_CONFIG["base_seed"]
 else:
     raise ValueError(
         f"Unknown partition_strategy='{PARTITION_STRATEGY}'. "
