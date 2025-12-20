@@ -11,10 +11,15 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
   - [Default Generation Settings for Synthetic Graph](#default-generation-settings-for-synthetic-graph)
   - [How to Generate Synthetic Graph](#how-to-generate-synthetic-graph)
 - [Federated Subgraph Partitioning](#federated-subgraph-partitioning)
-  - [Original Splits (Equal-Sized Clients)](#original-splits-equal-sized-clients)
-  - [Original Splits (Zipf-Skewed Clients)](#original-splits-zipf-skewed-clients)
-  - [Label-Imbalance Splits (LIS-Based)](#label-imbalance-splits-lis-based)
-  - [How to Generate Federated Splits](#how-to-generate-federated-splits)
+  - [Community-Detection-Based Partitioning](#community-detection-based-partitioning)
+    - [Original Splits (Equal-Sized Clients)](#original-splits-equal-sized-clients)
+    - [Original Splits (Zipf-Skewed Clients)](#original-splits-zipf-skewed-clients)
+    - [Label-Imbalance Splits (LIS-Based)](#label-imbalance-splits-lis-based)
+    - [How to Generate Metis- and Louvain-based Splits](#how-to-generate-metis--and-louvain-based-splits)
+  - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
+    - [Motivation](#motivation)
+    - [How to Generate Pattern-Aware Splits](#how-to-generate-pattern-aware-splits)
+    - [Sanity Checking Pattern Dispersion](#sanity-checking-pattern-dispersion)
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
   - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
   - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
@@ -78,6 +83,8 @@ This command generates the synthetic pattern-detection graphs and saves the foll
 
 ## Federated Subgraph Partitioning
 
+### Community-Detection-Based Partitioning
+
 In the federated setting, each client is represented by a subgraph of the global synthetic graph. We use two community-detection–based partitioning techniques:
 
 - **Metis:** balanced k-way graph partitioning
@@ -86,11 +93,11 @@ In the federated setting, each client is represented by a subgraph of the global
 Both follow the methodology of
 [OpenFGL: A Comprehensive Benchmark for Federated Graph Learning](https://arxiv.org/abs/2408.16288) (Li et al., 2024), extended here for multi-task labels.
 
-### Original Splits (Equal-Sized Clients)
+#### Original Splits (Equal-Sized Clients)
 
 The default experimental setup uses **approximately equal-sized clients**. After detecting communities, we assign them to clients using a greedy bin-packing strategy, producing subgraphs with similar node counts. This provides a controlled and stable federated environment for evaluating performance differences between centralized and decentralized training.
 
-### Original Splits (Zipf-Skewed Clients)
+#### Original Splits (Zipf-Skewed Clients)
 
 To simulate more realistic financial crime settings with different client sizes, we additionally support **Zipf-skewed** splits. Communities are assigned to clients according to a Zipf-like distribution, producing:
 
@@ -99,14 +106,14 @@ To simulate more realistic financial crime settings with different client sizes,
 
 These splits model strongly **non-uniform client sizes**, common in real-world networks.
 
-### Label-Imbalance Splits (LIS-Based)
+#### Label-Imbalance Splits (LIS-Based)
 
 We also provide **label-imbalance–aware** splits following the OpenFGL LIS strategy. Communities are clustered by their multi-task label distributions and grouped to reduce extreme label skew across clients.
 These splits are useful for benchmarking federated learning performance.
 
 ---
 
-### How to Generate Federated Splits
+#### How to Generate Metis- and Louvain-based Splits
 
 From the repository root:
 
@@ -135,6 +142,62 @@ The training script automatically selects the appropriate directory using:
 
 Examples:
 `"metis original"`, `"louvain original skewed"`, `"metis imbalance"`
+
+---
+
+### Pattern-Aware Federated Splits (Witness-Based)
+
+In addition to community-detection–based partitioning, this repository provides a **pattern-aware federated splitting strategy** that explicitly divides _structural subgraph patterns_ across clients.
+
+Unlike Metis- or Louvain-based approaches, which operate purely on graph topology, this strategy uses **pattern witnesses**, the exact node sets that form each labeled subgraph instance (e.g., cycles, scatter–gather motifs, or bicliques), to guide client assignment.
+
+#### Motivation
+
+In realistic federated financial crime detection settings, illicit activity patterns are often **distributed across institutions** rather than localized within a single organization. Community-based partitioning can unintentionally concentrate entire subgraph patterns within a single client, making the federated task artificially easy.
+
+The witness-based strategy addresses this by enforcing **instance-level subtask pattern dispersion**:
+
+> Nodes participating in the same structural pattern are, whenever possible, assigned to different clients.
+
+This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime scenario.
+
+---
+
+#### How to Generate Pattern-Aware Splits
+
+Running the synthetic data generation script:
+
+```bash
+python3 -m scripts.data.generate_synthetic
+```
+
+produces an additional federated split directory `./data/fed_witness_splits/` with the following structure per global graph (`train/`, `val/`, `test/`):
+
+- `clients/client_XXXX.pt` — per-client subgraphs
+- `node_to_client.pt` — node-to-client assignment
+- `client_sizes.csv` — number of nodes and edges per client
+- `witness_split_sanity.csv` — sanity check of pattern dispersion
+
+---
+
+#### Sanity Checking Pattern Dispersion
+
+To verify correct splitting behavior, the **witness-level dispersion statistics** are computed.
+
+For each pattern type, the following metrics are reported:
+
+- number of pattern instances evaluated,
+- fraction of instances achieving **maximal dispersion** across clients,
+- average number of distinct clients per pattern instance,
+- worst-case (minimum) dispersion observed.
+
+These statistics confirm that:
+
+- small patterns (e.g., 2- and 3-cycles) are almost always perfectly split,
+- larger patterns are consistently distributed across multiple clients,
+- no pattern type collapses into single-client concentration.
+
+This provides strong empirical validation that the federated split respects **pattern-level heterogeneity**.
 
 ## Principal Neighborhood Aggregation (PNA)
 
