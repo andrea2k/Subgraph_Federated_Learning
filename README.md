@@ -171,12 +171,20 @@ Running the synthetic data generation script:
 python3 -m scripts.data.generate_synthetic
 ```
 
-produces an additional federated split directory `./data/fed_witness_splits/` with the following structure per global graph (`train/`, `val/`, `test/`):
+produces an additional federated split directory at `./data/fed_witness_splits/`.
+
+This directory contains **pattern-aware federated splits** for each global graph split (`train/`, `val/`, `test/`). Each split directory has the following structure:
 
 - `clients/client_XXXX.pt` — per-client subgraphs
 - `node_to_client.pt` — node-to-client assignment
 - `client_sizes.csv` — number of nodes and edges per client
-- `witness_split_sanity.csv` — sanity check of pattern dispersion
+- `witness_split_sanity.csv` — sanity check showing how often pattern instances are split across distinct clients
+
+The training script automatically uses these **pattern-aware splits** when the federated configuration specifies:
+
+```json
+"partition_strategy": "partition aware"
+```
 
 ---
 
@@ -313,7 +321,7 @@ The federated setting introduces additional hyperparameters governing both the *
 - **`partition_strategy`**
   Selects the partitioning strategy used in the experiment.
   Supported options:
-  `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`
+  `"partition aware"`, `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`
 
 - **`global_epochs = 100`**
   The total number of global training rounds.
