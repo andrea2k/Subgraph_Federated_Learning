@@ -1,26 +1,22 @@
-# flcore/fedavg.py
+# flcore/fedprox/client.py
 import torch
 from fed_algo.base import BaseClient
 
 class FedProxClient(BaseClient):
     """
-    FedAvgClient implements the client-side logic for the Federated Averaging (FedAvg) algorithm,
-    introduced in the paper "Communication-Efficient Learning of Deep Networks from Decentralized Data"
-    by McMahan et al. (2017). This class extends the BaseClient class and manages local training
-    and communication with the server.
-
-    The FedAvg algorithm allows clients to train models locally on their data and send the 
-    updated model parameters to the server for aggregation, enabling efficient learning in 
-    decentralized environments.
+    FedProxClient is a client implementation for the Federated Proximal (FedProx) framework, 
+    introduced in the paper "Federated Optimization in Heterogeneous Networks." This client 
+    handles local training with a custom loss function that includes a proximal term, 
+    designed to address the challenges of heterogeneity in federated learning environments.
 
     Attributes:
-        None (inherits attributes from BaseClient)
+        None
     """
     def __init__(self, args, client_id, data, data_dir, message_pool, device):
         """
-        Initializes the FedAvgClient.
+        Initializes the FedProxClient.
 
-        Attributes:
+        Args:
             args (Namespace): Arguments containing model and training configurations.
             client_id (int): ID of the client.
             data (object): Data specific to the client's task.
@@ -32,18 +28,22 @@ class FedProxClient(BaseClient):
             
     def execute(self):
         """
-        Executes the local training process. This method first synchronizes the local model
-        with the global model parameters received from the server, and then trains the model
-        on the client's local data.
+        1) Sync local model with server weights
+        2) Cache a frozen snapshot of global parameters (for proximal term)
+        3) Train locally with FedProx penalty
         """
-        # Sync local model with global model
+        # 1) Sync local model with global model
         with torch.no_grad():
             global_weights = self.message_pool["server"]["weight"]
             for local_param, global_param in zip(self.task.model.parameters(), global_weights):
                 local_param.data.copy_(global_param.to(self.device))
 
-        # Local training (implemented inside NodeClsTask)
-        self.task.train()
+        # 2) Snapshot global params for proximal penalty (detach + clone)
+        global_params = [p.detach().clone() for p in self.task.model.parameters()]
+
+        # 3) Local training with FedProx
+        mu = float(getattr(self.args, "fedprox_mu", 1e-3))
+        self.task.train(global_params=global_params, fedprox_mu=mu)
 
     def send_message(self):
         """
