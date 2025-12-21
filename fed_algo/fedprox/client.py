@@ -44,7 +44,7 @@ class FedProxClient(BaseClient):
             for w in self.message_pool["server"]["weight"]
         ]
 
-        def custom_loss_fn(embedding, logits, label, mask):
+        def custom_loss_fn(logits, label):
             base_loss = self.task.default_loss_fn(logits, label)
             prox = 0.0
             for local_param, global_param in zip(self.task.model.parameters(), global_params):

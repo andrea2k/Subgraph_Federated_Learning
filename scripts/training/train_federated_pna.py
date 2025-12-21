@@ -17,6 +17,9 @@ from models.pna_reverse_mp import compute_directional_degree_hists
 from fed_algo.fedavg.client import FedAvgClient
 from fed_algo.fedavg.server import FedAvgServer
 
+from fed_algo.fedprox.client import FedProxClient
+from fed_algo.fedprox.server import FedProxServer
+
 
 PNA_CONFIG_PATH = "./configs/pna_configs.json"
 FED_CONFIG_PATH = "./configs/fed_configs.json"
@@ -59,6 +62,8 @@ def get_fl_classes(algorithm: str):
     alg = algorithm.lower()
     if alg == "fedavg":
         return FedAvgClient, FedAvgServer
+    elif alg == "fedprox":
+        return FedProxClient, FedProxServer
     # elif alg == "fedadam":
     #     from fed_algo.fedadam.client import FedAdamClient
     #     from fed_algo.fedadam.server import FedAdamServer
@@ -66,7 +71,7 @@ def get_fl_classes(algorithm: str):
     else:
         raise NotImplementedError(
             f"Algorithm '{algorithm}' is not implemented. "
-            f"Supported algorithms: ['fedavg']"
+            f"Supported algorithms: ['fedavg', 'fedprox']"
         )
 
 
@@ -335,7 +340,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
                 valid_loader,
                 criterion,
                 device,
-                USE_PORT_IDS,
+                use_ego_ids,
             )
 
         # We don't have a clean single scalar train_loss for all clients,
@@ -360,7 +365,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         test_loader,
         criterion,
         device,
-        USE_PORT_IDS,
+        use_port_ids,
     )
     return test_loss, test_f1
 
