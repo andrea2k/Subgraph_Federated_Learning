@@ -1,6 +1,6 @@
-# flcore/fedprox/client.py
 import torch
 from fed_algo.base import BaseClient
+from fed_algo.fedprox.fedprox_config import config
 
 class FedProxClient(BaseClient):
     """
@@ -25,32 +25,63 @@ class FedProxClient(BaseClient):
             device (torch.device): Device to run the computations on.
         """
         super(FedProxClient, self).__init__(args, client_id, data, data_dir, message_pool, device)
-            
+
+
+    def get_custom_loss_fn(self):
+        """
+        Returns a custom loss function for the FedProx framework. This loss function combines 
+        the standard task-specific loss (e.g., cross-entropy) with a proximal term that penalizes 
+        the deviation of local model parameters from the global model parameters.
+
+        Returns:
+            custom_loss_fn (function): A custom loss function that includes the proximal term.
+        """
+        mu = float(config["fedprox_mu"])
+
+        # snapshot global weights once per round
+        global_params = [
+            w.detach().to(self.device).clone()
+            for w in self.message_pool["server"]["weight"]
+        ]
+
+        def custom_loss_fn(embedding, logits, label, mask):
+            base_loss = self.task.default_loss_fn(logits, label)
+            prox = 0.0
+            for local_param, global_param in zip(self.task.model.parameters(), global_params):
+                prox += (local_param - global_param).pow(2).sum()
+            prox = 0.5 * mu * prox
+            return base_loss + prox
+
+        return custom_loss_fn
+    
+
     def execute(self):
         """
-        1) Sync local model with server weights
-        2) Cache a frozen snapshot of global parameters (for proximal term)
-        3) Train locally with FedProx penalty
+        OpenFGL-style execute:
+          1) sync local params from server
+          2) set task.loss_fn to FedProx custom loss
+          3) train
         """
-        # 1) Sync local model with global model
         with torch.no_grad():
-            global_weights = self.message_pool["server"]["weight"]
-            for local_param, global_param in zip(self.task.model.parameters(), global_weights):
+            for local_param, global_param in zip(self.task.model.parameters(), self.message_pool["server"]["weight"]):
                 local_param.data.copy_(global_param.to(self.device))
 
-        # 2) Snapshot global params for proximal penalty (detach + clone)
-        global_params = [p.detach().clone() for p in self.task.model.parameters()]
+        self.task.loss_fn = self.get_custom_loss_fn()
+        self.task.train()
+        self.task.loss_fn = None
 
-        # 3) Local training with FedProx
-        mu = float(getattr(self.args, "fedprox_mu", 1e-3))
-        self.task.train(global_params=global_params, fedprox_mu=mu)
 
     def send_message(self):
         """
-        Sends a message to the server containing the model parameters after training
-        and the number of samples in the client's dataset.
+        Sends a message to the server containing the local model parameters and the number 
+        of samples used for training. This information is used by the server to update the 
+        global model parameters.
+
+        The message includes:
+            - num_samples: The number of samples used in local training.
+            - weight: The updated local model parameters.
         """
         self.message_pool[f"client_{self.client_id}"] = {
             "num_samples": self.task.num_samples,
             "weight": [p.data.detach().cpu().clone() for p in self.task.model.parameters()],
-        }
+}        
