@@ -156,9 +156,10 @@ def _augment_with_ego_and_get_seed_slice(x_in, y_true, batch, is_hetero, model):
     return x_in_aug, y_used, B
 
 
-def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False):
+def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False, loss_fn=None):
     """
     This method can be used for training both homogeneous and heterogeneous graphs
+    If loss_fn is provided, it will be used (OpenFGL-style hook).
     """
     model.train()
     total_loss  = 0.0
@@ -218,7 +219,12 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False)
 
         out_used = out[:B] if B is not None else out
 
-        loss = criterion(out_used, y_used.float())
+        if loss_fn is not None:
+            # When we want to keep signature compatible with OpenFGL: (embedding, logits, label, mask)
+            loss = loss_fn(None, out_used, y_used.float(), None)
+        else:
+            loss = criterion(out_used, y_used.float())
+
         loss.backward()
         optimizer.step()
 

@@ -185,6 +185,12 @@ class NodeClsTask:
             self.criterion = nn.BCEWithLogitsLoss()
             print(f"[{name}] Using unweighted BCEWithLogitsLoss.")
 
+        # OpenFGL-style loss API:
+        # Default loss (what FedAvg will use)
+        self.default_loss_fn = lambda logits, labels: self.criterion(logits, labels.float())
+        # Algorithm can override this (FedProx will set it)
+        self.loss_fn = None
+
 
     # Local training used by FedAvgClient.execute() method
     def train(self):
@@ -200,10 +206,12 @@ class NodeClsTask:
         self.model.train()
         for ep in range(local_epochs):
             _ = train_epoch(
-                self.model,
-                self.train_loader,
-                self.optimizer,
-                self.criterion,
-                self.device,
-                self.use_port_ids,
-            )
+                    self.model,
+                    self.train_loader,
+                    self.optimizer,
+                    self.criterion,
+                    self.device,
+                    self.use_port_ids,
+                    loss_fn=self.loss_fn,
+                )
+
