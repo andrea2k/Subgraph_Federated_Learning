@@ -320,7 +320,7 @@ The federated setting introduces additional hyperparameters governing both the *
 - **`partition_strategy`**
   Selects the partitioning strategy used in the experiment.
   Supported options:
-  `"partition aware"`, `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`
+  `"partition aware"`, `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`.
 
 - **`global_epochs = 100`**
   The total number of global training rounds.
@@ -333,6 +333,8 @@ The federated setting introduces additional hyperparameters governing both the *
 
 - **`algorithm`**
   Specifies the federated learning algorithm used in the experiment.
+  Currently supported options:
+  `"fedavg"`, `"fedprox"`.
 
 All configurations are available in `.configs/fed_configs.json` file.
 
