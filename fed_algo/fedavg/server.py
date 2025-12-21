@@ -1,4 +1,4 @@
-# flcore/fedavg.py
+# flcore/fedavg/server.py
 import torch
 from fed_algo.base import BaseServer
 
