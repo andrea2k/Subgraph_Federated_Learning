@@ -38,22 +38,21 @@ class FedProxClient(BaseClient):
         """
         mu = float(config["fedprox_mu"])
 
-        # snapshot global weights once per round
         global_params = [
             w.detach().to(self.device).clone()
             for w in self.message_pool["server"]["weight"]
         ]
 
-        def custom_loss_fn(logits, label):
+        def custom_loss_fn(emb, logits, label, mask):
+            # emb and mask are unused for FedProx, but kept for compatibility
             base_loss = self.task.default_loss_fn(logits, label)
             prox = 0.0
             for local_param, global_param in zip(self.task.model.parameters(), global_params):
                 prox += (local_param - global_param).pow(2).sum()
-            prox = 0.5 * mu * prox
-            return base_loss + prox
+            return base_loss + 0.5 * mu * prox
 
         return custom_loss_fn
-    
+        
 
     def execute(self):
         """
