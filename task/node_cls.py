@@ -190,6 +190,9 @@ class NodeClsTask:
         self.default_loss_fn = lambda logits, labels: self.criterion(logits, labels.float())
         # Algorithm can override this (FedProx will set it)
         self.loss_fn = None
+        
+        # for scaffold algorithm
+        self.step_preprocess = None
 
 
     # Local training used by FedAvgClient.execute() method
@@ -213,5 +216,6 @@ class NodeClsTask:
                     self.device,
                     self.use_port_ids,
                     loss_fn=self.loss_fn,
+                    step_preprocess=self.step_preprocess,
                 )
 
