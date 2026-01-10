@@ -413,11 +413,20 @@ def save_federated_clients(
         # Nodes in this client graph = owned nodes + ghost endpoints
         nodes_keep = torch.unique(torch.cat([kept_src, kept_dst], dim=0))
 
-        # Extract subgraph induced by nodes_keep (relabel to 0..n-1)
+        # Filter edges first (ONLY edges touching owned nodes)
+        edge_index_f = global_data.edge_index[:, edge_keep]
+        edge_attr_f  = None if base_edge_attr is None else base_edge_attr[edge_keep]
+
+        # Nodes in this client graph = owned nodes + ghost endpoints (from filtered edges)
+        kept_src = edge_index_f[0]
+        kept_dst = edge_index_f[1]
+        nodes_keep = torch.unique(torch.cat([kept_src, kept_dst], dim=0))
+
+        # Now relabel ONLY these filtered edges
         eidx, eattr = subgraph(
             subset=nodes_keep,
-            edge_index=global_data.edge_index,
-            edge_attr=base_edge_attr,
+            edge_index=edge_index_f,     # filtered edge_index
+            edge_attr=edge_attr_f,       # filtered edge_attr
             relabel_nodes=True,
             num_nodes=global_data.num_nodes,
         )

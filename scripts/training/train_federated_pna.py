@@ -7,6 +7,7 @@ from datetime import datetime
 from types import SimpleNamespace
 import torch
 
+from utils.sanity_check import sanity_check_client_graphs
 from utils.metrics import append_f1_score_to_csv, start_epoch_csv, append_epoch_csv
 from utils.seed import set_seed
 from utils.train_utils import load_datasets, ensure_node_features, evaluate_epoch
@@ -236,7 +237,6 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     print(f"[FL-SETUP] Loading federated train splits from {FED_TRAIN_SPLITS_DIR}")
     client_graphs = []
     for cid in range(NUM_CLIENTS):
-        # supports both naming styles; prefers 4-digit
         p1 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid:04d}.pt")
         p2 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid}.pt")
         path = p1 if os.path.exists(p1) else p2
@@ -245,6 +245,14 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
                 f"Missing client graph for cid={cid}. Tried:\n  {p1}\n  {p2}"
             )
         client_graphs.append(torch.load(path, weights_only=False))
+
+    # sanity check
+    node_to_client_path = os.path.join(os.path.dirname(FED_TRAIN_SPLITS_DIR), "node_to_client.pt")
+    if os.path.exists(node_to_client_path):
+        node_to_client = torch.load(node_to_client_path)
+        sanity_check_client_graphs(client_graphs, node_to_client)
+    else:
+        print(f"[SANITY] node_to_client.pt not found at {node_to_client_path}, skipping mapping checks.")
 
     args = SimpleNamespace(
         task="node_cls",
