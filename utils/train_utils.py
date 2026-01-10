@@ -219,6 +219,24 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False,
 
         out_used = out[:B] if B is not None else out
 
+        # If client graph has owned_mask, compute loss only on owned nodes
+        owned_mask = None
+        if is_hetero:
+            if hasattr(batch['n'], 'owned_mask'):
+                owned_mask = batch['n'].owned_mask
+        else:
+            if hasattr(batch, 'owned_mask'):
+                owned_mask = batch.owned_mask
+
+        # If full-batch (or seed slicing returns all nodes), apply owned_mask
+        if owned_mask is not None and (B is None or B == n_nodes):
+            out_used = out_used[owned_mask]
+            y_used = y_used[owned_mask]
+            # count should be owned nodes
+            count = int(owned_mask.sum().item())
+        else:
+            count = (B if B is not None else n_nodes)
+
         if loss_fn is not None:
             # When we want to keep signature compatible with OpenFGL: (embedding, logits, label, mask)
             loss = loss_fn(None, out_used, y_used.float(), None)
@@ -232,7 +250,6 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False,
         
         optimizer.step()
 
-        count = (B if B is not None else n_nodes)
         total_loss  += loss.item() * count
         total_count += count
 
@@ -281,8 +298,22 @@ def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
     
         out_used = out[:B] if B is not None else out
 
+        owned_mask = None
+        if is_hetero:
+            if hasattr(batch['n'], 'owned_mask'):
+                owned_mask = batch['n'].owned_mask
+        else:
+            if hasattr(batch, 'owned_mask'):
+                owned_mask = batch.owned_mask
+
+        if owned_mask is not None and (B is None or B == n_nodes):
+            out_used = out_used[owned_mask]
+            y_used = y_used[owned_mask]
+            count = int(owned_mask.sum().item())
+        else:
+            count = (B if B is not None else n_nodes)
+
         loss = criterion(out_used, y_used.float())
-        count = (B if B is not None else n_nodes)
         total_loss  += loss.item() * count
         total_count += count
 
