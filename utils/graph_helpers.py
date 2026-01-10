@@ -38,47 +38,6 @@ def build_hetero_neighbor_loader(
     fanout: Any,
     device: Optional[torch.device] = None,
     shuffle: bool = True,
-):
-    """
-    NeighborLoader for mini-batch training/eval on a hetero graph.
-
-    fanout can be int or list[int].
-    """
-    if isinstance(fanout, int):
-        fanout_list = [fanout] * num_layers
-    else:
-        fanout_list = list(fanout)
-
-    num_neighbors = {
-        ("n", "fwd", "n"): fanout_list,
-        ("n", "rev", "n"): fanout_list,
-    }
-
-    use_cuda = (device is not None and device.type == "cuda")
-    num_workers = max(1, os.cpu_count() // 2)
-
-    return NeighborLoader(
-        hetero_data,
-        num_neighbors=num_neighbors,
-        input_nodes=("n", torch.arange(hetero_data["n"].num_nodes)),
-        batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=False,
-        pin_memory=use_cuda,
-        num_workers=num_workers,
-        persistent_workers=True,
-        prefetch_factor=2,
-        filter_per_worker=True,
-    )
-
-
-def build_hetero_neighbor_loader(
-    hetero_data,
-    batch_size: int,
-    num_layers: int,
-    fanout: Any,
-    device: Optional[torch.device] = None,
-    shuffle: bool = True,
     input_nodes: Optional[Union[torch.Tensor, List[int]]] = None,
 ):
     """
@@ -116,7 +75,6 @@ def build_hetero_neighbor_loader(
 
     use_cuda = (device is not None and device.type == "cuda")
 
-    # Be safe across environments: if num_workers==0, you must set persistent_workers=False
     cpu_cnt = os.cpu_count() or 2
     num_workers = max(0, cpu_cnt // 2)
 
@@ -134,5 +92,40 @@ def build_hetero_neighbor_loader(
         num_workers=num_workers,
         persistent_workers=persistent_workers,
         prefetch_factor=prefetch_factor,
+        filter_per_worker=True,
+    )
+
+
+def build_full_eval_loader(
+    hetero_data,
+    batch_size: int,
+    num_layers: int,
+    device: Optional[torch.device] = None,
+    shuffle: bool = False,
+):
+    """
+    Covers all nodes as seeds and expands with all neighbors up to num_layers.
+    Uses -1 neighbors, i.e., full k-hop neighborhoods.
+    """
+    fanout_all = [-1] * num_layers
+    num_neighbors = {
+        ("n", "fwd", "n"): fanout_all,
+        ("n", "rev", "n"): fanout_all,
+    }
+
+    use_cuda = (device is not None and device.type == "cuda")
+    num_workers = max(1, os.cpu_count() // 2)
+
+    return NeighborLoader(
+        hetero_data,
+        num_neighbors=num_neighbors,
+        input_nodes=("n", torch.arange(hetero_data["n"].num_nodes)),
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=False,
+        pin_memory=use_cuda,
+        num_workers=num_workers,
+        persistent_workers=True,
+        prefetch_factor=2,
         filter_per_worker=True,
     )

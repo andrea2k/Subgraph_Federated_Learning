@@ -345,7 +345,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
                 valid_loader,
                 criterion,
                 device,
-                use_ego_ids,
+                use_port_ids,
             )
 
         # We don't have a clean single scalar train_loss for all clients,

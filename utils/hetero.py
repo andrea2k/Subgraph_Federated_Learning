@@ -13,9 +13,7 @@ def make_bidirected_hetero(data, *, keep_node_x=True, keep_node_y=True):
     Edge attributes:
       Expects data.edge_attr[..., -2:] == [in_port, out_port] (LONG).
       For 'fwd' we keep [in_port, out_port] as-is.
-      For 'rev' we SWAP them: [out_port, in_port], because the reversed edge
-      (v->u) sees u's incoming port equal to original out_port(u->v), and
-      v's outgoing port equal to original in_port(u->v).
+      For 'rev' we SWAP them.
     """
     assert hasattr(data, "edge_index"), "Data must have an edge_index"
 
@@ -34,12 +32,22 @@ def make_bidirected_hetero(data, *, keep_node_x=True, keep_node_y=True):
         if getattr(data, key, None) is not None:
             hd['n'][key] = getattr(data, key)
 
+    # Preserve federated ghost/owned metadata on nodes
+    if hasattr(data, "owned_mask") and data.owned_mask is not None:
+        # ensure bool dtype (some pipelines may store uint8/long)
+        hd['n'].owned_mask = data.owned_mask.bool()
+    if hasattr(data, "global_nid") and data.global_nid is not None:
+        hd['n'].global_nid = data.global_nid.long()
+    if hasattr(data, "client_id"):
+        # store as a python int attribute; optional
+        hd['n'].client_id = int(getattr(data, "client_id"))
+
     # Edges
     ei = data.edge_index
     hd[('n','fwd','n')].edge_index = ei                         # u -> v
     hd[('n','rev','n')].edge_index = torch.flip(ei, dims=[0])   # v -> u
 
-    # Ports 
+    # Ports
     if getattr(data, 'edge_attr', None) is None:
         raise ValueError("Expected data.edge_attr with [.., in_port, out_port] appended. Got None.")
 
@@ -55,8 +63,7 @@ def make_bidirected_hetero(data, *, keep_node_x=True, keep_node_y=True):
     fwd_edge_attr = torch.stack([in_ports, out_ports], dim=-1)  # [E, 2] longs
     hd[('n','fwd','n')].edge_attr = fwd_edge_attr
 
-    # Reverse relation swaps them to reflect local view at reversed endpoints:
-    # (v->u): in_port@u == out_port(u->v), out_port@v == in_port(u->v)
+    # Reverse relation swaps them:
     rev_edge_attr = torch.stack([out_ports, in_ports], dim=-1)  # [E, 2] longs
     hd[('n','rev','n')].edge_attr = rev_edge_attr
 

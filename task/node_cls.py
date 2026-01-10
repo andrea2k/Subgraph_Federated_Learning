@@ -105,7 +105,11 @@ class NodeClsTask:
         out_dim = self.hetero_data['n'].y.size(-1)
         self.out_dim = out_dim
 
-        self.num_samples = int(self.hetero_data['n'].num_nodes)
+        # num_samples MUST count only owned nodes for correct FedAvg weighting
+        if hasattr(self.hetero_data['n'], "owned_mask") and self.hetero_data['n'].owned_mask is not None:
+            self.num_samples = int(self.hetero_data['n'].owned_mask.sum().item())
+        else:
+            self.num_samples = int(self.hetero_data['n'].num_nodes)
 
         # Batch size for local training
         if self.use_mini_batch:
@@ -140,6 +144,13 @@ class NodeClsTask:
 
         # 6) Build local training loader (mini-batch or full-batch)
         num_hops = self.num_layers  # one hop per PNA layer
+
+        # Choose seed nodes for NeighborLoader:
+        # If owned_mask exists (ghost setting), seed ONLY owned nodes
+        owned_idx = None
+        if hasattr(self.hetero_data['n'], "owned_mask") and self.hetero_data['n'].owned_mask is not None:
+            owned_idx = torch.where(self.hetero_data['n'].owned_mask)[0]
+
         if self.use_mini_batch:
             self.train_loader = build_hetero_neighbor_loader(
                 self.hetero_data,
@@ -147,6 +158,8 @@ class NodeClsTask:
                 num_layers=num_hops,
                 fanout=self.neighbors_per_hop,
                 device=self.device,
+                shuffle=True,
+                input_nodes=owned_idx,  
             )
         else:
             self.train_loader = build_full_eval_loader(
