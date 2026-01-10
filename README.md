@@ -18,6 +18,7 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
     - [How to Generate Metis- and Louvain-based Splits](#how-to-generate-metis--and-louvain-based-splits)
   - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
     - [Motivation](#motivation)
+    - [Client Subgraph Structure](#client-subgraph-structure)
     - [How to Generate Pattern-Aware Splits](#how-to-generate-pattern-aware-splits)
     - [Sanity Checking Pattern Dispersion Across Clients](#sanity-checking-pattern-dispersion-across-clients)
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
@@ -159,6 +160,12 @@ The witness-based strategy addresses this by enforcing **instance-level pattern 
 > Nodes participating in the same structural pattern are, whenever possible, assigned to different clients.
 
 This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime setting.
+
+#### Client Subgraph Structure
+
+Each client subgraph retains **all edges incident to at least one node owned by that client**. When an edge connects an owned node to a node assigned to a different client, the non-owned endpoint is included as a **ghost node**, ensuring that cross-client edges remain available for message passing.
+
+As a result, each client subgraph contains both **owned nodes** and **ghost nodes**. Ghost nodes participate only in message passing, while **training loss and evaluation metrics are computed exclusively on owned nodes**.
 
 ---
 
