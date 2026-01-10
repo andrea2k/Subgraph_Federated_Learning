@@ -161,6 +161,8 @@ The witness-based strategy addresses this by enforcing **instance-level pattern 
 
 This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime setting.
 
+---
+
 #### Client Subgraph Structure
 
 Each client subgraph retains **all edges incident to at least one node owned by that client**. When an edge connects an owned node to a node assigned to a different client, the non-owned endpoint is included as a **ghost node**, ensuring that cross-client edges remain available for message passing.
