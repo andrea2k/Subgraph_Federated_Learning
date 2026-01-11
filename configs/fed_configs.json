@@ -14,7 +14,7 @@
 
   "fed_learning_configs": {
     "partition_strategy": "partition aware",
-    "global_epochs": 100,
+    "global_epochs": 5,
     "local_epochs": 1,
     "client_fraction": 0.2,
     "algorithm": "fedavg",
