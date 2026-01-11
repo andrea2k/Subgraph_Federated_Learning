@@ -78,7 +78,7 @@ def zipf_assign_communities_to_clients(communities: dict,
 
 def graphdata_to_pyg(data_g):
     """
-    Convert your GraphData object into a torch_geometric.data.Data
+    Convert the GraphData object into a torch_geometric.data.Data
     that is compatible with the OpenFGL-style partitioning code.
     """
     # Use existing node features or create dummy ones if not available

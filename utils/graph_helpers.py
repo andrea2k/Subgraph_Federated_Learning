@@ -45,8 +45,8 @@ def build_hetero_neighbor_loader(
 
     fanout can be int or list[int].
 
-    If input_nodes is provided, it must be node indices for type 'n' (owned nodes).
-    This is REQUIRED for your new "ghost node" setting, so we don't train on ghosts.
+    If input_nodes is provided, it must be node indices for type 'n' (owned nodes)
+    so that we don't train on ghost nodes.
     """
     # fanout -> list per layer
     if isinstance(fanout, int):

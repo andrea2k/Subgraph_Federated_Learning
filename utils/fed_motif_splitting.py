@@ -364,16 +364,24 @@ def save_federated_clients(
     global_data: "GraphData",
     node_to_client: torch.Tensor,
     recompute_ports: bool = True,
+    include_cross_edges: bool = True,   
 ):
     """
-    Save per-client graphs while preserving cross-client edges.
+    Save per-client graphs with optional cross-client edges.
 
     For each client c:
       - owned nodes = {u | node_to_client[u] == c}
+
+    If include_cross_edges=True:
       - keep edges where owned[src] OR owned[dst]
-      - include ghost nodes (foreign endpoints) so edges are valid for message passing
+      - include ghost nodes (foreign endpoints)
       - store owned_mask (loss/metrics only on owned nodes)
       - store global_nid mapping (client-local -> global)
+
+    If include_cross_edges=False:
+      - keep edges where owned[src] AND owned[dst]
+      - NO ghost nodes should appear
+      - still store owned_mask/global_nid for a consistent pipeline
     """
     os.makedirs(split_dir, exist_ok=True)
 
@@ -400,8 +408,13 @@ def save_federated_clients(
     for c in range(num_clients):
         owned_global = (node_to_client == c)  # [N] bool over *global* node ids
 
-        # Keep edges incident to owned nodes (preserves cross-client edges)
-        edge_keep = owned_global[src] | owned_global[dst]  # [E] bool
+        # Choose which edges to keep
+        if include_cross_edges:
+            # keep any edge incident to an owned node
+            edge_keep = owned_global[src] | owned_global[dst]
+        else:
+            # keep only edges fully inside the owned set
+            edge_keep = owned_global[src] & owned_global[dst]
 
         if int(edge_keep.sum().item()) == 0:
             client_stats.append((c, 0, 0, 0, 0, 0))
@@ -410,23 +423,23 @@ def save_federated_clients(
         kept_src = src[edge_keep]
         kept_dst = dst[edge_keep]
 
-        # Nodes in this client graph = owned nodes + ghost endpoints
-        nodes_keep = torch.unique(torch.cat([kept_src, kept_dst], dim=0))
+        # Choose which nodes to keep
+        if include_cross_edges:
+            # owned nodes + foreign endpoints as ghosts
+            nodes_keep = torch.unique(torch.cat([kept_src, kept_dst], dim=0))
+        else:
+            # strictly owned nodes only (no ghosts)
+            nodes_keep = torch.where(owned_global)[0]
 
-        # Filter edges first (ONLY edges touching owned nodes)
-        edge_index_f = global_data.edge_index[:, edge_keep]
-        edge_attr_f  = None if base_edge_attr is None else base_edge_attr[edge_keep]
+        if int(nodes_keep.numel()) == 0:
+            client_stats.append((c, 0, 0, 0, 0, 0))
+            continue
 
-        # Nodes in this client graph = owned nodes + ghost endpoints (from filtered edges)
-        kept_src = edge_index_f[0]
-        kept_dst = edge_index_f[1]
-        nodes_keep = torch.unique(torch.cat([kept_src, kept_dst], dim=0))
-
-        # Now relabel ONLY these filtered edges
+        # Extract subgraph induced by nodes_keep (relabel to 0..n-1)
         eidx, eattr = subgraph(
             subset=nodes_keep,
-            edge_index=edge_index_f,     # filtered edge_index
-            edge_attr=edge_attr_f,       # filtered edge_attr
+            edge_index=global_data.edge_index,
+            edge_attr=base_edge_attr,
             relabel_nodes=True,
             num_nodes=global_data.num_nodes,
         )
@@ -443,22 +456,22 @@ def save_federated_clients(
             y=y,
             edge_index=eidx,
             edge_attr=eattr.clone() if eattr is not None else None,
-            readout=global_data.readout,
+            readout=getattr(global_data, "readout", None),
         )
 
         # Recompute ports after subgraphing (ports depend on adjacency)
         if recompute_ports and gd.edge_attr is not None:
             gd = gd.add_ports()
 
-        # Attach metadata 
+        # Attach metadata
         gd.owned_mask = owned_mask
         gd.global_nid = nodes_keep.clone()  # local -> global
         gd.client_id = int(c)
+        gd.include_cross_edges = bool(include_cross_edges)  # optional metadata
 
         torch.save(gd, os.path.join(clients_out, f"client_{c:04d}.pt"))
 
-        # Optional stats: how many cross edges are actually present?
-        # In the relabeled client graph, cross edge = exactly one endpoint is owned.
+        # Stats: cross edge = exactly one endpoint is owned (in client-local)
         cs, cd = gd.edge_index[0], gd.edge_index[1]
         cross_edges = int((gd.owned_mask[cs] ^ gd.owned_mask[cd]).sum().item())
 

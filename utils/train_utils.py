@@ -5,6 +5,8 @@ from torch_geometric.loader import NeighborLoader
 from torch_geometric.data import HeteroData
 import copy
 
+from utils.metrics import compute_minority_f1_score_per_task
+
 DATA_PATH = "./data"
 
 def load_datasets(log_dir=DATA_PATH, train_data_file="train.pt", val_data_file="val.pt", test_data_file="test.pt"):
@@ -25,42 +27,6 @@ def ensure_node_features(g):
         # Assign constant features (all ones) to each node
         g.x = torch.ones((N, 1), dtype=torch.float)
     return g
-
-
-def compute_minority_f1_score_per_task(logits, labels, threshold=0.5):
-    probs = torch.sigmoid(logits)
-    preds = (probs > threshold)
-    y = labels.bool()
-
-    N, C = y.shape
-    f1_scores = torch.zeros(C, dtype=torch.float32, device=logits.device)
-    epsilon = 1e-12
-    
-    for c in range(C):
-        y_c = y[:, c]
-
-        # Find the minority class (either 0 or 1)
-        pos = y_c.sum()
-        neg = y_c.numel() - pos
-        minority_is_one = (pos <= neg) 
-
-        if minority_is_one:
-            y_pos    = y_c
-            pred_pos = preds[:, c]
-        else:
-            y_pos    = ~y_c
-            pred_pos = ~preds[:, c]
-
-        true_pos = (y_pos & pred_pos).sum().float()
-        false_pos = ((~y_pos) & pred_pos).sum().float()
-        false_neg = (y_pos & (~pred_pos)).sum().float()
-        
-        precision = true_pos / (true_pos + false_pos + epsilon)
-        recall = true_pos / (true_pos + false_neg + epsilon)
-        f1 = 2 * precision * recall / (precision + recall + epsilon)
-        f1_scores[c] = f1
-
-    return f1_scores
 
 
 def make_reverse_neighbor_loader(data, num_neighbors=[15, 10, 5], batch_size=2048, shuffle=False, input_nodes=None):
@@ -218,6 +184,8 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False,
             out = model(x_in_aug, edge_in)
 
         out_used = out[:B] if B is not None else out
+        if B is not None:
+            y_used = y_used[:B]
 
         # If client graph has owned_mask, compute loss only on owned nodes
         owned_mask = None
@@ -257,9 +225,12 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False,
 
 
 @torch.no_grad()
-def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
+def evaluate_epoch(model, loader, criterion, device, use_port_ids=False, return_logits_labels: bool = False):
     """
-    This method can be used for evaluating both homogeneous and heterogeneous graphs
+    Evaluate on a loader. Supports homo/hetero graphs.
+
+    If return_logits_labels=True, also returns (logits, labels, count),
+    where logits/labels correspond to the evaluated nodes (owned seeds).
     """
     model.eval()
 
@@ -286,17 +257,18 @@ def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
             for rel in [('n','fwd','n'), ('n','rev','n')]:
                 if 'edge_attr' in batch[rel]:
                     ea = batch[rel].edge_attr
-                    if ea.dtype != torch.long: ea = ea.long()
+                    if ea.dtype != torch.long:
+                        ea = ea.long()
                     edge_attr_dict[rel] = ea
 
         if use_port_ids:
-            # Reverse-MP model (or any model that uses port information)
             out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
         else:
-            # Baseline model (no port IDs)
             out = model(x_in_aug, edge_in)
-    
+
         out_used = out[:B] if B is not None else out
+        if B is not None:
+            y_used = y_used[:B]
 
         owned_mask = None
         if is_hetero:
@@ -311,15 +283,15 @@ def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
             y_used = y_used[owned_mask]
             count = int(owned_mask.sum().item())
         else:
-            count = (B if B is not None else n_nodes)
+            count = int(B if B is not None else n_nodes)
 
         loss = criterion(out_used, y_used.float())
-        total_loss  += loss.item() * count
+        total_loss += loss.item() * count
         total_count += count
 
         preds = (torch.sigmoid(out_used) > 0.5)
         correct_pairs += (preds == y_used.bool()).sum().item()
-        total_pairs   += y_used.numel()
+        total_pairs += y_used.numel()
 
         all_logits.append(out_used.detach().cpu())
         all_labels.append(y_used.detach().cpu())
@@ -327,8 +299,12 @@ def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
     avg_loss = total_loss / max(total_count, 1)
     per_node_acc = correct_pairs / max(total_pairs, 1)
 
-    logits = torch.cat(all_logits, dim=0)
-    labels = torch.cat(all_labels, dim=0)
+    logits = torch.cat(all_logits, dim=0) if len(all_logits) else torch.empty((0,))
+    labels = torch.cat(all_labels, dim=0) if len(all_labels) else torch.empty((0,))
+
     f1_score_per_task = compute_minority_f1_score_per_task(logits, labels)
+
+    if return_logits_labels:
+        return avg_loss, per_node_acc, f1_score_per_task, logits, labels, total_count
 
     return avg_loss, per_node_acc, f1_score_per_task

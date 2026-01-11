@@ -4,6 +4,43 @@ import csv
 from datetime import datetime, timedelta
 import pandas as pd
 from pathlib import Path
+import torch
+
+def compute_minority_f1_score_per_task(logits, labels, threshold=0.5):
+    probs = torch.sigmoid(logits)
+    preds = (probs > threshold)
+    y = labels.bool()
+
+    N, C = y.shape
+    f1_scores = torch.zeros(C, dtype=torch.float32, device=logits.device)
+    epsilon = 1e-12
+    
+    for c in range(C):
+        y_c = y[:, c]
+
+        # Find the minority class (either 0 or 1)
+        pos = y_c.sum()
+        neg = y_c.numel() - pos
+        minority_is_one = (pos <= neg) 
+
+        if minority_is_one:
+            y_pos    = y_c
+            pred_pos = preds[:, c]
+        else:
+            y_pos    = ~y_c
+            pred_pos = ~preds[:, c]
+
+        true_pos = (y_pos & pred_pos).sum().float()
+        false_pos = ((~y_pos) & pred_pos).sum().float()
+        false_neg = (y_pos & (~pred_pos)).sum().float()
+        
+        precision = true_pos / (true_pos + false_pos + epsilon)
+        recall = true_pos / (true_pos + false_neg + epsilon)
+        f1 = 2 * precision * recall / (precision + recall + epsilon)
+        f1_scores[c] = f1
+
+    return f1_scores
+
 
 def compute_label_percentages(
     input_csv = "./data/y_sums.csv",

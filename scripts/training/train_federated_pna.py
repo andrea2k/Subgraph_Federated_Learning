@@ -7,12 +7,13 @@ from datetime import datetime
 from types import SimpleNamespace
 import torch
 
+from utils.loader import load_client_graphs
 from utils.sanity_check import sanity_check_client_graphs
 from utils.metrics import append_f1_score_to_csv, start_epoch_csv, append_epoch_csv
 from utils.seed import set_seed
-from utils.train_utils import load_datasets, ensure_node_features, evaluate_epoch
-from utils.hetero import make_bidirected_hetero
-from utils.graph_helpers import max_port_cols, check_and_strip_self_loops, build_hetero_neighbor_loader, build_full_eval_loader
+from utils.train_utils import load_datasets, ensure_node_features
+from utils.graph_helpers import max_port_cols, check_and_strip_self_loops
+from utils.federated_eval import build_federated_eval_loaders, evaluate_federated
 from models.pna_reverse_mp import compute_directional_degree_hists
 
 from fed_algo.fedavg.client import FedAvgClient
@@ -101,6 +102,8 @@ elif PARTITION_STRATEGY == "metis original skewed":
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
 elif PARTITION_STRATEGY == "partition aware":
     FED_TRAIN_SPLITS_DIR = "./data/fed_witness_splits/train/clients"
+    FED_VAL_SPLITS_DIR  = "./data/fed_witness_splits/val/clients"
+    FED_TEST_SPLITS_DIR = "./data/fed_witness_splits/test/clients"
     NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
 else:
     raise ValueError(
@@ -191,68 +194,40 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         num_nodes=train_data.num_nodes,
     )
 
-    # convert val/test to HeteroData for evaluation
-    val_h = make_bidirected_hetero(val_data)
-    test_h = make_bidirected_hetero(test_data)
-
-    # decide batch sizes for val/test
-    if use_mini_batch:
-        val_batch_size = batch_size
-        test_batch_size = batch_size
-    else:
-        val_batch_size = val_h["n"].num_nodes
-        test_batch_size = test_h["n"].num_nodes
-
-    # build loaders for validation & test
-    if use_mini_batch:
-        valid_loader = build_hetero_neighbor_loader(
-            val_h,
-            batch_size=val_batch_size,
-            num_layers=num_hops,
-            fanout=neighbors_per_hop,
-            device=device,
-        )
-        test_loader = build_hetero_neighbor_loader(
-            test_h,
-            batch_size=test_batch_size,
-            num_layers=num_hops,
-            fanout=neighbors_per_hop,
-            device=device,
-        )
-    else:
-        valid_loader = build_full_eval_loader(
-            val_h,
-            batch_size=val_batch_size,
-            num_layers=num_hops,
-            device=device,
-        )
-        test_loader = build_full_eval_loader(
-            test_h,
-            batch_size=test_batch_size,
-            num_layers=num_hops,
-            device=device,
-        )
-
-    # load federated train splits
+    # load federated train, test, and val splits
     print(f"[FL-SETUP] Loading federated train splits from {FED_TRAIN_SPLITS_DIR}")
-    client_graphs = []
-    for cid in range(NUM_CLIENTS):
-        p1 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid:04d}.pt")
-        p2 = os.path.join(FED_TRAIN_SPLITS_DIR, f"client_{cid}.pt")
-        path = p1 if os.path.exists(p1) else p2
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"Missing client graph for cid={cid}. Tried:\n  {p1}\n  {p2}"
-            )
-        client_graphs.append(torch.load(path, weights_only=False))
+    client_graphs = load_client_graphs(FED_TRAIN_SPLITS_DIR, NUM_CLIENTS)
 
-    # sanity check
+    print(f"[FL-SETUP] Loading federated val splits from {FED_VAL_SPLITS_DIR}")
+    val_client_graphs = load_client_graphs(FED_VAL_SPLITS_DIR, NUM_CLIENTS)
+
+    print(f"[FL-SETUP] Loading federated test splits from {FED_TEST_SPLITS_DIR}")
+    test_client_graphs = load_client_graphs(FED_TEST_SPLITS_DIR, NUM_CLIENTS)
+
+    # sanity checks:
+    # train splits
     node_to_client_path = os.path.join(os.path.dirname(FED_TRAIN_SPLITS_DIR), "node_to_client.pt")
     if os.path.exists(node_to_client_path):
         node_to_client = torch.load(node_to_client_path)
         sanity_check_client_graphs(client_graphs, node_to_client)
     else:
         print(f"[SANITY] node_to_client.pt not found at {node_to_client_path}, skipping mapping checks.")
+
+    # val splits
+    val_node_to_client_path = os.path.join(os.path.dirname(FED_VAL_SPLITS_DIR), "node_to_client.pt")
+    if os.path.exists(val_node_to_client_path):
+        val_node_to_client = torch.load(val_node_to_client_path)
+        sanity_check_client_graphs(val_client_graphs, val_node_to_client)
+    else:
+        print(f"[SANITY] node_to_client.pt not found at {val_node_to_client_path}, skipping val mapping checks.")
+
+    # test splits
+    test_node_to_client_path = os.path.join(os.path.dirname(FED_TEST_SPLITS_DIR), "node_to_client.pt")
+    if os.path.exists(test_node_to_client_path):
+        test_node_to_client = torch.load(test_node_to_client_path)
+        sanity_check_client_graphs(test_client_graphs, test_node_to_client)
+    else:
+        print(f"[SANITY] node_to_client.pt not found at {test_node_to_client_path}, skipping test mapping checks.")
 
     args = SimpleNamespace(
         task="node_cls",
@@ -293,6 +268,25 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
 
     # use server's criterion (from NodeClsTask) for evaluation
     criterion = server.task.criterion
+
+    # build federated eval loaders once (re-used every round)
+    val_eval_loaders, _ = build_federated_eval_loaders(
+        val_client_graphs,
+        num_layers=num_hops,
+        neighbors_per_hop=neighbors_per_hop,
+        batch_size=batch_size,
+        device=device,
+        use_mini_batch=use_mini_batch,
+    )
+
+    test_eval_loaders, _ = build_federated_eval_loaders(
+        test_client_graphs,
+        num_layers=num_hops,
+        neighbors_per_hop=neighbors_per_hop,
+        batch_size=batch_size,
+        device=device,
+        use_mini_batch=use_mini_batch,
+    )
 
     # build clients from federated splits
     clients = []
@@ -348,12 +342,12 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
 
         # validation on centralized validation graph
         with torch.no_grad():
-            val_loss, _, val_f1 = evaluate_epoch(
+            val_loss, val_f1 = evaluate_federated(
                 server.task.model,
-                valid_loader,
+                val_eval_loaders,
                 criterion,
                 device,
-                use_port_ids,
+                use_port_ids=use_port_ids,
             )
 
         # We don't have a clean single scalar train_loss for all clients,
@@ -373,13 +367,14 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
 
     # final test evaluation on best global model
     server.task.model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
-    test_loss, _, test_f1 = evaluate_epoch(
+    test_loss, test_f1 = evaluate_federated(
         server.task.model,
-        test_loader,
+        test_eval_loaders,
         criterion,
         device,
-        use_port_ids,
+        use_port_ids=use_port_ids,
     )
+
     return test_loss, test_f1
 
 

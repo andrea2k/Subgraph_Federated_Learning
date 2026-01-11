@@ -23,6 +23,7 @@ with open(FED_CONFIG_PATH, "r") as f:
 
 FED_DATA_CONFIG = ALL_FED_CONFIG["partition_aware_splits"]
 NUM_CLIENTS = FED_DATA_CONFIG["num_clients"]
+INCLUDE_CROSS_EDGES = FED_DATA_CONFIG["include_cross_edges"]
 
 # Print logs on the terminal screen
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
@@ -211,9 +212,9 @@ def main():
         witnesses=te_w,
     )
 
-    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client)
-    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client)
-    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client)
+    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client, INCLUDE_CROSS_EDGES)
+    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client, INCLUDE_CROSS_EDGES)
+    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client, INCLUDE_CROSS_EDGES)
 
     logging.info("Saved federated witness splits under %s", fed_root)
     
