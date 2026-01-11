@@ -212,9 +212,9 @@ def main():
         witnesses=te_w,
     )
 
-    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client, INCLUDE_CROSS_EDGES)
-    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client, INCLUDE_CROSS_EDGES)
-    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client, INCLUDE_CROSS_EDGES)
+    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
+    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
+    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
 
     logging.info("Saved federated witness splits under %s", fed_root)
     
