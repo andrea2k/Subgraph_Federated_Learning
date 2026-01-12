@@ -436,10 +436,15 @@ def save_federated_clients(
             continue
 
         # Extract subgraph induced by nodes_keep (relabel to 0..n-1)
+        edge_index_filt = global_data.edge_index[:, edge_keep]
+        edge_attr_filt  = base_edge_attr[edge_keep] if base_edge_attr is not None else None
+
+        # only add owned-owned and owned-ghost edges
+        # exclude ghost-ghost edges
         eidx, eattr = subgraph(
             subset=nodes_keep,
-            edge_index=global_data.edge_index,
-            edge_attr=base_edge_attr,
+            edge_index=edge_index_filt,
+            edge_attr=edge_attr_filt,
             relabel_nodes=True,
             num_nodes=global_data.num_nodes,
         )
