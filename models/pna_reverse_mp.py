@@ -31,16 +31,25 @@ class PNANetReverseMP(nn.Module):
         pre_layers: int = 1,
         post_layers: int = 1,
         divide_input: bool = False,
-        combine: str = "sum",   # how to combine relations in HeteroConv - possible values: 'sum', 'mean', or 'max'
+        combine: str = "sum",   # 'sum', 'mean', or 'max'
         in_port_vocab_size=0,
         out_port_vocab_size=0, 
         port_emb_dim=0,
+        *,
+        enable_cross_client_comm: bool = False,
+        comm=None,
+        client_id: int | None = None,
     ):
         super().__init__()
         if aggregators is None:
             aggregators = ["mean", "min", "max", "std"]
         if scalers is None:
             scalers = ["amplification", "attenuation", "identity"]
+
+        # cross-client communication flags
+        self.enable_cross_client_comm = bool(enable_cross_client_comm)
+        self.comm = comm
+        self.client_id = client_id
 
         self.in_port_vocab_size  = int(in_port_vocab_size)
         self.out_port_vocab_size = int(out_port_vocab_size)
@@ -65,26 +74,24 @@ class PNANetReverseMP(nn.Module):
 
         for _ in range(num_layers):
             conv_dict = {
-                # Define PNA with in-degree histogram of the original graph.
                 ('n','fwd','n'): PNAConv(
                     in_channels=hidden_dim,
                     out_channels=hidden_dim,
                     aggregators=aggregators,
                     scalers=scalers,
-                    deg=deg_fwd,    # histogram for in-degrees w.r.t. fwd edges
+                    deg=deg_fwd,
                     towers=towers,
                     pre_layers=pre_layers,
                     post_layers=post_layers,
                     divide_input=divide_input,
                     edge_dim=edge_dim if edge_dim > 0 else None,
                 ),
-                # Define PNA with in-degree histogram of the reversed graph.
                 ('n','rev','n'): PNAConv(
                     in_channels=hidden_dim,
                     out_channels=hidden_dim,
                     aggregators=aggregators,
                     scalers=scalers,
-                    deg=deg_rev,    # histogram for in-degrees w.r.t. rev edges
+                    deg=deg_rev,
                     towers=towers,
                     pre_layers=pre_layers,
                     post_layers=post_layers,
@@ -111,7 +118,8 @@ class PNANetReverseMP(nn.Module):
     def _edge_ports_to_attr(self, edge_attr_dict):
         """
         Expect edge_attr_dict[('n','fwd','n')] and edge_attr_dict[('n','rev','n')]
-        each of shape [E_rel, 2] with columns [in_port, out_port] as prepared in make_bidirected_hetero().
+        each of shape [E_rel, 2] with columns [in_port, out_port] as prepared
+        in make_bidirected_hetero().
         Returns dict of float tensors [E_rel, edge_dim] for PNA.
         """
         if self.in_port_emb is None and self.out_port_emb is None:
@@ -131,7 +139,54 @@ class PNANetReverseMP(nn.Module):
             out[rel] = torch.cat(parts, dim=-1).float()  # [E, edge_dim]
         return out
 
-    def forward(self, x_dict, edge_index_dict, *, edge_attr_dict=None):
+    def _cross_client_sync(
+        self,
+        x: torch.Tensor,               # [N, hidden_dim]
+        layer_idx: int,
+        global_nids: torch.Tensor | None,
+        owned_mask: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """
+        If cross-client communication is enabled, push embeddings for owned nodes
+        to the global comm bus and pull canonical embeddings for ghost nodes.
+        """
+        if (
+            not self.enable_cross_client_comm or
+            self.comm is None or
+            self.client_id is None or
+            global_nids is None or
+            owned_mask is None
+        ):
+            return x
+
+        # push owned embeddings
+        self.comm.push_owned(
+            client_id=self.client_id,
+            layer=layer_idx,
+            global_nids=global_nids,
+            node_embs=x,
+            owned_mask=owned_mask,
+        )
+
+        # pull for ghost nodes and merge
+        x = self.comm.pull_ghost_and_merge(
+            layer=layer_idx,
+            global_nids=global_nids,
+            owned_mask=owned_mask,
+            local_embs=x,
+        )
+        return x
+
+    def forward(
+        self,
+        x_dict,
+        edge_index_dict,
+        *,
+        edge_attr_dict=None,
+        global_nids: torch.Tensor | None = None,   # [N] global ids for 'n'
+        owned_mask: torch.Tensor | None = None,    # [N] bool for 'n'
+        device=None,                               # not strictly needed here
+    ):
         x_dict, edge_index_dict = self._ensure_dicts(x_dict, edge_index_dict)
         x = x_dict['n']
         x = F.relu(self.input(x))
@@ -139,18 +194,24 @@ class PNANetReverseMP(nn.Module):
         # Build edge attrs for PNA from (in_port, out_port)
         pna_edge_attrs = self._edge_ports_to_attr(edge_attr_dict) if edge_attr_dict is not None else None
 
-        for conv, bn in zip(self.convs, self.bns):
+        for layer_idx, (conv, bn) in enumerate(zip(self.convs, self.bns)):
             if pna_edge_attrs is not None:
-                # ports enabled → pass dict to HeteroConv
                 out_dict = conv({'n': x}, edge_index_dict, edge_attr_dict=pna_edge_attrs)
             else:
-                # ports disabled → do NOT pass edge_attr_dict at all
                 out_dict = conv({'n': x}, edge_index_dict)
 
             x = out_dict['n']
             x = bn(x)
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
+
+            # cross-client sync hook after each GNN layer
+            x = self._cross_client_sync(
+                x=x,
+                layer_idx=layer_idx,
+                global_nids=global_nids,
+                owned_mask=owned_mask,
+            )
 
         return self.mlp(x)
 
