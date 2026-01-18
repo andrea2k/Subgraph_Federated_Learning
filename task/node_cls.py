@@ -35,6 +35,9 @@ class NodeClsTask:
           * deg_fwd_hist, deg_rev_hist
           * in_port_vocab_size, out_port_vocab_size
           * ego_dim
+      - For cross-client comm:
+          * enable_cross_client_comm : bool
+          * cross_client_comm : CrossClientComm
     """
 
     def __init__(self,
@@ -61,6 +64,10 @@ class NodeClsTask:
         self.lr = getattr(args, "lr", 1e-3)
         self.weight_decay = getattr(args, "weight_decay", 1e-4)
         self.minority_class_weight = getattr(args, "minority_class_weight", None)
+
+        # cross-client comm flags from args
+        self.enable_cross_client_comm = getattr(args, "enable_cross_client_comm", False)
+        self.comm = getattr(args, "cross_client_comm", None)
 
         # 1) Pre-process local homogeneous graph (client's split)
         name = f"client_{client_id}" if client_id is not None else "server"
@@ -140,6 +147,9 @@ class NodeClsTask:
             in_port_vocab_size=self.in_port_vocab_size,
             out_port_vocab_size=self.out_port_vocab_size,
             port_emb_dim=(self.port_emb_dim if self.use_port_ids else 0),
+            enable_cross_client_comm=self.enable_cross_client_comm,
+            comm=self.comm,
+            client_id=self.client_id,
         ).to(self.device)
 
         # 6) Build local training loader (mini-batch or full-batch)
@@ -188,7 +198,6 @@ class NodeClsTask:
         if isinstance(self.minority_class_weight, str) and self.minority_class_weight == "auto":
             assert auto_pos_weight is not None
             self.criterion = nn.BCEWithLogitsLoss(pos_weight=auto_pos_weight.to(self.device))
-            #print(f"[{name}] Using automatic per-task minority weighting: {auto_pos_weight.tolist()}")
             print(f"[{name}] Using automatic per-task minority weighting")
         elif self.minority_class_weight is not None:
             pos_weight = torch.full((out_dim,), float(self.minority_class_weight), device=self.device)
@@ -222,13 +231,12 @@ class NodeClsTask:
         self.model.train()
         for ep in range(local_epochs):
             _ = train_epoch(
-                    self.model,
-                    self.train_loader,
-                    self.optimizer,
-                    self.criterion,
-                    self.device,
-                    self.use_port_ids,
-                    loss_fn=self.loss_fn,
-                    step_preprocess=self.step_preprocess,
-                )
-
+                self.model,
+                self.train_loader,
+                self.optimizer,
+                self.criterion,
+                self.device,
+                self.use_port_ids,
+                loss_fn=self.loss_fn,
+                step_preprocess=self.step_preprocess,
+            )
