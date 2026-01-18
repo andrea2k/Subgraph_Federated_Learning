@@ -174,34 +174,60 @@ def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False,
             print(f"[EGO-CHECK] base_dim={base_dim}  ego_dim={ego_dim}  aug_dim={aug_dim}  seeds(B)={B}")
             model._ego_dbg_printed = True
 
+        # extract global_nids and owned_mask for cross-client comm
+        global_nids = None
+        owned_mask = None
+        if is_hetero:
+            if hasattr(batch['n'], 'global_nid'):
+                global_nids = batch['n'].global_nid
+            if hasattr(batch['n'], 'owned_mask'):
+                owned_mask = batch['n'].owned_mask
+        else:
+            if hasattr(batch, 'global_nid'):
+                global_nids = batch.global_nid
+            if hasattr(batch, 'owned_mask'):
+                owned_mask = batch.owned_mask
+
         optimizer.zero_grad()
 
+        # Call model with extra arguments so PNANetReverseMP can sync
         if use_port_ids:
-            # Reverse-MP model (or any model that uses port information)
-            out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
+            out = model(
+                x_in_aug,
+                edge_in,
+                edge_attr_dict=edge_attr_dict,
+                global_nids=global_nids,
+                owned_mask=owned_mask,
+                device=device,
+            )
         else:
-            # Baseline model (no port IDs)
-            out = model(x_in_aug, edge_in)
+            out = model(
+                x_in_aug,
+                edge_in,
+                global_nids=global_nids,
+                owned_mask=owned_mask,
+                device=device,
+            )
 
         out_used = out[:B] if B is not None else out
         if B is not None:
             y_used = y_used[:B]
 
         # If client graph has owned_mask, compute loss only on owned nodes
-        owned_mask = None
+        owned_mask_full = None
         if is_hetero:
             if hasattr(batch['n'], 'owned_mask'):
-                owned_mask = batch['n'].owned_mask
+                owned_mask_full = batch['n'].owned_mask
         else:
             if hasattr(batch, 'owned_mask'):
-                owned_mask = batch.owned_mask
+                owned_mask_full = batch.owned_mask
 
         # If full-batch (or seed slicing returns all nodes), apply owned_mask
-        if owned_mask is not None and (B is None or B == n_nodes):
-            out_used = out_used[owned_mask]
-            y_used = y_used[owned_mask]
+        if owned_mask_full is not None and (B is None or B == n_nodes):
+            out_used = out_used[owned_mask_full]
+            y_used = y_used[owned_mask_full]
             # count should be owned nodes
-            count = int(owned_mask.sum().item())
+            count = int(owned_mask_full.sum().item())
         else:
             count = (B if B is not None else n_nodes)
 
@@ -261,27 +287,55 @@ def evaluate_epoch(model, loader, criterion, device, use_port_ids=False, return_
                         ea = ea.long()
                     edge_attr_dict[rel] = ea
 
-        if use_port_ids:
-            out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
+        # extract global_nids and owned_mask for cross-client comm
+        global_nids = None
+        owned_mask = None
+        if is_hetero:
+            if hasattr(batch['n'], 'global_nid'):
+                global_nids = batch['n'].global_nid
+            if hasattr(batch['n'], 'owned_mask'):
+                owned_mask = batch['n'].owned_mask
         else:
-            out = model(x_in_aug, edge_in)
+            if hasattr(batch, 'global_nid'):
+                global_nids = batch.global_nid
+            if hasattr(batch, 'owned_mask'):
+                owned_mask = batch.owned_mask
+
+        # call model with extra arguments
+        if use_port_ids:
+            out = model(
+                x_in_aug,
+                edge_in,
+                edge_attr_dict=edge_attr_dict,
+                global_nids=global_nids,
+                owned_mask=owned_mask,
+                device=device,
+            )
+        else:
+            out = model(
+                x_in_aug,
+                edge_in,
+                global_nids=global_nids,
+                owned_mask=owned_mask,
+                device=device,
+            )
 
         out_used = out[:B] if B is not None else out
         if B is not None:
             y_used = y_used[:B]
 
-        owned_mask = None
+        owned_mask_full = None
         if is_hetero:
             if hasattr(batch['n'], 'owned_mask'):
-                owned_mask = batch['n'].owned_mask
+                owned_mask_full = batch['n'].owned_mask
         else:
             if hasattr(batch, 'owned_mask'):
-                owned_mask = batch.owned_mask
+                owned_mask_full = batch.owned_mask
 
-        if owned_mask is not None and (B is None or B == n_nodes):
-            out_used = out_used[owned_mask]
-            y_used = y_used[owned_mask]
-            count = int(owned_mask.sum().item())
+        if owned_mask_full is not None and (B is None or B == n_nodes):
+            out_used = out_used[owned_mask_full]
+            y_used = y_used[owned_mask_full]
+            count = int(owned_mask_full.sum().item())
         else:
             count = int(B if B is not None else n_nodes)
 
