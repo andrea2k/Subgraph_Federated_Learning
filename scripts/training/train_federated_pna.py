@@ -14,6 +14,7 @@ from utils.seed import set_seed
 from utils.train_utils import load_datasets, ensure_node_features
 from utils.graph_helpers import max_port_cols, check_and_strip_self_loops
 from utils.federated_eval import build_federated_eval_loaders, evaluate_federated
+from utils.cross_client_comm import CrossClientComm
 from models.pna_reverse_mp import compute_directional_degree_hists
 
 from fed_algo.fedavg.client import FedAvgClient
@@ -50,6 +51,7 @@ USE_PORT_IDS = PNA_CONFIG["use_port_ids"]
 USE_MINI_BATCH = PNA_CONFIG["use_mini_batch"]
 BATCH_SIZE = PNA_CONFIG["batch_size"]
 PORT_EMB_DIM = PNA_CONFIG["port_emb_dim"]
+ENABLE_CROSS_CLIENT_COMM = PNA_CONFIG.get("enable_cross_client_comm", False)
 
 DEFAULT_HPARAMS = PNA_CONFIG["default_hparams"]
 
@@ -133,6 +135,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         "num_epochs": GLOBAL_EPOCHS,          # number of global communication rounds
         "local_epochs": GLOBAL_LOCAL_EPOCHS,  # client epochs per round
         "client_fraction": CLIENT_FRACTION,
+        "enable_cross_client_comm": ENABLE_CROSS_CLIENT_COMM,
         **DEFAULT_HPARAMS,
     }
     cfg = {**default_cfg, **hparams}
@@ -154,6 +157,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
 
     local_epochs = cfg["local_epochs"]          # how many epochs per client per round
     client_fraction = cfg["client_fraction"]    # fraction of clients per round, domain:(0,1]
+    enable_cross_client_comm = cfg["enable_cross_client_comm"] 
 
     print(f"[FL-SETUP] Algorithm={ALGORITHM}")
     print(f"[FL-SETUP] PNA model hyperparameters: {cfg}")
@@ -229,6 +233,31 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     else:
         print(f"[SANITY] node_to_client.pt not found at {test_node_to_client_path}, skipping test mapping checks.")
 
+    # build global_owner mapping and CrossClientComm (shared by all clients)
+    # create one communication bus per experiment run
+    if enable_cross_client_comm:
+        print("[FL-SETUP] Enabling cross-client embedding exchange")
+        global_owner = {}
+
+        for cid, g in enumerate(client_graphs):
+            if not hasattr(g, "global_nid"):
+                raise ValueError("Client graph is missing 'global_nid' for cross-client comm.")
+            if not hasattr(g, "owned_mask"):
+                raise ValueError("Client graph is missing 'owned_mask' for cross-client comm.")
+
+            gids = g.global_nid.cpu().tolist()
+            owned = g.owned_mask.cpu().tolist()
+
+            for gid, owned_flag in zip(gids, owned):
+                if owned_flag:
+                    # only the owner sets it; ghosts must not overwrite
+                    global_owner.setdefault(gid, cid)
+
+        comm = CrossClientComm(global_owner)
+    else:
+        print("[FL-SETUP] Cross-client embedding exchange disabled")
+        comm = None
+
     args = SimpleNamespace(
         task="node_cls",
         # model / training hyperparams
@@ -252,6 +281,9 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         deg_rev_hist=deg_rev_hist,
         in_port_vocab_size=in_port_vocab_size,
         out_port_vocab_size=out_port_vocab_size,
+        # cross-client comm
+        enable_cross_client_comm=enable_cross_client_comm,
+        cross_client_comm=comm,
     )
 
     # set up FL server & clients (algorithm-agnostic)
@@ -320,6 +352,10 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     # federated training loop
     for round_idx in range(1, num_rounds + 1):
         print(f"\n=== [{ALGORITHM}] Round {round_idx:03d}/{num_rounds:03d} ===")
+
+        # reset comm per round so embeddings don't leak across rounds
+        if args.enable_cross_client_comm and args.cross_client_comm is not None:
+            args.cross_client_comm.reset_round()
 
         # sample clients according to client_fraction
         num_sampled = max(1, int(round(client_fraction * NUM_CLIENTS)))
