@@ -19,6 +19,7 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
   - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
     - [Motivation](#motivation)
     - [Client Subgraph Structure](#client-subgraph-structure)
+    - [Cross-Client Edge Handling](#cross-client-edge-handling)
     - [How to Generate Pattern-Aware Splits](#how-to-generate-pattern-aware-splits)
     - [Sanity Checking Pattern Dispersion Across Clients](#sanity-checking-pattern-dispersion-across-clients)
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
@@ -165,9 +166,35 @@ This yields a federated dataset with **stronger non-IID structure** and a more r
 
 #### Client Subgraph Structure
 
-Each client subgraph retains **all edges incident to at least one node owned by that client**. When an edge connects an owned node to a node assigned to a different client, the non-owned endpoint is included as a **ghost node**, ensuring that cross-client edges remain available for message passing.
+Each client operates on a **local subgraph** derived from the global graph according to the partition-aware splitting strategy. Client subgraphs distinguish between **owned nodes** (assigned to the client) and **ghost nodes** (nodes owned by other clients but required for structural consistency).
 
-As a result, each client subgraph contains both **owned nodes** and **ghost nodes**. Ghost nodes participate only in message passing, while **training loss and evaluation metrics are computed exclusively on owned nodes**.
+**Owned nodes** are the primary entities of a client:
+
+- Model parameters are updated based on losses computed **only on owned nodes**
+- Evaluation metrics (train/val/test) are reported **exclusively on owned nodes**
+- Each owned node belongs to exactly one client
+
+**Ghost nodes** are **read-only replicas** of nodes owned by other clients:
+
+- They are included solely to support message passing
+- They never contribute to loss or evaluation metrics
+- Gradients are not computed or aggregated for ghost nodes
+
+---
+
+#### Cross-Client Edge Handling
+
+The inclusion of edges that span multiple clients is controlled by the configuration flag:
+
+```json
+"partition_aware_splits": {
+  "num_clients": 15,
+  "include_cross_edges": true,
+  "base_seed": 42
+}
+```
+
+where **`include_cross_edges = true`** is the default.
 
 ---
 
