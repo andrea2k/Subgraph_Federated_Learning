@@ -67,7 +67,7 @@ class PNANet(nn.Module):
         )
         
 
-    def forward(self, x, edge_index, batch=None):
+    def forward(self, x, edge_index, global_nids=None, owned_mask=None, device=None, batch=None):
         x = F.relu(self.input(x))
         for conv, bn in zip(self.convs, self.bns):
             x = conv(x, edge_index)

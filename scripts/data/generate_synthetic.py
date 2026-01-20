@@ -74,7 +74,7 @@ def main():
     logging.info("Split seeds: %s", split_seeds)
 
     # Below parameters are defined based on Appendix D.2 of the original paper
-    n = 8192        # number of nodes
+    n = 200        # number of nodes
     d = 6           # average degree
     r = 11.1        # radius
     num_graphs = 1  # one connected component generator call per data split to prevent data leakeage
