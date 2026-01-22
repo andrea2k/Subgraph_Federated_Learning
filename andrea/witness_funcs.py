@@ -1,15 +1,5 @@
 import torch
 import numpy as np
-import time
-import statistics
-
-from scripts.data.simulator import deg_in, deg_out, fan_in, fan_out
-from utils.fed_partitioning import graphdata_to_pyg, get_subgraph_pyg_data
-from utils.fed_motif_splitting import (
-    Cn_check_with_witness,
-    SG2_check_with_witness,
-    BP2_check_with_witness
-)
 
 def build_unique_in_out(edge_index, num_nodes):
     src = edge_index[0].numpy()
@@ -216,24 +206,3 @@ def BP2(out_set, in_set):
                         r1, r2 = (r, i) if r < i else (i, r)
                         W.add((int(x),int(y),int(r1),int(r2)))
     return list(W)
-
-def main():
-    graph_data = torch.load("./data/train.pt", weights_only=False)
-    edge_index, num_nodes = graph_data.edge_index, graph_data.num_nodes
-    out, out_set, inn, in_set = build_unique_in_out(edge_index, num_nodes)
-
-    # test for cycles: 
-
-    # cycles = cycles_C5(out, out_set)
-    # labels, witness = Cn_check_with_witness(5)(graph_data)
-
-    sg2_fast = SG2(out_set, in_set)
-    labels, sg2_selin = SG2_check_with_witness()(graph_data)
-    print(len(sg2_fast), len(sg2_selin))
-
-    bp2_fast = BP2(out_set, in_set)
-    labels, bp2_selin = BP2_check_with_witness()(graph_data)
-    print(len(bp2_fast), len(bp2_selin))
-
-if __name__ == "__main__":
-    main()
