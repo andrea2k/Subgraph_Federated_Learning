@@ -1,0 +1,3 @@
+n,d,r,type,seed_tr,seed_va,seed_te,num_nodes_tr,num_nodes_va,num_nodes_te,num_edges_tr,num_edges_va,num_edges_te
+1000,4,4.0,chordal,139164315,9986153,161436348,1000,1000,1000,2000,2000,2000
+2000,4,4.0,chordal,1343332376,1626787833,1811342165,2000,2000,2000,4000,4000,4000
