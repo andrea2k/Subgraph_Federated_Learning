@@ -14,49 +14,50 @@ from andrea.witness_funcs import (
     SG2, BP2,
 )
 
-def count_motifs_for_graph(g):
-    """Count motifs on a single PyG graph object (train/val/test)."""
-    # Ensure CPU for numpy() inside build_unique_in_out
+TASK_FUNCS = {
+    "cycle2": lambda out, out_set, in_set: cycles_C2(out, out_set),
+    "cycle3": lambda out, out_set, in_set: cycles_C3(out, out_set),
+    "cycle4": lambda out, out_set, in_set: cycles_C4(out, out_set),
+    "cycle5": lambda out, out_set, in_set: cycles_C5(out, out_set),
+    "cycle6": lambda out, out_set, in_set: cycles_C6(out, out_set),
+    "scatter_gather": lambda out, out_set, in_set: SG2(out_set, in_set),
+    "biclique": lambda out, out_set, in_set: BP2(out_set, in_set),
+}
+TASKS = list(TASK_FUNCS.keys())
+
+def set_y_and_count_motifs(g, task_funcs=TASK_FUNCS):
     edge_index = g.edge_index
     num_nodes = int(g.num_nodes)
 
     out, out_set, inn, in_set = build_unique_in_out(edge_index, num_nodes)
 
-    c2 = len(cycles_C2(out, out_set))
-    c3 = len(cycles_C3(out, out_set))
-    c4 = len(cycles_C4(out, out_set))
-    c5 = len(cycles_C5(out, out_set))
-    c6 = len(cycles_C6(out, out_set))
+    tasks = list(task_funcs.keys())
+    y = torch.zeros((num_nodes, len(tasks)), dtype=torch.float32)
 
-    sg = len(SG2(out_set, in_set))
-    bp = len(BP2(out_set, in_set))
+    counts = {}
 
-    return {
-        "cycle2": c2,
-        "cycle3": c3,
-        "cycle4": c4,
-        "cycle5": c5,
-        "cycle6": c6,
-        "scatter_gather": sg,
-        "biclique": bp,
-        "num_nodes": num_nodes
-    }
+    for col, task_name in enumerate(tasks):
+        motifs = task_funcs[task_name](out, out_set, in_set)  # list of tuples
+        counts[task_name] = len(motifs)
 
-def write_y_sums_csv(path, splits):
-    tasks = [
-        "cycle2", "cycle3", "cycle4", "cycle5", "cycle6",
-        "scatter_gather", "biclique"
-    ]
+        # label_mode="all": mark all nodes in witness tuple
+        for w in motifs:
+            for u in w:
+                y[int(u), col] = 1.0
 
+    g.y = y
+    g.num_classes = y.shape[1]
+    return g, counts
+
+def write_y_sums_csv(path, split_counts, tasks=TASKS):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["split"] + tasks)
-
-        for split_name, data in splits.items():
-            counts = count_motifs_for_graph(data)
-            row = [split_name] + [counts[t] for t in tasks]
-            writer.writerow(row)
+        for split_name in ["tr", "va", "te"]:
+            c = split_counts[split_name]
+            writer.writerow([split_name] + [c[t] for t in tasks])
 
 N_LIST = [1000,2000]              # nodes
 D_LIST = [4]                 # average degree
@@ -64,7 +65,6 @@ R_LIST = [4.0]         # locality radius / delta
 GEN_LIST = ["chordal"]   # generator
 
 BASE_SEED = 0
-
 
 def main():
 
@@ -94,12 +94,15 @@ def main():
         
         set_seed(split_seeds["train"])
         tr = make_sim().generate_pytorch_graph().add_ports()
+        tr, tr_counts = set_y_and_count_motifs(tr, TASK_FUNCS)
 
         set_seed(split_seeds["val"])
         va = make_sim().generate_pytorch_graph().add_ports()
+        va, va_counts = set_y_and_count_motifs(va, TASK_FUNCS)
 
         set_seed(split_seeds["test"])
         te = make_sim().generate_pytorch_graph().add_ports()
+        te, te_counts = set_y_and_count_motifs(te, TASK_FUNCS)
 
         out_dir_pt = f"./andrea/data/data_{n}_{d}_{r}_{generator}"
         os.makedirs(out_dir_pt, exist_ok=True)
@@ -108,8 +111,8 @@ def main():
         torch.save(va, os.path.join(out_dir_pt, "val.pt"))
         torch.save(te, os.path.join(out_dir_pt, "test.pt"))
 
-        splits = {"tr": tr, "va": va, "te": te}
-        write_y_sums_csv(f"{out_dir_pt}/y_sums.csv", splits)
+        split_counts = {"tr": tr_counts, "va": va_counts, "te": te_counts}
+        write_y_sums_csv(f"{out_dir_pt}/y_sums.csv", split_counts, TASKS)
         
         row = {
             "n": n,
