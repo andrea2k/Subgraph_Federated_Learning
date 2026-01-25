@@ -16,6 +16,7 @@
     "port_emb_dim": 8,
     "num_epochs": 100,
     "enable_cross_client_comm": true,
+    "cross_client_mix_alpha": 0.5,
 
     "default_hparams": {
       "ego_dim": null,

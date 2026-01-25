@@ -39,6 +39,7 @@ class PNANetReverseMP(nn.Module):
         enable_cross_client_comm: bool = False,
         comm=None,
         client_id: int | None = None,
+        ghost_mix_alpha: float = 1.0,
     ):
         super().__init__()
         if aggregators is None:
@@ -50,6 +51,7 @@ class PNANetReverseMP(nn.Module):
         self.enable_cross_client_comm = bool(enable_cross_client_comm)
         self.comm = comm
         self.client_id = client_id
+        self.ghost_mix_alpha = float(ghost_mix_alpha)
 
         self.in_port_vocab_size  = int(in_port_vocab_size)
         self.out_port_vocab_size = int(out_port_vocab_size)
@@ -146,10 +148,6 @@ class PNANetReverseMP(nn.Module):
         global_nids: torch.Tensor | None,
         owned_mask: torch.Tensor | None,
     ) -> torch.Tensor:
-        """
-        If cross-client communication is enabled, push embeddings for owned nodes
-        to the global comm bus and pull canonical embeddings for ghost nodes.
-        """
         if (
             not self.enable_cross_client_comm or
             self.comm is None or
@@ -168,12 +166,13 @@ class PNANetReverseMP(nn.Module):
             owned_mask=owned_mask,
         )
 
-        # pull for ghost nodes and merge
+        # pull for ghost nodes and blend with local embeddings
         x = self.comm.pull_ghost_and_merge(
             layer=layer_idx,
             global_nids=global_nids,
             owned_mask=owned_mask,
             local_embs=x,
+            mix_alpha=self.ghost_mix_alpha,   
         )
         return x
 
