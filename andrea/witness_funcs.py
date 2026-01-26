@@ -1,5 +1,14 @@
-import torch
 import numpy as np
+
+def canon_cycle_rotation(cyc):
+    """
+    Canonicalize a directed cycle up to rotation only.
+    Example: (2,3,1) -> (1,2,3). Direction is preserved (no reversal).
+    """
+    cyc = list(cyc)
+    m = min(cyc)
+    k = cyc.index(m)
+    return tuple(cyc[k:] + cyc[:k])
 
 def build_unique_in_out(edge_index, num_nodes):
     src = edge_index[0].numpy()
@@ -10,199 +19,179 @@ def build_unique_in_out(edge_index, num_nodes):
 
     for u, v in zip(src, dst):
         u = int(u); v = int(v)
+        if u == v:
+            continue
         out_set[u].add(v)
         in_set[v].add(u)
 
-    out = [list(s) for s in out_set]
-    inn = [list(s) for s in in_set]
-    return out, out_set, inn, in_set
+    return out_set, in_set
 
-def cycles_C2(out, out_set):
-    cycles = []
-    n = len(out)
+def cycles_C2(out_set, in_set):
+    cycles = set()
+    n = len(out_set)
     for a in range(n):
-        for b in out[a]:
-            if b > a and a in out_set[b]:
-                cycles.append((a, b))
-    return cycles
+        for b in out_set[a]:
+            if a != b and a in out_set[b]:
+                cycles.add(tuple(sorted((a, b))))
+    return list(cycles)
 
-def cycles_C3(out, out_set):
-    cycles = []
-    n = len(out)
+def cycles_C3(out_set, in_set):
+    cycles = set()
+    n = len(out_set)
+
     for a in range(n):
-        for b in out[a]:
-            if b <= a:
+        for b in out_set[a]:
+            if b == a:
                 continue
-            for c in out[b]:
-                if c > a and a in out_set[c]:
-                    cycles.append((a, b, c))
-    return cycles
-
-def cycles_C4(out, out_set):
-    cycles = []
-    n = len(out)
-    for a in range(n):
-        for b in out[a]:
-            if b <= a:
-                continue
-            for c in out[b]:
-                if c <= a or c == b:
+            for c in out_set[b]:
+                if c == a or c == b:
                     continue
-                for d in out[c]:
-                    if d == b:
-                        continue
-                    if d > a and a in out_set[d]:
-                        cycles.append((a, b, c, d))
-    return cycles
+                if a in out_set[c]:
+                    cycles.add(canon_cycle_rotation((a, b, c)))
 
-def cycles_C5(out, out_set):
-    cycles = []
-    n = len(out)
+    return list(cycles)
+
+def cycles_C4(out_set, in_set):
+    cycles = set()
+    n = len(out_set)
+
     for a in range(n):
-        for b in out[a]:
-            if b <= a:
+        for b in out_set[a]:
+            if b == a:
                 continue
-            for c in out[b]:
-                if c <= a or c == b:
+            for c in out_set[b]:
+                if c in (a, b):
                     continue
-                for d in out[c]:
-                    if d <= a or d == b or d == c:
+                for d in out_set[c]:
+                    if d in (a, b, c):
                         continue
-                    for e in out[d]:
-                        if e == b or e == c or e == d:
+                    if a in out_set[d]:
+                        cycles.add(canon_cycle_rotation((a, b, c, d)))
+
+    return list(cycles)
+
+def cycles_C5(out_set, in_set):
+    cycles = set()
+    n = len(out_set)
+
+    for a in range(n):
+        for b in out_set[a]:
+            if b == a:
+                continue
+            for c in out_set[b]:
+                if c in (a, b):
+                    continue
+                for d in out_set[c]:
+                    if d in (a, b, c):
+                        continue
+                    for e in out_set[d]:
+                        if e in (a, b, c, d):
                             continue
-                        if e > a and a in out_set[e]:
-                            cycles.append((a, b, c, d, e))
-    return cycles
+                        if a in out_set[e]:
+                            cycles.add(canon_cycle_rotation((a, b, c, d, e)))
 
-def cycles_C6(out, out_set):
-    cycles = []
-    n = len(out)
+    return list(cycles)
+
+def cycles_C6(out_set, in_set):
+    cycles = set()
+    n = len(out_set)
+
     for a in range(n):
-        for b in out[a]:
-            if b <= a:
+        for b in out_set[a]:
+            if b == a:
                 continue
-            for c in out[b]:
-                if c <= a or c == b:
+            for c in out_set[b]:
+                if c in (a, b):
                     continue
-                for d in out[c]:
-                    if d <= a or d == b or d == c:
+                for d in out_set[c]:
+                    if d in (a, b, c):
                         continue
-                    for e in out[d]:
-                        if e <= a or e == b or e == c or e == d:
+                    for e in out_set[d]:
+                        if e in (a, b, c, d):
                             continue
-                        for f in out[e]:
-                            if f == b or f == c or f == d or f == e:
+                        for f in out_set[e]:
+                            if f in (a, b, c, d, e):
                                 continue
-                            if f > a and a in out_set[f]:
-                                cycles.append((a, b, c, d, e, f))
-    return cycles
+                            if a in out_set[f]:
+                                cycles.add(canon_cycle_rotation((a, b, c, d, e, f)))
 
+    return list(cycles)
 
 def SG2(out_set, in_set):
-    """
-    Return a list of unique SG2 witnesses (s, j1, j2, i).
-
-    An SG2 witness consists of four nodes where:
-    - j1 and j2 are two distinct predecessors of i,
-    - s is a common predecessor of both j1 and j2.
-
-    Uniqueness is defined up to permutation of equivalent roles
-    (e.g., swapping j1 and j2 or swaapping i and s does not create a new witness).
-    """
     n = len(out_set)
     W = set()
 
-    for i in range(n):
-        preds = in_set[i]
-        if len(preds) < 2:
+    for sink in range(n):
+        sink_preds = in_set[sink]
+        if len(sink_preds) < 2:
             continue
 
         # convert once; sorting gives stable canonical order
-        preds_list = sorted(preds)
+        sink_preds_sorted = sorted(sink_preds)
 
-        L = len(preds_list)
-        for a in range(L - 1):
-            j1 = preds_list[a]
-            if j1 == i:
+        L = len(sink_preds_sorted)
+        for left in range(L - 1):
+            j1 = sink_preds_sorted[left]
+            if j1 == sink:
                 continue
-            in1 = in_set[j1]
-            if not in1:
+            left_preds = in_set[j1]
+            if not left_preds:
                 continue
 
-            for b in range(a + 1, L):
-                j2 = preds_list[b]
-                if j2 == i:
+            for right in range(left + 1, L):
+                j2 = sink_preds_sorted[right]
+                if j2 == sink:
                     continue
-                in2 = in_set[j2]
-                if not in2:
+                right_preds = in_set[j2]
+                if not right_preds:
                     continue
                 
 
                 # iterate smaller in-set for speed
-                if len(in1) <= len(in2):
-                    small, big = in1, in2
+                if len(left_preds) <= len(right_preds):
+                    small, big = left_preds, right_preds
                 else:
-                    small, big = in2, in1
+                    small, big = right_preds, left_preds
 
-                m1, m2 = (j1, j2) if j1 < j2 else (j2, j1)
-
-                for s in small:
-                    if s == i or s == j1 or s == j2:
+                for source in small:
+                    if source == sink or source == j1 or source == j2:
                         continue
-                    if s in big:
-                        end1, end2 = (s, i) if s < i else (i, s)
-                        W.add((int(end1), int(m1), int(m2), int(end2)))
+                    if source in big:
+                        W.add((int(source), int(j1), int(j2), int(sink)))
     return list(W)
 
+def sort_bp2(L1,L2,R1,R2):
+    l1, l2 = (L1, L2) if L1 < L2 else (L2, L1)
+    r1, r2 = (R1, R2) if R1 < R2 else (R2, R1)
+    return l1, l2, r1, r2
+
 def BP2(out_set, in_set):
-    """
-    Return a list of unique BP2 witnesses (l1, l2, r, i).
-
-    A BP2 witness consists of four nodes where:
-    - l1 and l2 are two distinct predecessors of i,
-    - both l1 and l2 have an outgoing edge to the same node r (r != i).
-
-    Uniqueness ignores the ordering of l1 and l2 + r and i
-    (swapping them does not create a new witness).
-    """
     n = len(in_set)
     W = set()
 
-    for i in range(n):
-        lefts = in_set[i]
-        if len(lefts) < 2:
+    for l1 in range(n):
+        out1 = out_set[l1]
+        if len(out1) < 2:
             continue
-
-        lefts_list = sorted(lefts)
-        L = len(lefts_list)
-
-        for a in range(L - 1):
-            l1 = lefts_list[a]
-            if l1 == i:
-                continue
-            out1 = out_set[l1]
-            if not out1:
+        for l2 in range(l1 + 1, n):
+            out2 = out_set[l2]
+            if len(out2) < 2:
                 continue
 
-            for b in range(a + 1, L):
-                l2 = lefts_list[b]
-                if l2 == i:
-                    continue
-                out2 = out_set[l2]
-                if not out2:
-                    continue
-                if len(out1) <= len(out2):
-                    small, big = out1, out2
-                else:
-                    small, big = out2, out1
+            common = list(out1.intersection(out2))  # candidates for right nodes
+            if len(common) < 2:
+                continue
 
-                x, y = (l1, l2) if l1 < l2 else (l2, l1)
-
-                for r in small:
-                    if r == i or r == l1 or r == l2:
+            common.sort()
+            # choose unordered pairs (r1, r2) from common
+            for i in range(len(common) - 1):
+                r1 = common[i]
+                if r1 in (l1, l2):
+                    continue
+                for j in range(i + 1, len(common)):
+                    r2 = common[j]
+                    if r2 in (l1, l2) or r2 == r1:
                         continue
-                    if r in big:
-                        r1, r2 = (r, i) if r < i else (i, r)
-                        W.add((int(x),int(y),int(r1),int(r2)))
+                    l1, l2, r1, r2 = sort_bp2(l1, l2, r1, r2)
+                    W.add((int(l1), int(l2), int(r1), int(r2)))
     return list(W)

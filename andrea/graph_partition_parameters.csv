@@ -1,0 +1,2 @@
+dataset_id,n,d,r,type,split,method,split_id,seed_tag,seed,n_clients,louvain_res,metis_num_coms,client_assignment,alpha
+data_1000_4_4.0_chordal,1000,4,4.0,chordal,train,louvain_label_imbalance,louvain_label_imbalance_res1p0_c32,louvain_label_imbalance_res1.0_c32,1754587977,32,1.0,,,

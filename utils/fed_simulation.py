@@ -5,8 +5,8 @@ from torch_geometric.utils import to_scipy_sparse_matrix, to_networkx
 from torch_geometric.data import Data
 import pymetis as metis
 
-from utils.fed_partitioning import get_subgraph_pyg_data, zipf_assign_communities_to_clients, equal_assign_communities_to_clients
-
+from utils.fed_partitioning import zipf_assign_communities_to_clients, equal_assign_communities_to_clients
+from andrea.get_subgraph import get_subgraph_pyg_data
 """
 The implementation of the Label Imbalance Split (LIS) simulation strategy  
 for the Metis-based and Louvain-based data partitioning techniques is adapted 
