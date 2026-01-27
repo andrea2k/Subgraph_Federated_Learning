@@ -104,9 +104,9 @@ elif PARTITION_STRATEGY == "louvain original skewed":              # with zipf-s
 elif PARTITION_STRATEGY == "metis original skewed":                
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
 elif PARTITION_STRATEGY == "partition aware":
-    FED_TRAIN_SPLITS_DIR = "./data/fed_witness_splits/train/clients"
-    FED_VAL_SPLITS_DIR  = "./data/fed_witness_splits/val/clients"
-    FED_TEST_SPLITS_DIR = "./data/fed_witness_splits/test/clients"
+    FED_TRAIN_SPLITS_DIR = "./data/fed_partition_aware_splits/train/clients"
+    FED_VAL_SPLITS_DIR  = "./data/fed_partition_aware_splits/val/clients"
+    FED_TEST_SPLITS_DIR = "./data/fed_partition_aware_splits/test/clients"
     NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
 else:
     raise ValueError(

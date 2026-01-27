@@ -206,7 +206,7 @@ Running the synthetic data generation script:
 python3 -m scripts.data.generate_synthetic
 ```
 
-produces an additional federated split directory at `./data/fed_witness_splits/`.
+produces an additional federated split directory at `./data/fed_partition_aware_splits/`.
 
 This directory contains **pattern-aware federated splits** for each global graph split (`train/`, `val/`, `test/`). Each split directory has the following structure:
 
