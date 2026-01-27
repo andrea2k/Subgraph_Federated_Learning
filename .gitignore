@@ -2,3 +2,12 @@ __pycache__/
 .DS_Store
 gcn_utils.py
 simulator.py
+
+# ignore unused data files
+data/*
+!data/fed_witness_splits/
+!data/seeds/global_data_seeds.txt
+!data/train.pt
+!data/test.pt
+!data/val.pt
+!data/y_sums.csv
