@@ -23,6 +23,8 @@ CONFIG = ALL_CONFIG["reverse_mp_with_port_and_ego"]
 MODEL_NAME = CONFIG["model_name"]
 BEST_MODEL_PATH = CONFIG["best_model_path"]
 
+BASE_SEED = CONFIG["base_seed"]
+
 USE_EGO_IDS = CONFIG["use_ego_ids"]
 USE_PORT_IDS = CONFIG["use_port_ids"]
 USE_MINI_BATCH = CONFIG["use_mini_batch"]
@@ -335,8 +337,8 @@ def main():
         weight_decay=DEFAULT_HPARAMS["weight_decay"],
     )
 
-    # seeds = [0, 1, 2, 3, 4]
-    seeds = [0] # for testing
+    #seeds = [BASE_SEED]
+    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2, BASE_SEED+3, BASE_SEED+4]
     test_f1_scores = []
     for s in seeds:
         _, test_f1 = run_pna(s, tasks, device, run_id=run_id, **base_hparams)
@@ -360,6 +362,8 @@ def main():
 
     runtime_sec = time.perf_counter() - start_ts
 
+    neigh = base_hparams["neighbors_per_hop"]
+
     append_f1_score_to_csv(
         out_csv="./results/metrics/f1_scores.csv",
         tasks=tasks,
@@ -367,7 +371,11 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name=f"PNA reverse MP with {mode_str} training, port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}",
+        model_name = (
+            f"PNA reverse MP with {mode_str} training, "
+            f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}, "
+            f"neigh={neigh}, seeds={seeds}"
+        )
         runtime_seconds=runtime_sec,
     )
 
