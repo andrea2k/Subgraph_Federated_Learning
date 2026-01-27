@@ -5,8 +5,10 @@ simulator.py
 
 # ignore unused data files
 data/*
+
+# re-add directories under data/
 !data/fed_witness_splits/
-!data/seeds/global_data_seeds.txt
+!data/seeds/
 !data/train.pt
 !data/test.pt
 !data/val.pt
