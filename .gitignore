@@ -3,11 +3,14 @@ __pycache__/
 gcn_utils.py
 simulator.py
 
+# ignore checkpoints 
+checkpoints/
+
 # ignore unused data files
 data/*
 
 # re-add directories under data/
-!data/fed_witness_splits/
+!data/fed_partition_aware_splits/
 !data/seeds/
 !data/train.pt
 !data/test.pt
