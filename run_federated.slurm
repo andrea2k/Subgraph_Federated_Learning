@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name=fed-thesis-26-jan
+#SBATCH --job-name=fed-thesis-27-jan-v1
 #SBATCH --account=ewi-st-dis
 #SBATCH --qos=short
 #SBATCH --partition=general      # Request partition
@@ -21,19 +21,19 @@ export APPTAINER_CACHEDIR=/tmp/$USER
 # Paths 
 APPTAINER_IMAGE="/tudelft.net/staff-umbrella/CSE3000GLTD/sceydeli/pytorch2.2.2-cuda11.8-ubuntu22.04-fraudGT_v2.sif"
 CODE_DIR="/home/nfs/sceydeli/thesis/Subgraph_Federated_Learning"
-CKPT_DIR="/tudelft.net/staff-umbrella/CSE3000GLTD/sceydeli/checkpoints"
+HOST_BASE_DIR="/tudelft.net/staff-umbrella/CSE3000GLTD/sceydeli"
 
-# Make sure logs exist
-mkdir -p logs/slurm
+# Make sure log directory exists (on the host)
+mkdir -p "${CODE_DIR}/logs/slurm"
 
 # Optional module load
 # module load cuda/12.4
 
-# Run this script inside the container
+# Run the training inside the container
 srun apptainer exec \
   --nv \
   --containall \
   --bind "${CODE_DIR}:/workspace" \
-  --bind "${CKPT_DIR}:/workspace/checkpoints" \
+  --bind "${HOST_BASE_DIR}:${HOST_BASE_DIR}" \
   "${APPTAINER_IMAGE}" \
   bash -c "cd /workspace && export PYTHONPATH=/workspace:\$PYTHONPATH && python -m scripts.training.train_federated_pna"

@@ -3,6 +3,9 @@ __pycache__/
 gcn_utils.py
 simulator.py
 
+# ignore checkpoints folder as created by the server
+/checkpoints
+
 # ignore checkpoints 
 checkpoints/
 
