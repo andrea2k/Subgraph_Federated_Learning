@@ -338,7 +338,7 @@ def main():
     )
 
     #seeds = [BASE_SEED]
-    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2, BASE_SEED+3, BASE_SEED+4]
+    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2] # Average over 3 epochs
     test_f1_scores = []
     for s in seeds:
         _, test_f1 = run_pna(s, tasks, device, run_id=run_id, **base_hparams)
@@ -375,7 +375,7 @@ def main():
             f"PNA reverse MP with {mode_str} training, "
             f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}, "
             f"neigh={neigh}, seeds={seeds}"
-        )
+        ),
         runtime_seconds=runtime_sec,
     )
 
