@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name=fed-thesis-27-jan-centralized-pna-6-layers-averaged-5-runs-[10,10,10,10,5,5]
+#SBATCH --job-name=fed-thesis-30-jan-centralized-pna-5-layers-averaged-3-runs-[15,10,5]-weighting:auto
 #SBATCH --account=ewi-st-dis
 #SBATCH --qos=short
 #SBATCH --partition=general      # Request partition
