@@ -363,9 +363,10 @@ def main():
     runtime_sec = time.perf_counter() - start_ts
 
     neigh = base_hparams["neighbors_per_hop"]
+    weighting = base_hparams["minority_class_weight"]
 
     append_f1_score_to_csv(
-        out_csv="./results/metrics/f1_scores.csv",
+        out_csv="./results/parameter_tuning/pna_tuning_f1_scores.csv",
         tasks=tasks,
         mean_f1=mean_f1,
         std_f1=std_f1,
@@ -374,7 +375,8 @@ def main():
         model_name = (
             f"PNA reverse MP with {mode_str} training, "
             f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}, "
-            f"neigh={neigh}, seeds={seeds}"
+            f"neigh={neigh}, seeds={seeds}, "
+            f"weighting={weighting}"
         ),
         runtime_seconds=runtime_sec,
     )
