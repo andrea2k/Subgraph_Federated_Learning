@@ -38,9 +38,9 @@ This repository includes a **synthetic subgraph-detection dataset** used for ben
 
 The generated synthetic subgraph-detection dataset consists of eleven money laundering patterns. These patterns are randomly injected into graphs using a _random circulant–like graph generator_ (Egressy et al., 2023). The eleven tasks consist of **four degree-based motifs** and **seven higher-order structural motifs.**
 
-The degree-based motifs are **degree-in/out** (the number of incoming and outgoing edges) and **fan-in/out** (the number of unique incoming and outgoing neighbors). For each of these four tasks, a node’s label is set to \emph{true} if the corresponding quantity is greater than 3.
+The degree-based motifs are **degree-in/out** (the number of incoming and outgoing edges) and **fan-in/out** (the number of unique incoming and outgoing neighbors). For each of these four tasks, a node’s label is set to *true* if the corresponding quantity is greater than three.
 
-The remaining seven tasks are defined based on a node’s participation in higher-order structural motifs: **scatter–gather patterns, directed bicliques, and directed cycles of length up to six**. For these motif tasks, a node’s label is set to \emph{true} if it participates in at least one instance of the corresponding motif.
+The remaining seven tasks are defined based on a node’s participation in higher-order structural motifs: **scatter–gather patterns, directed bicliques, and directed cycles of length up to six**. For these motif tasks, a node’s label is set to *true* if it participates in at least one instance of the corresponding motif.
 
 ---
 
