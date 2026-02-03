@@ -2,7 +2,7 @@
 
 A repository for **synthetic subgraph-detection benchmarking** and **PNA-based baselines** on directed multigraphs.
 
-It provides a fully reproducible pipeline for generating synthetic multigraphs with node-level pattern labels, partitioning them into federated client subgraphs using both **community-detection–based methods** (Louvain, Metis) and a **pattern-aware splitting strategy**, and training **centralized and federated PNA models** for financial crime detection.
+It provides a fully reproducible pipeline for generating synthetic multigraphs with node-level pattern labels, partitioning them into federated client subgraphs using both **community-detection–based methods** (Louvain, Metis) and a custom **pattern-aware splitting strategy**, and training **centralized and federated PNA models** for financial crime detection.
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -23,7 +23,7 @@ It provides a fully reproducible pipeline for generating synthetic multigraphs w
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
   - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
   - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
-  - [3. Training Configuration](#3-training-configuration)
+  - [Training Configuration for Centralized PNA Model](#training-configuration-for-centralized-pna-model)
 - [PNA Training Under Federated Setting](#pna-training-under-federated-setting)
   - [Federated Learning Configuration](#federated-learning-configuration)
     - [Federated Dataset Simulation](#federated-dataset-simulation)
@@ -38,9 +38,9 @@ This repository includes a **synthetic subgraph-detection dataset** used for ben
 
 The generated synthetic subgraph-detection dataset consists of eleven money laundering patterns. These patterns are randomly injected into graphs using a _random circulant–like graph generator_ (Egressy et al., 2023). The eleven tasks consist of **four degree-based motifs** and **seven higher-order structural motifs.**
 
-The degree-based motifs are **degree-in/out** (the number of incoming and outgoing edges) and **fan-in/out** (the number of unique incoming and outgoing neighbors). For each of these four tasks, a node’s label is set to *true* if the corresponding quantity is greater than three.
+The degree-based motifs are **degree-in/out** (the number of incoming and outgoing edges) and **fan-in/out** (the number of unique incoming and outgoing neighbors). For each of these four tasks, a node’s label is set to _true_ if the corresponding quantity is greater than three.
 
-The remaining seven tasks are defined based on a node’s participation in higher-order structural motifs: **scatter–gather patterns, directed bicliques, and directed cycles of length up to six**. For these motif tasks, a node’s label is set to *true* if it participates in at least one instance of the corresponding motif.
+The remaining seven tasks are defined based on a node’s participation in higher-order structural motifs: **scatter–gather patterns, directed bicliques, and directed cycles of length up to six**. For these motif tasks, a node’s label is set to _true_ if it participates in at least one instance of the corresponding motif.
 
 ---
 
@@ -138,7 +138,7 @@ Examples:
 
 ### Pattern-Aware Federated Splits (Witness-Based)
 
-In addition to community-detection–based partitioning, this repository provides a **pattern-aware federated splitting strategy** that explicitly divides _structural subgraph patterns_ across clients.
+In addition to community-detection–based partitioning, this repository provides a custom **pattern-aware federated splitting strategy** that explicitly divides _structural subgraph patterns_ across clients.
 
 Unlike Metis- or Louvain-based approaches, which operate purely on graph topology, this strategy uses **pattern witnesses**, the exact node sets that form each labeled subgraph instance (e.g., cycles, scatter–gather motifs, or bicliques), to guide client assignment.
 
@@ -243,7 +243,7 @@ This version serves as the foundation for future **federated** extensions.
 
 ---
 
-### 3. Training Configuration
+### Training Configuration for Centralized PNA Model
 
 Both PNA variants share the following core hyperparameters:
 
