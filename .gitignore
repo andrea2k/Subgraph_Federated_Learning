@@ -9,11 +9,16 @@ simulator.py
 # ignore checkpoints 
 checkpoints/
 
+# ignore server logs
+logs/
+
 # ignore unused data files
 data/*
 
 # re-add directories under data/
 !data/fed_partition_aware_splits/
+!data/fed_partition_aware_splits_without_cross_edges/
+!data/fed_partition_aware_splits_with_cross_edges/
 !data/seeds/
 !data/train.pt
 !data/test.pt
