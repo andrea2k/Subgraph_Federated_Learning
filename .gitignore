@@ -9,6 +9,9 @@ simulator.py
 # ignore checkpoints 
 checkpoints/
 
+# ignore server logs
+logs/
+
 # ignore unused data files
 data/*
 
