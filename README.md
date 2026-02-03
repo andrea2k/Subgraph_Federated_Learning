@@ -26,7 +26,8 @@ It provides a fully reproducible pipeline for generating synthetic multigraphs w
   - [Training Configuration for Centralized PNA Model](#training-configuration-for-centralized-pna-model)
 - [PNA Training Under Federated Setting](#pna-training-under-federated-setting)
   - [Federated Learning Configuration](#federated-learning-configuration)
-    - [Federated Dataset Simulation](#federated-dataset-simulation)
+    - [Hyperparameters for Louvain- and Metis-Based Splits](#hyperparameters-for-louvain--and-metis-based-splits)
+    - [Hyperparameters for Partition-Aware Splits](#hyperparameters-for-partition-aware-splits)
     - [Federated Learning Hyperparameters](#federated-learning-hyperparameters)
 - [Reproducibility](#reproducibility)
 
@@ -293,17 +294,29 @@ python3 -m scripts.training.train_federated_pna
 
 The federated setting introduces additional hyperparameters governing both the **federated splits generation** and the **federated training procedure**. This section documents the default configuration used throughout the experiments, along with a brief rationale for each choice.
 
-#### Federated Dataset Simulation
+#### Hyperparameters for Louvain- and Metis-Based Splits
 
 - **`num_clients = 32`**
   The 8192-node global graph is partitioned into 32 subgraphs, yielding approximately 256 nodes per client.
-  This creates a **realistically challenging** federated scenario: clients are small enough to introduce non-IID behavior but large enough to support stable local training.
 
 - **`louvain_resolution = 1.0`**
   Uses the default modularity resolution for Louvain community detection.
 
 - **`metis_num_coms = 32`**
   The Metis partitioning strategy is configured to produce exactly 32 partitions, ensuring that **each client corresponds to one contiguous graph community**, which maximizes structural separation between clients.
+
+---
+
+#### Hyperparameters for Partition-Aware Splits
+
+- **`num_clients = 15`**
+  The global graph is split into 15 clients under the pattern-aware partitioning scheme.
+
+- **`include_cross_edges = true`**
+  Enables the inclusion of cross-client edges when constructing client subgraphs.
+  This allows clients to observe edges connecting to ghost nodes owned by other clients, which is essential for studying **cross-client communication**.
+
+---
 
 #### Federated Learning Hyperparameters
 
@@ -313,18 +326,18 @@ The federated setting introduces additional hyperparameters governing both the *
   `"partition aware"`, `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`.
 
 - **`global_epochs = 100`**
-  The total number of global training rounds.
+  The total number of global communication rounds.
 
-- **`local_epochs = 2`**
-  Each client performs two passes over its local subgraph during every communication round.
+- **`local_epochs = 1`**
+  Number of local training epochs performed by each client per communication round. A single local epoch is used by default to limit client drift and emphasize the effects of graph partitioning.
 
-- **`client_fraction = 1.0`**
+- **`client_fraction = 0.5`**
   All clients participate in every communication round.
 
 - **`algorithm`**
   Specifies the federated learning algorithm used in the experiment.
   Currently supported options:
-  `"fedavg"`, `"fedprox"`.
+  `"fedavg"`, `"fedprox"`, `"scaffold"`.
 
 All configurations are available in `.configs/fed_configs.json` file.
 
