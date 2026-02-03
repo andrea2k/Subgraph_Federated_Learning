@@ -172,7 +172,8 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     print(
         f"[FL-SETUP] num_clients={NUM_CLIENTS}, "
         f"num_rounds={num_rounds}, local_epochs={local_epochs}, "
-        f"client_fraction={client_fraction},"
+        f"client_fraction={client_fraction}, "
+        f"cross edges={INCLUDE_CROSS_EDGES}, "
         f"cross-client communication={enable_cross_client_comm}"
     )
 
@@ -465,7 +466,7 @@ def main():
     )
 
     # For testing, use single seed
-    # seeds = [BASE_SEED]
+    #seeds = [BASE_SEED]
     seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2]
 
     test_f1_scores = []
@@ -501,7 +502,13 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name=f"PNA reverse MP {mode_str}, partition_strategy={PARTITION_STRATEGY}, num_clients={NUM_CLIENTS} ,local_epochs={base_hparams['local_epochs']}, client_fraction={base_hparams['client_fraction']}",
+        model_name=f"PNA reverse MP {mode_str}, " 
+                   f"partition_strategy={PARTITION_STRATEGY}, " 
+                   f"num_clients={NUM_CLIENTS}, " 
+                   f"local_epochs={base_hparams['local_epochs']}, " 
+                   f"client_fraction={base_hparams['client_fraction']}, "
+                   f"cross_edges={INCLUDE_CROSS_EDGES}, "
+                   f"cross_client_communication={ENABLE_CROSS_CLIENT_COMM}",
         runtime_seconds=runtime_sec,
     )
 
