@@ -40,6 +40,7 @@ PNA_CONFIG = ALL_PNA_CONFIG["reverse_mp_with_port_and_ego"]
 FED_CONFIG = ALL_FED_CONFIG["fed_learning_configs"]
 COMMUNITY_SPLITS_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
 PARTITION_AWARE_SPLITS_CONFIG = ALL_FED_CONFIG["partition_aware_splits"]
+INCLUDE_CROSS_EDGES = PARTITION_AWARE_SPLITS_CONFIG["include_cross_edges"]
 
 ALGORITHM = FED_CONFIG["algorithm"]  # e.g. "fedavg"
 
@@ -104,9 +105,13 @@ elif PARTITION_STRATEGY == "louvain original skewed":              # with zipf-s
 elif PARTITION_STRATEGY == "metis original skewed":                
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
 elif PARTITION_STRATEGY == "partition aware":
-    FED_TRAIN_SPLITS_DIR = "./data/fed_partition_aware_splits/train/clients"
-    FED_VAL_SPLITS_DIR  = "./data/fed_partition_aware_splits/val/clients"
-    FED_TEST_SPLITS_DIR = "./data/fed_partition_aware_splits/test/clients"
+    if INCLUDE_CROSS_EDGES:
+        data_folder_path = "./data/fed_partition_aware_splits_with_cross_edges"
+    else:
+        data_folder_path = "./data/fed_partition_aware_splits_without_cross_edges"
+    FED_TRAIN_SPLITS_DIR = os.path.join(data_folder_path, "train/clients")
+    FED_VAL_SPLITS_DIR  = os.path.join(data_folder_path, "val/clients")
+    FED_TEST_SPLITS_DIR = os.path.join(data_folder_path, "test/clients")
     NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
 else:
     raise ValueError(
@@ -167,7 +172,8 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
     print(
         f"[FL-SETUP] num_clients={NUM_CLIENTS}, "
         f"num_rounds={num_rounds}, local_epochs={local_epochs}, "
-        f"client_fraction={client_fraction}"
+        f"client_fraction={client_fraction},"
+        f"cross-client communication={enable_cross_client_comm}"
     )
 
     model_dir = os.path.join(BEST_MODEL_PATH, f"run_{run_id}_seed{seed}")
@@ -459,8 +465,8 @@ def main():
     )
 
     # For testing, use single seed
-    # seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2, BASE_SEED+3, BASE_SEED+4]
-    seeds = [BASE_SEED]
+    # seeds = [BASE_SEED]
+    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2]
 
     test_f1_scores = []
     for s in seeds:
