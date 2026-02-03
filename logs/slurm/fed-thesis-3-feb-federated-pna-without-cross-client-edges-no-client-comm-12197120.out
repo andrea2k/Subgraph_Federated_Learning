@@ -1,0 +1,1443 @@
+[FL-SETUP] Algorithm=fedavg
+[FL-SETUP] PNA model hyperparameters: {'use_ego_ids': True, 'batch_size': 32, 'use_port_ids': True, 'use_mini_batch': True, 'port_emb_dim': 8, 'num_epochs': 100, 'local_epochs': 1, 'client_fraction': 1.0, 'enable_cross_client_comm': False, 'cross_client_mix_alpha': 0.5, 'ego_dim': None, 'num_layers': 6, 'neighbors_per_hop': [10, 10, 10, 10, 5, 5], 'hidden_dim': 64, 'dropout': 0.1, 'lr': 0.001, 'weight_decay': 0.0001, 'minority_class_weight': 'auto'}
+[FL-SETUP] num_clients=15, num_rounds=100, local_epochs=1, client_fraction=1.0, cross edges=False, cross-client communication=False
+[FL-SETUP] Loading federated train splits from ./data/fed_partition_aware_splits_without_cross_edges/train/clients
+[FL-SETUP] Loading federated val splits from ./data/fed_partition_aware_splits_without_cross_edges/val/clients
+[FL-SETUP] Loading federated test splits from ./data/fed_partition_aware_splits_without_cross_edges/test/clients
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=62 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=51 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=58 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=61 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=75 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=53 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=68 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[FL-SETUP] Cross-client embedding exchange disabled
+[server] Using automatic per-task minority weighting
+[client_0] Using automatic per-task minority weighting
+[client_1] Using automatic per-task minority weighting
+[client_2] Using automatic per-task minority weighting
+[client_3] Using automatic per-task minority weighting
+[client_4] Using automatic per-task minority weighting
+[client_5] Using automatic per-task minority weighting
+[client_6] Using automatic per-task minority weighting
+[client_7] Using automatic per-task minority weighting
+[client_8] Using automatic per-task minority weighting
+[client_9] Using automatic per-task minority weighting
+[client_10] Using automatic per-task minority weighting
+[client_11] Using automatic per-task minority weighting
+[client_12] Using automatic per-task minority weighting
+[client_13] Using automatic per-task minority weighting
+[client_14] Using automatic per-task minority weighting
+
+=== [fedavg] Round 001/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (11, 2) (dtype=torch.int64) | rev edge_attr: (11, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (2, 2) (dtype=torch.int64) | rev edge_attr: (2, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (2, 2) (dtype=torch.int64) | rev edge_attr: (2, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (6, 2) (dtype=torch.int64) | rev edge_attr: (6, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (6, 2) (dtype=torch.int64) | rev edge_attr: (6, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (9, 2) (dtype=torch.int64) | rev edge_attr: (9, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (3, 2) (dtype=torch.int64) | rev edge_attr: (3, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (2, 2) (dtype=torch.int64) | rev edge_attr: (2, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (5, 2) (dtype=torch.int64) | rev edge_attr: (5, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[seed 0] Round 001 | val 0.8178 | val macro-minF1 24.16%
+
+=== [fedavg] Round 002/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 002 | val 0.8167 | val macro-minF1 23.87%
+
+=== [fedavg] Round 003/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 003 | val 0.8158 | val macro-minF1 26.84%
+
+=== [fedavg] Round 004/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 004 | val 0.8150 | val macro-minF1 27.06%
+
+=== [fedavg] Round 005/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 005 | val 0.8145 | val macro-minF1 27.06%
+
+=== [fedavg] Round 006/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 006 | val 0.8142 | val macro-minF1 27.06%
+
+=== [fedavg] Round 007/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 007 | val 0.8140 | val macro-minF1 27.00%
+
+=== [fedavg] Round 008/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 008 | val 0.8137 | val macro-minF1 27.20%
+
+=== [fedavg] Round 009/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 009 | val 0.8138 | val macro-minF1 27.20%
+
+=== [fedavg] Round 010/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 010 | val 0.8137 | val macro-minF1 25.98%
+
+=== [fedavg] Round 011/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 011 | val 0.8134 | val macro-minF1 26.01%
+
+=== [fedavg] Round 012/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 012 | val 0.8137 | val macro-minF1 25.98%
+
+=== [fedavg] Round 013/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 013 | val 0.8136 | val macro-minF1 26.96%
+
+=== [fedavg] Round 014/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 014 | val 0.8134 | val macro-minF1 27.15%
+
+=== [fedavg] Round 015/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 015 | val 0.8132 | val macro-minF1 27.13%
+
+=== [fedavg] Round 016/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 016 | val 0.8134 | val macro-minF1 27.19%
+
+=== [fedavg] Round 017/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 017 | val 0.8134 | val macro-minF1 27.28%
+
+=== [fedavg] Round 018/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 018 | val 0.8132 | val macro-minF1 27.22%
+
+=== [fedavg] Round 019/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 019 | val 0.8131 | val macro-minF1 27.19%
+
+=== [fedavg] Round 020/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 020 | val 0.8132 | val macro-minF1 27.27%
+
+=== [fedavg] Round 021/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 021 | val 0.8129 | val macro-minF1 27.15%
+
+=== [fedavg] Round 022/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 022 | val 0.8131 | val macro-minF1 25.98%
+
+=== [fedavg] Round 023/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 023 | val 0.8130 | val macro-minF1 26.20%
+
+=== [fedavg] Round 024/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 024 | val 0.8133 | val macro-minF1 24.93%
+
+=== [fedavg] Round 025/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 025 | val 0.8132 | val macro-minF1 24.97%
+
+=== [fedavg] Round 026/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 026 | val 0.8134 | val macro-minF1 24.94%
+
+=== [fedavg] Round 027/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 027 | val 0.8133 | val macro-minF1 24.76%
+
+=== [fedavg] Round 028/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 028 | val 0.8135 | val macro-minF1 24.94%
+
+=== [fedavg] Round 029/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 029 | val 0.8132 | val macro-minF1 24.96%
+
+=== [fedavg] Round 030/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 030 | val 0.8131 | val macro-minF1 25.07%
+
+=== [fedavg] Round 031/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 031 | val 0.8132 | val macro-minF1 25.12%
+
+=== [fedavg] Round 032/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 032 | val 0.8131 | val macro-minF1 25.05%
+
+=== [fedavg] Round 033/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 033 | val 0.8129 | val macro-minF1 25.09%
+
+=== [fedavg] Round 034/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 034 | val 0.8127 | val macro-minF1 25.85%
+
+=== [fedavg] Round 035/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 035 | val 0.8129 | val macro-minF1 25.02%
+
+=== [fedavg] Round 036/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 036 | val 0.8129 | val macro-minF1 25.03%
+
+=== [fedavg] Round 037/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 037 | val 0.8130 | val macro-minF1 25.03%
+
+=== [fedavg] Round 038/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 038 | val 0.8129 | val macro-minF1 25.05%
+
+=== [fedavg] Round 039/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 039 | val 0.8129 | val macro-minF1 25.05%
+
+=== [fedavg] Round 040/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 040 | val 0.8130 | val macro-minF1 25.05%
+
+=== [fedavg] Round 041/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 041 | val 0.8129 | val macro-minF1 25.05%
+
+=== [fedavg] Round 042/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 042 | val 0.8127 | val macro-minF1 25.05%
+
+=== [fedavg] Round 043/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 043 | val 0.8127 | val macro-minF1 25.04%
+
+=== [fedavg] Round 044/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 044 | val 0.8128 | val macro-minF1 25.05%
+
+=== [fedavg] Round 045/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 045 | val 0.8129 | val macro-minF1 25.03%
+
+=== [fedavg] Round 046/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 046 | val 0.8130 | val macro-minF1 25.03%
+
+=== [fedavg] Round 047/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 047 | val 0.8129 | val macro-minF1 24.86%
+
+=== [fedavg] Round 048/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 048 | val 0.8128 | val macro-minF1 24.86%
+
+=== [fedavg] Round 049/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 049 | val 0.8129 | val macro-minF1 24.86%
+
+=== [fedavg] Round 050/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 050 | val 0.8129 | val macro-minF1 22.57%
+
+=== [fedavg] Round 051/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 051 | val 0.8130 | val macro-minF1 21.33%
+
+=== [fedavg] Round 052/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 052 | val 0.8130 | val macro-minF1 21.33%
+
+=== [fedavg] Round 053/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 053 | val 0.8132 | val macro-minF1 24.78%
+
+=== [fedavg] Round 054/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 054 | val 0.8133 | val macro-minF1 22.59%
+
+=== [fedavg] Round 055/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 055 | val 0.8132 | val macro-minF1 22.63%
+
+=== [fedavg] Round 056/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 056 | val 0.8132 | val macro-minF1 22.58%
+
+=== [fedavg] Round 057/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 057 | val 0.8132 | val macro-minF1 26.00%
+
+=== [fedavg] Round 058/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 058 | val 0.8133 | val macro-minF1 24.85%
+
+=== [fedavg] Round 059/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 059 | val 0.8133 | val macro-minF1 24.85%
+
+=== [fedavg] Round 060/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 060 | val 0.8133 | val macro-minF1 24.85%
+
+=== [fedavg] Round 061/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 061 | val 0.8130 | val macro-minF1 25.14%
+
+=== [fedavg] Round 062/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 062 | val 0.8131 | val macro-minF1 25.14%
+
+=== [fedavg] Round 063/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 063 | val 0.8132 | val macro-minF1 24.86%
+
+=== [fedavg] Round 064/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 064 | val 0.8133 | val macro-minF1 25.05%
+
+=== [fedavg] Round 065/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 065 | val 0.8134 | val macro-minF1 24.86%
+
+=== [fedavg] Round 066/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 066 | val 0.8132 | val macro-minF1 24.86%
+
+=== [fedavg] Round 067/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 067 | val 0.8134 | val macro-minF1 21.42%
+
+=== [fedavg] Round 068/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 068 | val 0.8135 | val macro-minF1 21.34%
+
+=== [fedavg] Round 069/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 069 | val 0.8134 | val macro-minF1 21.39%
+
+=== [fedavg] Round 070/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 070 | val 0.8135 | val macro-minF1 21.42%
+
+=== [fedavg] Round 071/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 071 | val 0.8133 | val macro-minF1 22.59%
+
+=== [fedavg] Round 072/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 072 | val 0.8134 | val macro-minF1 22.60%
+
+=== [fedavg] Round 073/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 073 | val 0.8133 | val macro-minF1 22.63%
+
+=== [fedavg] Round 074/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 074 | val 0.8133 | val macro-minF1 24.86%
+
+=== [fedavg] Round 075/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 075 | val 0.8133 | val macro-minF1 22.63%
+
+=== [fedavg] Round 076/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 076 | val 0.8134 | val macro-minF1 23.51%
+
+=== [fedavg] Round 077/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 077 | val 0.8135 | val macro-minF1 21.34%
+
+=== [fedavg] Round 078/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 078 | val 0.8135 | val macro-minF1 23.64%
+
+=== [fedavg] Round 079/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 079 | val 0.8133 | val macro-minF1 21.34%
+
+=== [fedavg] Round 080/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 080 | val 0.8131 | val macro-minF1 21.61%
+
+=== [fedavg] Round 081/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 081 | val 0.8132 | val macro-minF1 23.65%
+
+=== [fedavg] Round 082/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 082 | val 0.8133 | val macro-minF1 21.42%
+
+=== [fedavg] Round 083/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 083 | val 0.8133 | val macro-minF1 22.69%
+
+=== [fedavg] Round 084/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 084 | val 0.8133 | val macro-minF1 24.70%
+
+=== [fedavg] Round 085/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 085 | val 0.8132 | val macro-minF1 24.83%
+
+=== [fedavg] Round 086/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 086 | val 0.8130 | val macro-minF1 26.17%
+
+=== [fedavg] Round 087/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 087 | val 0.8130 | val macro-minF1 24.94%
+
+=== [fedavg] Round 088/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 088 | val 0.8131 | val macro-minF1 24.94%
+
+=== [fedavg] Round 089/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 089 | val 0.8134 | val macro-minF1 24.75%
+
+=== [fedavg] Round 090/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 090 | val 0.8133 | val macro-minF1 24.75%
+
+=== [fedavg] Round 091/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 091 | val 0.8133 | val macro-minF1 26.99%
+
+=== [fedavg] Round 092/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 092 | val 0.8134 | val macro-minF1 24.76%
+
+=== [fedavg] Round 093/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 093 | val 0.8136 | val macro-minF1 24.73%
+
+=== [fedavg] Round 094/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 094 | val 0.8137 | val macro-minF1 24.73%
+
+=== [fedavg] Round 095/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 095 | val 0.8137 | val macro-minF1 24.75%
+
+=== [fedavg] Round 096/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 096 | val 0.8139 | val macro-minF1 24.71%
+
+=== [fedavg] Round 097/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 097 | val 0.8139 | val macro-minF1 26.95%
+
+=== [fedavg] Round 098/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 098 | val 0.8138 | val macro-minF1 26.94%
+
+=== [fedavg] Round 099/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 099 | val 0.8137 | val macro-minF1 24.74%
+
+=== [fedavg] Round 100/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 0] Round 100 | val 0.8138 | val macro-minF1 24.74%
+[FL-SETUP] Algorithm=fedavg
+[FL-SETUP] PNA model hyperparameters: {'use_ego_ids': True, 'batch_size': 32, 'use_port_ids': True, 'use_mini_batch': True, 'port_emb_dim': 8, 'num_epochs': 100, 'local_epochs': 1, 'client_fraction': 1.0, 'enable_cross_client_comm': False, 'cross_client_mix_alpha': 0.5, 'ego_dim': None, 'num_layers': 6, 'neighbors_per_hop': [10, 10, 10, 10, 5, 5], 'hidden_dim': 64, 'dropout': 0.1, 'lr': 0.001, 'weight_decay': 0.0001, 'minority_class_weight': 'auto'}
+[FL-SETUP] num_clients=15, num_rounds=100, local_epochs=1, client_fraction=1.0, cross edges=False, cross-client communication=False
+[FL-SETUP] Loading federated train splits from ./data/fed_partition_aware_splits_without_cross_edges/train/clients
+[FL-SETUP] Loading federated val splits from ./data/fed_partition_aware_splits_without_cross_edges/val/clients
+[FL-SETUP] Loading federated test splits from ./data/fed_partition_aware_splits_without_cross_edges/test/clients
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=62 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=51 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=58 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=61 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=75 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=53 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=68 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[FL-SETUP] Cross-client embedding exchange disabled
+[server] Using automatic per-task minority weighting
+[client_0] Using automatic per-task minority weighting
+[client_1] Using automatic per-task minority weighting
+[client_2] Using automatic per-task minority weighting
+[client_3] Using automatic per-task minority weighting
+[client_4] Using automatic per-task minority weighting
+[client_5] Using automatic per-task minority weighting
+[client_6] Using automatic per-task minority weighting
+[client_7] Using automatic per-task minority weighting
+[client_8] Using automatic per-task minority weighting
+[client_9] Using automatic per-task minority weighting
+[client_10] Using automatic per-task minority weighting
+[client_11] Using automatic per-task minority weighting
+[client_12] Using automatic per-task minority weighting
+[client_13] Using automatic per-task minority weighting
+[client_14] Using automatic per-task minority weighting
+
+=== [fedavg] Round 001/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[PORT] fwd edge_attr: (3, 2) (dtype=torch.int64) | rev edge_attr: (3, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (13, 2) (dtype=torch.int64) | rev edge_attr: (13, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (4, 2) (dtype=torch.int64) | rev edge_attr: (4, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (6, 2) (dtype=torch.int64) | rev edge_attr: (6, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (11, 2) (dtype=torch.int64) | rev edge_attr: (11, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (11, 2) (dtype=torch.int64) | rev edge_attr: (11, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (2, 2) (dtype=torch.int64) | rev edge_attr: (2, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (9, 2) (dtype=torch.int64) | rev edge_attr: (9, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (5, 2) (dtype=torch.int64) | rev edge_attr: (5, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (13, 2) (dtype=torch.int64) | rev edge_attr: (13, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (9, 2) (dtype=torch.int64) | rev edge_attr: (9, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (4, 2) (dtype=torch.int64) | rev edge_attr: (4, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[seed 1] Round 001 | val 0.8166 | val macro-minF1 29.46%
+
+=== [fedavg] Round 002/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 002 | val 0.8147 | val macro-minF1 34.54%
+
+=== [fedavg] Round 003/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 003 | val 0.8138 | val macro-minF1 33.88%
+
+=== [fedavg] Round 004/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 004 | val 0.8133 | val macro-minF1 34.04%
+
+=== [fedavg] Round 005/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 005 | val 0.8130 | val macro-minF1 33.36%
+
+=== [fedavg] Round 006/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 006 | val 0.8127 | val macro-minF1 33.34%
+
+=== [fedavg] Round 007/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 007 | val 0.8125 | val macro-minF1 33.29%
+
+=== [fedavg] Round 008/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 008 | val 0.8121 | val macro-minF1 33.26%
+
+=== [fedavg] Round 009/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 009 | val 0.8122 | val macro-minF1 33.28%
+
+=== [fedavg] Round 010/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 010 | val 0.8122 | val macro-minF1 36.69%
+
+=== [fedavg] Round 011/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 011 | val 0.8122 | val macro-minF1 33.26%
+
+=== [fedavg] Round 012/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 012 | val 0.8122 | val macro-minF1 33.26%
+
+=== [fedavg] Round 013/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 013 | val 0.8119 | val macro-minF1 32.94%
+
+=== [fedavg] Round 014/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 014 | val 0.8116 | val macro-minF1 32.93%
+
+=== [fedavg] Round 015/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 015 | val 0.8116 | val macro-minF1 36.35%
+
+=== [fedavg] Round 016/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 016 | val 0.8117 | val macro-minF1 36.35%
+
+=== [fedavg] Round 017/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 017 | val 0.8115 | val macro-minF1 36.48%
+
+=== [fedavg] Round 018/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 018 | val 0.8117 | val macro-minF1 36.68%
+
+=== [fedavg] Round 019/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 019 | val 0.8118 | val macro-minF1 36.30%
+
+=== [fedavg] Round 020/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 020 | val 0.8117 | val macro-minF1 36.60%
+
+=== [fedavg] Round 021/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 021 | val 0.8118 | val macro-minF1 36.44%
+
+=== [fedavg] Round 022/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 022 | val 0.8120 | val macro-minF1 36.46%
+
+=== [fedavg] Round 023/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 023 | val 0.8115 | val macro-minF1 36.53%
+
+=== [fedavg] Round 024/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 024 | val 0.8117 | val macro-minF1 36.68%
+
+=== [fedavg] Round 025/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 025 | val 0.8117 | val macro-minF1 36.42%
+
+=== [fedavg] Round 026/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 026 | val 0.8117 | val macro-minF1 36.35%
+
+=== [fedavg] Round 027/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 027 | val 0.8116 | val macro-minF1 36.55%
+
+=== [fedavg] Round 028/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 028 | val 0.8112 | val macro-minF1 36.69%
+
+=== [fedavg] Round 029/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 029 | val 0.8113 | val macro-minF1 36.70%
+
+=== [fedavg] Round 030/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 030 | val 0.8111 | val macro-minF1 36.71%
+
+=== [fedavg] Round 031/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 031 | val 0.8114 | val macro-minF1 36.69%
+
+=== [fedavg] Round 032/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 032 | val 0.8117 | val macro-minF1 36.63%
+
+=== [fedavg] Round 033/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 033 | val 0.8118 | val macro-minF1 36.69%
+
+=== [fedavg] Round 034/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 034 | val 0.8117 | val macro-minF1 36.70%
+
+=== [fedavg] Round 035/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 035 | val 0.8116 | val macro-minF1 36.70%
+
+=== [fedavg] Round 036/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 036 | val 0.8118 | val macro-minF1 36.70%
+
+=== [fedavg] Round 037/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 037 | val 0.8119 | val macro-minF1 36.69%
+
+=== [fedavg] Round 038/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 038 | val 0.8120 | val macro-minF1 36.70%
+
+=== [fedavg] Round 039/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 039 | val 0.8123 | val macro-minF1 36.69%
+
+=== [fedavg] Round 040/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 040 | val 0.8122 | val macro-minF1 36.69%
+
+=== [fedavg] Round 041/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 041 | val 0.8121 | val macro-minF1 36.69%
+
+=== [fedavg] Round 042/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 042 | val 0.8118 | val macro-minF1 36.70%
+
+=== [fedavg] Round 043/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 043 | val 0.8122 | val macro-minF1 36.59%
+
+=== [fedavg] Round 044/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 044 | val 0.8125 | val macro-minF1 36.60%
+
+=== [fedavg] Round 045/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 045 | val 0.8125 | val macro-minF1 36.60%
+
+=== [fedavg] Round 046/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 046 | val 0.8125 | val macro-minF1 36.59%
+
+=== [fedavg] Round 047/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 047 | val 0.8128 | val macro-minF1 36.59%
+
+=== [fedavg] Round 048/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 048 | val 0.8125 | val macro-minF1 36.64%
+
+=== [fedavg] Round 049/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 049 | val 0.8125 | val macro-minF1 36.44%
+
+=== [fedavg] Round 050/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 050 | val 0.8124 | val macro-minF1 36.68%
+
+=== [fedavg] Round 051/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 051 | val 0.8125 | val macro-minF1 36.70%
+
+=== [fedavg] Round 052/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 052 | val 0.8121 | val macro-minF1 36.70%
+
+=== [fedavg] Round 053/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 053 | val 0.8124 | val macro-minF1 36.68%
+
+=== [fedavg] Round 054/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 054 | val 0.8125 | val macro-minF1 36.67%
+
+=== [fedavg] Round 055/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 055 | val 0.8127 | val macro-minF1 36.69%
+
+=== [fedavg] Round 056/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 056 | val 0.8126 | val macro-minF1 36.69%
+
+=== [fedavg] Round 057/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 057 | val 0.8123 | val macro-minF1 36.68%
+
+=== [fedavg] Round 058/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 058 | val 0.8123 | val macro-minF1 36.59%
+
+=== [fedavg] Round 059/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 059 | val 0.8125 | val macro-minF1 36.59%
+
+=== [fedavg] Round 060/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 060 | val 0.8125 | val macro-minF1 36.59%
+
+=== [fedavg] Round 061/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 061 | val 0.8127 | val macro-minF1 36.64%
+
+=== [fedavg] Round 062/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 062 | val 0.8127 | val macro-minF1 36.69%
+
+=== [fedavg] Round 063/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 063 | val 0.8125 | val macro-minF1 36.69%
+
+=== [fedavg] Round 064/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 064 | val 0.8126 | val macro-minF1 36.69%
+
+=== [fedavg] Round 065/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 065 | val 0.8129 | val macro-minF1 36.69%
+
+=== [fedavg] Round 066/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 066 | val 0.8127 | val macro-minF1 36.64%
+
+=== [fedavg] Round 067/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 067 | val 0.8128 | val macro-minF1 36.65%
+
+=== [fedavg] Round 068/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 068 | val 0.8130 | val macro-minF1 36.65%
+
+=== [fedavg] Round 069/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 069 | val 0.8128 | val macro-minF1 36.69%
+
+=== [fedavg] Round 070/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 070 | val 0.8128 | val macro-minF1 36.59%
+
+=== [fedavg] Round 071/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 071 | val 0.8130 | val macro-minF1 36.64%
+
+=== [fedavg] Round 072/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 072 | val 0.8131 | val macro-minF1 36.69%
+
+=== [fedavg] Round 073/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 073 | val 0.8131 | val macro-minF1 36.70%
+
+=== [fedavg] Round 074/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 074 | val 0.8131 | val macro-minF1 36.70%
+
+=== [fedavg] Round 075/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 075 | val 0.8131 | val macro-minF1 36.70%
+
+=== [fedavg] Round 076/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 076 | val 0.8134 | val macro-minF1 36.65%
+
+=== [fedavg] Round 077/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 077 | val 0.8133 | val macro-minF1 36.65%
+
+=== [fedavg] Round 078/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 078 | val 0.8132 | val macro-minF1 36.70%
+
+=== [fedavg] Round 079/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 079 | val 0.8131 | val macro-minF1 36.70%
+
+=== [fedavg] Round 080/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 080 | val 0.8131 | val macro-minF1 36.70%
+
+=== [fedavg] Round 081/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 081 | val 0.8133 | val macro-minF1 36.70%
+
+=== [fedavg] Round 082/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 082 | val 0.8133 | val macro-minF1 36.70%
+
+=== [fedavg] Round 083/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 083 | val 0.8133 | val macro-minF1 36.70%
+
+=== [fedavg] Round 084/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 084 | val 0.8132 | val macro-minF1 36.70%
+
+=== [fedavg] Round 085/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 085 | val 0.8133 | val macro-minF1 36.69%
+
+=== [fedavg] Round 086/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 086 | val 0.8133 | val macro-minF1 36.70%
+
+=== [fedavg] Round 087/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 087 | val 0.8134 | val macro-minF1 36.58%
+
+=== [fedavg] Round 088/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 088 | val 0.8136 | val macro-minF1 36.59%
+
+=== [fedavg] Round 089/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 089 | val 0.8135 | val macro-minF1 36.65%
+
+=== [fedavg] Round 090/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 090 | val 0.8136 | val macro-minF1 34.41%
+
+=== [fedavg] Round 091/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 091 | val 0.8135 | val macro-minF1 36.69%
+
+=== [fedavg] Round 092/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 092 | val 0.8133 | val macro-minF1 36.64%
+
+=== [fedavg] Round 093/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 093 | val 0.8135 | val macro-minF1 34.48%
+
+=== [fedavg] Round 094/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 094 | val 0.8132 | val macro-minF1 34.22%
+
+=== [fedavg] Round 095/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 095 | val 0.8135 | val macro-minF1 34.36%
+
+=== [fedavg] Round 096/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 096 | val 0.8134 | val macro-minF1 34.42%
+
+=== [fedavg] Round 097/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 097 | val 0.8133 | val macro-minF1 32.27%
+
+=== [fedavg] Round 098/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 098 | val 0.8134 | val macro-minF1 34.42%
+
+=== [fedavg] Round 099/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 099 | val 0.8134 | val macro-minF1 34.42%
+
+=== [fedavg] Round 100/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 1] Round 100 | val 0.8134 | val macro-minF1 34.37%
+[FL-SETUP] Algorithm=fedavg
+[FL-SETUP] PNA model hyperparameters: {'use_ego_ids': True, 'batch_size': 32, 'use_port_ids': True, 'use_mini_batch': True, 'port_emb_dim': 8, 'num_epochs': 100, 'local_epochs': 1, 'client_fraction': 1.0, 'enable_cross_client_comm': False, 'cross_client_mix_alpha': 0.5, 'ego_dim': None, 'num_layers': 6, 'neighbors_per_hop': [10, 10, 10, 10, 5, 5], 'hidden_dim': 64, 'dropout': 0.1, 'lr': 0.001, 'weight_decay': 0.0001, 'minority_class_weight': 'auto'}
+[FL-SETUP] num_clients=15, num_rounds=100, local_epochs=1, client_fraction=1.0, cross edges=False, cross-client communication=False
+[FL-SETUP] Loading federated train splits from ./data/fed_partition_aware_splits_without_cross_edges/train/clients
+[FL-SETUP] Loading federated val splits from ./data/fed_partition_aware_splits_without_cross_edges/val/clients
+[FL-SETUP] Loading federated test splits from ./data/fed_partition_aware_splits_without_cross_edges/test/clients
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=56 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=62 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=51 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=58 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=61 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[SANITY cid=0] nodes=547 owned=547 ghost=0 edges=75 cross_edges=0
+[SANITY cid=1] nodes=547 owned=547 ghost=0 edges=53 cross_edges=0
+[SANITY cid=2] nodes=546 owned=546 ghost=0 edges=68 cross_edges=0
+[SANITY] All client graphs passed. (15 clients)
+[FL-SETUP] Cross-client embedding exchange disabled
+[server] Using automatic per-task minority weighting
+[client_0] Using automatic per-task minority weighting
+[client_1] Using automatic per-task minority weighting
+[client_2] Using automatic per-task minority weighting
+[client_3] Using automatic per-task minority weighting
+[client_4] Using automatic per-task minority weighting
+[client_5] Using automatic per-task minority weighting
+[client_6] Using automatic per-task minority weighting
+[client_7] Using automatic per-task minority weighting
+[client_8] Using automatic per-task minority weighting
+[client_9] Using automatic per-task minority weighting
+[client_10] Using automatic per-task minority weighting
+[client_11] Using automatic per-task minority weighting
+[client_12] Using automatic per-task minority weighting
+[client_13] Using automatic per-task minority weighting
+[client_14] Using automatic per-task minority weighting
+
+=== [fedavg] Round 001/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[PORT] fwd edge_attr: (4, 2) (dtype=torch.int64) | rev edge_attr: (4, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (6, 2) (dtype=torch.int64) | rev edge_attr: (6, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (13, 2) (dtype=torch.int64) | rev edge_attr: (13, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (5, 2) (dtype=torch.int64) | rev edge_attr: (5, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (18, 2) (dtype=torch.int64) | rev edge_attr: (18, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (12, 2) (dtype=torch.int64) | rev edge_attr: (12, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (10, 2) (dtype=torch.int64) | rev edge_attr: (10, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (8, 2) (dtype=torch.int64) | rev edge_attr: (8, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (11, 2) (dtype=torch.int64) | rev edge_attr: (11, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (9, 2) (dtype=torch.int64) | rev edge_attr: (9, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (3, 2) (dtype=torch.int64) | rev edge_attr: (3, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (7, 2) (dtype=torch.int64) | rev edge_attr: (7, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (4, 2) (dtype=torch.int64) | rev edge_attr: (4, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[PORT] fwd edge_attr: (4, 2) (dtype=torch.int64) | rev edge_attr: (4, 2)
+[TRAIN MODE] mini-batch (seed-only) | is_hetero=True | ego_dim=32
+[EGO-CHECK] base_dim=1  ego_dim=32  aug_dim=33  seeds(B)=32
+[seed 2] Round 001 | val 0.8179 | val macro-minF1 20.38%
+
+=== [fedavg] Round 002/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 002 | val 0.8171 | val macro-minF1 24.25%
+
+=== [fedavg] Round 003/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 003 | val 0.8160 | val macro-minF1 26.68%
+
+=== [fedavg] Round 004/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 004 | val 0.8152 | val macro-minF1 26.69%
+
+=== [fedavg] Round 005/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 005 | val 0.8144 | val macro-minF1 26.69%
+
+=== [fedavg] Round 006/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 006 | val 0.8137 | val macro-minF1 26.87%
+
+=== [fedavg] Round 007/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 007 | val 0.8134 | val macro-minF1 28.80%
+
+=== [fedavg] Round 008/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 008 | val 0.8132 | val macro-minF1 28.95%
+
+=== [fedavg] Round 009/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 009 | val 0.8129 | val macro-minF1 28.97%
+
+=== [fedavg] Round 010/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 010 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 011/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 011 | val 0.8129 | val macro-minF1 28.90%
+
+=== [fedavg] Round 012/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 012 | val 0.8128 | val macro-minF1 29.00%
+
+=== [fedavg] Round 013/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 013 | val 0.8128 | val macro-minF1 29.01%
+
+=== [fedavg] Round 014/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 014 | val 0.8127 | val macro-minF1 29.02%
+
+=== [fedavg] Round 015/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 015 | val 0.8126 | val macro-minF1 29.01%
+
+=== [fedavg] Round 016/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 016 | val 0.8128 | val macro-minF1 29.01%
+
+=== [fedavg] Round 017/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 017 | val 0.8129 | val macro-minF1 29.01%
+
+=== [fedavg] Round 018/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 018 | val 0.8126 | val macro-minF1 29.01%
+
+=== [fedavg] Round 019/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 019 | val 0.8125 | val macro-minF1 29.01%
+
+=== [fedavg] Round 020/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 020 | val 0.8126 | val macro-minF1 29.01%
+
+=== [fedavg] Round 021/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 021 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 022/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 022 | val 0.8127 | val macro-minF1 28.14%
+
+=== [fedavg] Round 023/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 023 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 024/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 024 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 025/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 025 | val 0.8124 | val macro-minF1 29.01%
+
+=== [fedavg] Round 026/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 026 | val 0.8121 | val macro-minF1 29.01%
+
+=== [fedavg] Round 027/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 027 | val 0.8121 | val macro-minF1 29.01%
+
+=== [fedavg] Round 028/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 028 | val 0.8121 | val macro-minF1 29.01%
+
+=== [fedavg] Round 029/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 029 | val 0.8119 | val macro-minF1 29.01%
+
+=== [fedavg] Round 030/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 030 | val 0.8119 | val macro-minF1 29.01%
+
+=== [fedavg] Round 031/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 031 | val 0.8118 | val macro-minF1 29.01%
+
+=== [fedavg] Round 032/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 032 | val 0.8118 | val macro-minF1 29.01%
+
+=== [fedavg] Round 033/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 033 | val 0.8121 | val macro-minF1 29.01%
+
+=== [fedavg] Round 034/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 034 | val 0.8121 | val macro-minF1 29.01%
+
+=== [fedavg] Round 035/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 035 | val 0.8122 | val macro-minF1 29.01%
+
+=== [fedavg] Round 036/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 036 | val 0.8122 | val macro-minF1 29.01%
+
+=== [fedavg] Round 037/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 037 | val 0.8122 | val macro-minF1 29.01%
+
+=== [fedavg] Round 038/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 038 | val 0.8123 | val macro-minF1 29.01%
+
+=== [fedavg] Round 039/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 039 | val 0.8123 | val macro-minF1 29.01%
+
+=== [fedavg] Round 040/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 040 | val 0.8122 | val macro-minF1 29.01%
+
+=== [fedavg] Round 041/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 041 | val 0.8122 | val macro-minF1 29.01%
+
+=== [fedavg] Round 042/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 042 | val 0.8124 | val macro-minF1 29.01%
+
+=== [fedavg] Round 043/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 043 | val 0.8124 | val macro-minF1 31.24%
+
+=== [fedavg] Round 044/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 044 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 045/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 045 | val 0.8124 | val macro-minF1 29.01%
+
+=== [fedavg] Round 046/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 046 | val 0.8125 | val macro-minF1 29.01%
+
+=== [fedavg] Round 047/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 047 | val 0.8126 | val macro-minF1 29.01%
+
+=== [fedavg] Round 048/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 048 | val 0.8124 | val macro-minF1 29.01%
+
+=== [fedavg] Round 049/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 049 | val 0.8128 | val macro-minF1 29.01%
+
+=== [fedavg] Round 050/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 050 | val 0.8128 | val macro-minF1 29.01%
+
+=== [fedavg] Round 051/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 051 | val 0.8127 | val macro-minF1 29.01%
+
+=== [fedavg] Round 052/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 052 | val 0.8133 | val macro-minF1 29.01%
+
+=== [fedavg] Round 053/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 053 | val 0.8129 | val macro-minF1 29.01%
+
+=== [fedavg] Round 054/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 054 | val 0.8129 | val macro-minF1 29.01%
+
+=== [fedavg] Round 055/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 055 | val 0.8128 | val macro-minF1 29.01%
+
+=== [fedavg] Round 056/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 056 | val 0.8130 | val macro-minF1 29.01%
+
+=== [fedavg] Round 057/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 057 | val 0.8130 | val macro-minF1 28.13%
+
+=== [fedavg] Round 058/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 058 | val 0.8131 | val macro-minF1 28.13%
+
+=== [fedavg] Round 059/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 059 | val 0.8132 | val macro-minF1 28.08%
+
+=== [fedavg] Round 060/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 060 | val 0.8130 | val macro-minF1 28.15%
+
+=== [fedavg] Round 061/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 061 | val 0.8130 | val macro-minF1 29.01%
+
+=== [fedavg] Round 062/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 062 | val 0.8133 | val macro-minF1 28.98%
+
+=== [fedavg] Round 063/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 063 | val 0.8133 | val macro-minF1 29.01%
+
+=== [fedavg] Round 064/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 064 | val 0.8134 | val macro-minF1 29.01%
+
+=== [fedavg] Round 065/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 065 | val 0.8132 | val macro-minF1 29.01%
+
+=== [fedavg] Round 066/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 066 | val 0.8130 | val macro-minF1 29.01%
+
+=== [fedavg] Round 067/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 067 | val 0.8129 | val macro-minF1 29.01%
+
+=== [fedavg] Round 068/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 068 | val 0.8131 | val macro-minF1 29.01%
+
+=== [fedavg] Round 069/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 069 | val 0.8130 | val macro-minF1 29.01%
+
+=== [fedavg] Round 070/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 070 | val 0.8132 | val macro-minF1 29.01%
+
+=== [fedavg] Round 071/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 071 | val 0.8131 | val macro-minF1 29.01%
+
+=== [fedavg] Round 072/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 072 | val 0.8132 | val macro-minF1 29.01%
+
+=== [fedavg] Round 073/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 073 | val 0.8133 | val macro-minF1 29.01%
+
+=== [fedavg] Round 074/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 074 | val 0.8131 | val macro-minF1 29.01%
+
+=== [fedavg] Round 075/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 075 | val 0.8133 | val macro-minF1 29.01%
+
+=== [fedavg] Round 076/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 076 | val 0.8132 | val macro-minF1 29.01%
+
+=== [fedavg] Round 077/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 077 | val 0.8134 | val macro-minF1 29.01%
+
+=== [fedavg] Round 078/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 078 | val 0.8135 | val macro-minF1 29.02%
+
+=== [fedavg] Round 079/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 079 | val 0.8136 | val macro-minF1 29.02%
+
+=== [fedavg] Round 080/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 080 | val 0.8136 | val macro-minF1 29.02%
+
+=== [fedavg] Round 081/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 081 | val 0.8135 | val macro-minF1 29.01%
+
+=== [fedavg] Round 082/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 082 | val 0.8136 | val macro-minF1 29.01%
+
+=== [fedavg] Round 083/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 083 | val 0.8135 | val macro-minF1 29.01%
+
+=== [fedavg] Round 084/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 084 | val 0.8135 | val macro-minF1 29.01%
+
+=== [fedavg] Round 085/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 085 | val 0.8136 | val macro-minF1 29.01%
+
+=== [fedavg] Round 086/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 086 | val 0.8135 | val macro-minF1 29.01%
+
+=== [fedavg] Round 087/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 087 | val 0.8137 | val macro-minF1 29.01%
+
+=== [fedavg] Round 088/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 088 | val 0.8138 | val macro-minF1 29.01%
+
+=== [fedavg] Round 089/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 089 | val 0.8139 | val macro-minF1 29.01%
+
+=== [fedavg] Round 090/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 090 | val 0.8136 | val macro-minF1 29.01%
+
+=== [fedavg] Round 091/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 091 | val 0.8136 | val macro-minF1 29.01%
+
+=== [fedavg] Round 092/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 092 | val 0.8138 | val macro-minF1 29.02%
+
+=== [fedavg] Round 093/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 093 | val 0.8140 | val macro-minF1 29.00%
+
+=== [fedavg] Round 094/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 094 | val 0.8138 | val macro-minF1 28.96%
+
+=== [fedavg] Round 095/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 095 | val 0.8139 | val macro-minF1 28.97%
+
+=== [fedavg] Round 096/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 096 | val 0.8138 | val macro-minF1 29.02%
+
+=== [fedavg] Round 097/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 097 | val 0.8139 | val macro-minF1 29.01%
+
+=== [fedavg] Round 098/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 098 | val 0.8138 | val macro-minF1 29.01%
+
+=== [fedavg] Round 099/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 099 | val 0.8137 | val macro-minF1 29.01%
+
+=== [fedavg] Round 100/100 ===
+[FL-ROUND] Sampled clients: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+[seed 2] Round 100 | val 0.8135 | val macro-minF1 29.01%
+
+PNA reverse message passing in federated fedavg (mini-batch), port numbers=True, & ego IDs=True — macro minority F1 over 3 runs: 30.91%
+Per-task (mean±std over runs): deg-in: 27.76±0.00% | deg-out: 34.76±12.24% | fan-in: 34.82±9.57% | fan-out: 26.39±0.42% | C2: 22.47±14.00% | C3: 31.37±13.61% | C4: 63.13±0.01% | C5: 16.33±23.09% | C6: 12.20±17.26% | S-G: 30.96±10.94% | B-C: 39.88±11.54%
