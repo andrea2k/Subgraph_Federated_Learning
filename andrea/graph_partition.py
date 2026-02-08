@@ -12,33 +12,37 @@ from utils.fed_simulation import (
     louvain_original_split,
     metis_original_split,
 )
+from andrea.components_split_utils import (
+    components_label_imbalance_split,
+    components_original_split,
+)
 from andrea.multigraph_generation import (
     DATA_ROOT, 
     GRAPH_PARAM_CSV, 
     TASK_FUNCS, 
     TASKS, 
-    set_y_and_count_motifs, 
+    set_y_and_get_motifs, 
 )
 
 BASE_SEED = 0
 PARTITION_PARAM_CSV = "./andrea/graph_partition_parameters.csv"
-FED_OUT_ROOT = "./andrea/subgraph_data"
+SUBGRAPH_ROOT = "./andrea/subgraph_data"
 
 SPLIT_METHODS = [
     "louvain_label_imbalance",
     "metis_label_imbalance",
     "louvain_original",
     "metis_original",
+    "components_label_imbalance_split",
+    "components_original_split",
 ]
-N_CLIENTS_LIST = [32]
-LOUVAIN_RES_LIST = [1.0, 1.5]
+N_CLIENTS_LIST = [4, 6, 8, 10, 14, 18, 22, 26, 30]
+LOUVAIN_RES_LIST = [0.5, 0.8, 1.0, 1.2]
 ASSIGN_METHOD_LIST = ["zipf", "equal"]
-ALPHA_LIST = [1.2]
-
-SAVE_CLIENTS_PT = True
+ALPHA_LIST = [0.4, 0.8, 1.2, 1.6]
 
 def METIS_NUM_COMS_LIST(n_clients):
-    return [2 * n_clients, 3 * n_clients]
+    return [n_clients]
 
 def build_split_configs():
     """Return list of cfg dicts. Each cfg becomes one split directory."""
@@ -62,6 +66,7 @@ def build_split_configs():
 
             elif method == "metis_label_imbalance":
                 for num_coms in METIS_NUM_COMS_LIST(n_clients):
+                    num_coms = int(num_coms)
                     seed_tag = f"{method}_com{num_coms}_c{n_clients}"
                     split_configs.append({
                         "method": method,
@@ -102,6 +107,7 @@ def build_split_configs():
 
             elif method == "metis_original":
                 for num_coms in METIS_NUM_COMS_LIST(n_clients):
+                    num_coms = int(num_coms)
                     for assign in ASSIGN_METHOD_LIST:
                         if assign == "zipf":
                             for alpha in ALPHA_LIST:
@@ -126,6 +132,44 @@ def build_split_configs():
                                 "alpha": None,
                                 "seed_tag": seed_tag,
                             })
+
+            elif method == "components_label_imbalance_split":
+                seed_tag = f"{method}_c{n_clients}"
+                split_configs.append({
+                    "method": method,
+                    "n_clients": n_clients,
+                    "louvain_res": None,
+                    "metis_num_coms": None,
+                    "client_assignment": None,
+                    "alpha": None,
+                    "seed_tag": seed_tag,
+                })
+
+            elif method == "components_original_split":
+                for assign in ASSIGN_METHOD_LIST:
+                    if assign == "zipf":
+                        for alpha in ALPHA_LIST:
+                            seed_tag = f"{method}_{assign}{alpha}_c{n_clients}"
+                            split_configs.append({
+                                "method": method,
+                                "n_clients": n_clients,
+                                "louvain_res": None,
+                                "metis_num_coms": None,
+                                "client_assignment": assign,
+                                "alpha": alpha,
+                                "seed_tag": seed_tag,
+                            })
+                    else:
+                        seed_tag = f"{method}_{assign}_c{n_clients}"
+                        split_configs.append({
+                            "method": method,
+                            "n_clients": n_clients,
+                            "louvain_res": None,
+                            "metis_num_coms": None,
+                            "client_assignment": assign,
+                            "alpha": None,
+                            "seed_tag": seed_tag,
+                        })
 
     # make deterministic filesystem-safe split_id
     for cfg in split_configs:
@@ -177,7 +221,25 @@ def run_split_from_config(global_data, cfg, seed):
             seed=seed,
             return_node_indices=False,
         )
+    
+    if method == "components_label_imbalance_split":
+        return components_label_imbalance_split(
+            global_data,
+            num_clients=n_clients,
+            seed=seed,
+            return_node_indices=False,
+        )
 
+    if method == "components_original_split":
+        return components_original_split(
+            global_data,
+            num_clients=n_clients,
+            seed=seed,
+            alpha=(None if cfg["alpha"] is None else float(cfg["alpha"])),
+            client_assignment=str(cfg["client_assignment"]),
+            return_node_indices=False,
+        )
+    
     raise ValueError(f"Unknown method: {method}")
 
 def dataset_id_from_row(row):
@@ -211,16 +273,15 @@ def sanity_check(global_data, clients):
 def save_split_dir(out_dir, clients, tasks=TASKS):
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, "motif_counts.csv")
-    PRINTED = False
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["client_id"] + TASKS) 
         for cid, client_data in enumerate(clients):
-            g, counts = set_y_and_count_motifs(client_data, TASK_FUNCS)
+            g, motifs = set_y_and_get_motifs(client_data, TASK_FUNCS)
             fname = f"client_{cid}.pt"
             fpath = os.path.join(out_dir, fname)
             torch.save(g, fpath)
-            writer.writerow([cid] + [counts[t] for t in tasks])
+            writer.writerow([cid] + [len(motifs[t]) for t in tasks])
     print(f"DATA PARTITION -> {out_dir} ({len(clients)} clients)")
     
 def main():
@@ -235,7 +296,7 @@ def main():
 
         dataset_id = dataset_id_from_row(grow)
 
-        for split_name in ["train", "val", "test"]:
+        for split_name in ["train" , "val", "test"]:
             global_data = load_global_data(dataset_id, split_name)
 
             for cfg in split_configs:
@@ -248,7 +309,7 @@ def main():
                 clients = run_split_from_config(global_data, cfg, seed)
                 sanity_check(global_data, clients)
                 
-                out_dir = os.path.join(FED_OUT_ROOT, dataset_id, split_name, split_id)
+                out_dir = os.path.join(SUBGRAPH_ROOT, dataset_id, split_name, split_id)
                 
                 save_split_dir(out_dir, clients)
 
@@ -273,9 +334,6 @@ def main():
                 }
 
                 rows.append(row)
-                break
-            break
-        break
     df = pd.DataFrame(rows)
 
     sort_cols = ["dataset_id", "split", "method", "n_clients", "split_id"]

@@ -17,10 +17,10 @@ BASE_SEED = 0
 DATA_ROOT = "./andrea/graph_data"
 GRAPH_PARAM_CSV = "./andrea/multigraph_generation_parameters.csv"
 
-N_LIST = [1000,2000]    # nodes
-D_LIST = [4]            # average degree
-R_LIST = [4.0]          # locality radius / delta
-GEN_LIST = ["chordal"]  # generator
+N_LIST = [2000, 4000, 6000, 8000, 10000, 12000]    # nodes
+D_LIST = [4, 6, 8]            # average degree
+R_LIST = [2.0, 3.0, 4.0]          # locality radius / delta
+GEN_LIST = ["random", "barabasi", "watts"]  # generator
 
 TASK_FUNCS = {
     "cycle2": lambda out_set, in_set: cycles_C2(out_set,in_set),
@@ -34,7 +34,7 @@ TASK_FUNCS = {
 
 TASKS = list(TASK_FUNCS.keys())
 
-def set_y_and_count_motifs(g, task_funcs=TASK_FUNCS):
+def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
     edge_index = g.edge_index
     num_nodes = int(g.num_nodes)
 
@@ -43,11 +43,11 @@ def set_y_and_count_motifs(g, task_funcs=TASK_FUNCS):
     tasks = list(task_funcs.keys())
     y = torch.zeros((num_nodes, len(tasks)), dtype=torch.float32)
 
-    counts = {}
+    motifs_tuple = {}
 
     for col, task_name in enumerate(tasks):
         motifs = task_funcs[task_name](out_set, in_set)  # list of tuples
-        counts[task_name] = len(motifs)
+        motifs_tuple[task_name] = motifs
 
         # label_mode="all": mark all nodes in witness tuple
         for w in motifs:
@@ -56,17 +56,17 @@ def set_y_and_count_motifs(g, task_funcs=TASK_FUNCS):
 
     g.y = y
     g.num_classes = y.shape[1]
-    return g, counts
+    return g, motifs_tuple
 
-def write_motif_counts_csv(path, split_counts, tasks=TASKS):
+def write_motif_counts_csv(path, split_motifs, tasks=TASKS):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["split"] + tasks)
-        for split_name in ["tr", "va", "te"]:
-            c = split_counts[split_name]
-            writer.writerow([split_name] + [c[t] for t in tasks])
+        for split_name in ["train", "val", "test"]:
+            motifs = split_motifs[split_name]
+            writer.writerow([split_name] + [len(motifs[t]) for t in tasks])
 
 def main():
 
@@ -96,15 +96,15 @@ def main():
         
         set_seed(split_seeds["train"])
         tr = make_sim().generate_pytorch_graph().add_ports()
-        tr, tr_counts = set_y_and_count_motifs(tr, TASK_FUNCS)
+        tr, tr_motifs = set_y_and_get_motifs(tr, TASK_FUNCS)
 
         set_seed(split_seeds["val"])
         va = make_sim().generate_pytorch_graph().add_ports()
-        va, va_counts = set_y_and_count_motifs(va, TASK_FUNCS)
+        va, va_motifs = set_y_and_get_motifs(va, TASK_FUNCS)
 
         set_seed(split_seeds["test"])
         te = make_sim().generate_pytorch_graph().add_ports()
-        te, te_counts = set_y_and_count_motifs(te, TASK_FUNCS)
+        te, te_motifs = set_y_and_get_motifs(te, TASK_FUNCS)
 
         out_dir_pt = f"{DATA_ROOT}/data_{n}_{d}_{r}_{generator}"
         os.makedirs(out_dir_pt, exist_ok=True)
@@ -114,24 +114,23 @@ def main():
         torch.save(te, os.path.join(out_dir_pt, "test.pt"))
         
         print(f"DATA GENERATED -> {out_dir_pt}")
-
-        split_counts = {"tr": tr_counts, "va": va_counts, "te": te_counts}
-        write_motif_counts_csv(f"{out_dir_pt}/motif_counts.csv", split_counts, TASKS)
+        split_motifs = {"train": tr_motifs, "val": va_motifs, "test": te_motifs}
+        write_motif_counts_csv(f"{out_dir_pt}/motif_counts.csv", split_motifs, TASKS)
         
         row = {
             "n": n,
             "d": d,
             "r": r,
             "type": generator,
-            "seed_tr": split_seeds["train"],
-            "seed_va": split_seeds["val"],
-            "seed_te": split_seeds["test"],
-            "num_nodes_tr": int(tr.num_nodes),
-            "num_nodes_va": int(va.num_nodes),
-            "num_nodes_te": int(te.num_nodes),
-            "num_edges_tr": int(tr.edge_index.size(1)),
-            "num_edges_va": int(va.edge_index.size(1)),
-            "num_edges_te": int(te.edge_index.size(1)),
+            "seed_train": split_seeds["train"],
+            "seed_val": split_seeds["val"],
+            "seed_test": split_seeds["test"],
+            "num_nodes_train": int(tr.num_nodes),
+            "num_nodes_val": int(va.num_nodes),
+            "num_nodes_test": int(te.num_nodes),
+            "num_edges_train": int(tr.edge_index.size(1)),
+            "num_edges_val": int(va.edge_index.size(1)),
+            "num_edges_test": int(te.edge_index.size(1)),
         }
         
         rows.append(row)

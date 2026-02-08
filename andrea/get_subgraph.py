@@ -23,7 +23,7 @@ def get_subgraph_pyg_data(global_data: Data, node_list):
     if getattr(global_data, "y", None) is not None:
         sub_data.y = global_data.y[node_idx]
 
-    sub_data.num_nodes = node_idx.numel()
+    sub_data.num_nodes = int(node_idx.numel())
 
     # local id -> global id (as a tensor; faster than dict)
     sub_data.global_map = node_idx.detach().cpu()

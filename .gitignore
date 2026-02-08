@@ -2,3 +2,4 @@ __pycache__/
 .DS_Store
 gcn_utils.py
 simulator.py
+andrea/subgraph_data/
