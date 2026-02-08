@@ -210,7 +210,8 @@ def metis_label_imbalance_split(global_data: Data,
         clustering_data[com_id, :] = dist
 
     # kMeans: communities -> clients
-    kmeans = KMeans(n_clusters=num_clients, n_init="auto", random_state=seed)
+    k = min(num_clients, num_communities)
+    kmeans = KMeans(n_clusters=k, n_init="auto", random_state=seed)
     clustering_labels = kmeans.fit_predict(clustering_data)
 
     client_indices = {cid: [] for cid in range(num_clients)}
@@ -289,7 +290,8 @@ def louvain_label_imbalance_split(global_data: Data,
         clustering_data[com_id, :] = dist
 
     # kMeans over communities by label distribution
-    kmeans = KMeans(n_clusters=num_clients, n_init="auto", random_state=seed)
+    k = min(num_clients, num_communities)
+    kmeans = KMeans(n_clusters=k, n_init="auto", random_state=seed)
     clustering_labels = kmeans.fit_predict(clustering_data)  # community -> client
 
     # aggregate communities into clients
