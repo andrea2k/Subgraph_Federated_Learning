@@ -71,6 +71,8 @@ def components_original_split(global_data: Data,
                          alpha: float = 1.2,
                          client_assignment: str = "zipf",
                          return_node_indices: bool = False):
+    
+    print(f"Conducting subgraph-FL Component (original, {client_assignment}-assigned) simulation...")
 
     global_data, motifs = set_y_and_get_motifs(global_data, TASK_FUNCS)
     motifs_src, motifs_dst = motifs_only_src_dst(motifs)
@@ -123,7 +125,9 @@ def components_label_imbalance_split(
                         num_clients: int,
                         seed: int | None = None,
                         return_node_indices: bool = False,):
-    
+
+    print(f"Conducting subgraph-FL Component (label-imbalance) simulation...")
+
     global_data, motifs = set_y_and_get_motifs(global_data, TASK_FUNCS)
     motifs_src, motifs_dst = motifs_only_src_dst(motifs)
     motifs_filter = motifs_only_filter(global_data.num_nodes, global_data.edge_index, motifs_src, motifs_dst)

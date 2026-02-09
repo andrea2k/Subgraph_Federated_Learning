@@ -283,62 +283,105 @@ def save_split_dir(out_dir, clients, tasks=TASKS):
             torch.save(g, fpath)
             writer.writerow([cid] + [len(motifs[t]) for t in tasks])
     print(f"DATA PARTITION -> {out_dir} ({len(clients)} clients)")
-    
+
+def build_row(dataset_id, grow, split_name, cfg, seed):
+
+    return {
+        "dataset_id": dataset_id,
+        "n": int(grow["n"]),
+        "d": int(grow["d"]),
+        "r": float(grow["r"]),
+        "type": str(grow["type"]),
+
+        "split": split_name,
+        "method": str(cfg["method"]),
+        "split_id": cfg["split_id"],
+        "seed_tag": str(cfg["seed_tag"]),
+        "seed": int(seed),
+
+        "n_clients": int(cfg["n_clients"]),
+        "louvain_res": cfg.get("louvain_res", ""),
+        "metis_num_coms": cfg.get("metis_num_coms", ""),
+        "client_assignment": cfg.get("client_assignment", ""),
+        "alpha": cfg.get("alpha", ""),
+    }
+
+def append_row_to_csv(csv_path: str, row: dict, fieldnames: list[str]):
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    file_exists = os.path.exists(csv_path)
+
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+        f.flush()
+        print("Appended to CSV...")
+
+def resort_and_dedupe_csv_inplace(csv_path: str, sort_cols):
+    if not os.path.exists(csv_path):
+        return
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        return
+    df = df.sort_values(sort_cols).reset_index(drop=True)
+    df.to_csv(csv_path, index=False)
+
 def main():
     set_seed(BASE_SEED)
 
     graphs_df = pd.read_csv(GRAPH_PARAM_CSV).sort_values(["n", "d", "r", "type"]).reset_index(drop=True)
     split_configs = build_split_configs()
 
-    rows = []
+    # read existing keys
+    if os.path.exists(PARTITION_PARAM_CSV):
+        existing_df = pd.read_csv(PARTITION_PARAM_CSV)
+        existing_keys = set(
+            (r["dataset_id"], r["split"], r["split_id"])
+            for _, r in existing_df.iterrows()
+        )
+
+    fieldnames = [
+        "dataset_id", "n", "d", "r", "type",
+        "split", "method", "split_id", "seed_tag", "seed",
+        "n_clients", "louvain_res", "metis_num_coms", "client_assignment", "alpha",
+    ]
+
+    skipped = 0
 
     for _, grow in graphs_df.iterrows():
 
         dataset_id = dataset_id_from_row(grow)
 
         for split_name in ["train" , "val", "test"]:
-            global_data = load_global_data(dataset_id, split_name)
 
             for cfg in split_configs:
-                method = str(cfg["method"])
                 split_id = cfg["split_id"]
                 seed_tag = str(cfg["seed_tag"])
 
+                key = (dataset_id, split_name, split_id)
+
+                if key in existing_keys:
+                    # Already recorded in CSV, skip both running and re-adding.
+                    skipped += 1
+                    print(f"skipped in csv: {skipped}")
+                    continue
+
+                out_dir = os.path.join(SUBGRAPH_ROOT, dataset_id, split_name, split_id)
                 seed = derive_seed(BASE_SEED, f"{dataset_id}_{split_name}_{seed_tag}")
+
+                row = build_row(dataset_id, grow, split_name, cfg, seed)
+                
+                global_data = load_global_data(dataset_id, split_name)
 
                 clients = run_split_from_config(global_data, cfg, seed)
                 sanity_check(global_data, clients)
-                
-                out_dir = os.path.join(SUBGRAPH_ROOT, dataset_id, split_name, split_id)
-                
                 save_split_dir(out_dir, clients)
-
-                row = {
-                    "dataset_id": dataset_id,
-                    "n": int(grow["n"]),
-                    "d": int(grow["d"]),
-                    "r": float(grow["r"]),
-                    "type": str(grow["type"]),
-
-                    "split": split_name,
-                    "method": method,
-                    "split_id": split_id,
-                    "seed_tag": seed_tag,
-                    "seed": int(seed),
-
-                    "n_clients": int(cfg["n_clients"]),
-                    "louvain_res": cfg.get("louvain_res", ""),
-                    "metis_num_coms": cfg.get("metis_num_coms", ""),
-                    "client_assignment": cfg.get("client_assignment", ""),
-                    "alpha": cfg.get("alpha", ""),
-                }
-
-                rows.append(row)
-    df = pd.DataFrame(rows)
+                append_row_to_csv(PARTITION_PARAM_CSV, row, fieldnames)
 
     sort_cols = ["dataset_id", "split", "method", "n_clients", "split_id"]
-    df = df.sort_values(sort_cols).reset_index(drop=True)
-    df.to_csv(PARTITION_PARAM_CSV, index=False)
+
+    resort_and_dedupe_csv_inplace(PARTITION_PARAM_CSV, sort_cols)
     print(f"PARTITION PARAMETERS STORED -> {PARTITION_PARAM_CSV}")
 
 if __name__ == "__main__":
