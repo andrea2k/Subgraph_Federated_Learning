@@ -9,18 +9,20 @@
       "number": "use uniform scalar pos_weight for all tasks (e.g. 2.0)"
     },
 
+    "base_seed": 0,
     "use_ego_ids": true,
     "use_port_ids": true,
     "use_mini_batch": true,
     "batch_size": 32,
     "port_emb_dim": 8,
     "num_epochs": 100,
-    "enable_cross_client_comm": true,
+    "enable_cross_client_comm": false,
+    "cross_client_mix_alpha": 0.5,
 
     "default_hparams": {
       "ego_dim": null,
-      "num_layers": 2,
-      "neighbors_per_hop": [10, 4],
+      "num_layers": 6,
+      "neighbors_per_hop": [10,10,10,10,5,5],
       "hidden_dim": 64,
       "dropout": 0.1,
       "lr": 0.001,

@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -7,7 +8,7 @@ from torch_geometric.utils import subgraph
 def equal_assign_communities_to_clients(
     communities: dict[int, list[int]],
     num_clients: int,
-    seed: int | None = None):
+    seed: Optional[int] = None):
     """
     Assign communities to clients to get approximately equal-sized clients.
 
@@ -36,7 +37,7 @@ def equal_assign_communities_to_clients(
 def zipf_assign_communities_to_clients(communities: dict,
                                         num_clients: int,
                                         alpha: float = 1.2,
-                                        seed: int | None = None):
+                                        seed: Optional[int] = None):
     """
     Assigns each community to a client using a Zipf-like skew:
 

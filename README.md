@@ -1,12 +1,12 @@
 # Subgraph Federated Learning <!-- omit in toc -->
 
-A repository for **synthetic subgraph-detection** benchmarking and **PNA** baselines on directed multigraphs.
+A repository for **synthetic subgraph-detection benchmarking** and **PNA-based baselines** on directed multigraphs.
 
-This repository generates synthetic multigraphs with subgraph pattern labels, partitions them into federated subgraphs using Metis- and Louvain-based splitting strategies, and trains centralized or federated PNA-based models for financial crime detection.
+It provides a fully reproducible pipeline for generating synthetic multigraphs with node-level pattern labels, partitioning them into federated client subgraphs using both **community-detection–based methods** (Louvain, Metis) and a custom **pattern-aware splitting strategy**, and training **centralized and federated PNA models** for financial crime detection.
 
 ## Table of Contents <!-- omit in toc -->
 
-- [Synthetic Graph Generation](#synthetic-graph-generation)
+- [Synthetic Pattern Detection Dataset Generation](#synthetic-pattern-detection-dataset-generation)
   - [Label Tasks](#label-tasks)
   - [Default Generation Settings for Synthetic Graph](#default-generation-settings-for-synthetic-graph)
   - [How to Generate Synthetic Graph](#how-to-generate-synthetic-graph)
@@ -18,39 +18,30 @@ This repository generates synthetic multigraphs with subgraph pattern labels, pa
     - [How to Generate Metis- and Louvain-based Splits](#how-to-generate-metis--and-louvain-based-splits)
   - [Pattern-Aware Federated Splits (Witness-Based)](#pattern-aware-federated-splits-witness-based)
     - [Motivation](#motivation)
-    - [Client Subgraph Structure](#client-subgraph-structure)
     - [Cross-Client Edge Handling](#cross-client-edge-handling)
     - [How to Generate Pattern-Aware Splits](#how-to-generate-pattern-aware-splits)
-    - [Sanity Checking Pattern Dispersion Across Clients](#sanity-checking-pattern-dispersion-across-clients)
 - [Principal Neighborhood Aggregation (PNA)](#principal-neighborhood-aggregation-pna)
   - [1. Baseline PNA (Full-Batch Training)](#1-baseline-pna-full-batch-training)
   - [2. PNA with Reverse Message Passing (Mini-Batch Training)](#2-pna-with-reverse-message-passing-mini-batch-training)
-  - [3. Training Configuration](#3-training-configuration)
+  - [Training Configuration for Centralized PNA Model](#training-configuration-for-centralized-pna-model)
 - [PNA Training Under Federated Setting](#pna-training-under-federated-setting)
   - [Federated Learning Configuration](#federated-learning-configuration)
-    - [Federated Dataset Simulation](#federated-dataset-simulation)
-    - [Federated Learning Hyperparameters](#federated-learning-hyperparameters)
+    - [Federated Training Hyperparameters](#federated-training-hyperparameters)
+    - [Hyperparameters for Partition-Aware Splits](#hyperparameters-for-partition-aware-splits)
+    - [Hyperparameters for Louvain- and Metis-Based Splits](#hyperparameters-for-louvain--and-metis-based-splits)
 - [Reproducibility](#reproducibility)
 
-## Synthetic Graph Generation
+## Synthetic Pattern Detection Dataset Generation
 
 This repository includes a **synthetic subgraph-detection dataset** used for benchmarking graph models for the pattern detection task. The graphs and labels are generated following the pseudocode and configurations described in [Provably Powerful Graph Neural Networks for Directed Multigraphs](https://arxiv.org/abs/2306.11586) (Egressy et al., 2023).
 
 ### Label Tasks
 
-Each node is labeled for the presence of the following patterns (11 sub-tasks):
+The generated synthetic subgraph-detection dataset consists of eleven money laundering patterns. These patterns are randomly injected into graphs using a _random circulant–like graph generator_ (Egressy et al., 2023). The eleven tasks consist of **four degree-based motifs** and **seven higher-order structural motifs.**
 
-- `deg_in > 3`
-- `deg_out > 3`
-- `fan_in > 3`
-- `fan_out > 3`
-- `cycle2`
-- `cycle3`
-- `cycle4`
-- `cycle5`
-- `cycle6`
-- `scatter_gather`
-- `biclique`
+The degree-based motifs are **degree-in/out** (the number of incoming and outgoing edges) and **fan-in/out** (the number of unique incoming and outgoing neighbors). For each of these four tasks, a node’s label is set to _true_ if the corresponding quantity is greater than three.
+
+The remaining seven tasks are defined based on a node’s participation in higher-order structural motifs: **scatter–gather patterns, directed bicliques, and directed cycles of length up to six**. For these motif tasks, a node’s label is set to _true_ if it participates in at least one instance of the corresponding motif.
 
 ---
 
@@ -62,7 +53,7 @@ The default generation config (see the generator script `scripts/data/generate_s
 - Average degree `d = 6`
 - Radius parameter `r = 11.1`
 - Directed multigraphs (for directed cycles)
-- Generator: `chordal` / random-circulant-like
+- Generator: `chordal` (random-circulant-like graph generator)
 - One connected component per split (prevents data leakage)
 
 ---
@@ -148,7 +139,7 @@ Examples:
 
 ### Pattern-Aware Federated Splits (Witness-Based)
 
-In addition to community-detection–based partitioning, this repository provides a **pattern-aware federated splitting strategy** that explicitly divides _structural subgraph patterns_ across clients.
+In addition to community-detection–based partitioning, this repository provides a custom **pattern-aware federated splitting strategy** that explicitly divides _structural subgraph patterns_ across clients.
 
 Unlike Metis- or Louvain-based approaches, which operate purely on graph topology, this strategy uses **pattern witnesses**, the exact node sets that form each labeled subgraph instance (e.g., cycles, scatter–gather motifs, or bicliques), to guide client assignment.
 
@@ -161,24 +152,6 @@ The witness-based strategy addresses this by enforcing **instance-level pattern 
 > Nodes participating in the same structural pattern are, whenever possible, assigned to different clients.
 
 This yields a federated dataset with **stronger non-IID structure** and a more realistic financial crime setting.
-
----
-
-#### Client Subgraph Structure
-
-Each client operates on a **local subgraph** derived from the global graph according to the partition-aware splitting strategy. Client subgraphs distinguish between **owned nodes** (assigned to the client) and **ghost nodes** (nodes owned by other clients but required for structural consistency).
-
-**Owned nodes** are the primary entities of a client:
-
-- Model parameters are updated based on losses computed **only on owned nodes**
-- Evaluation metrics (train/val/test) are reported **exclusively on owned nodes**
-- Each owned node belongs to exactly one client
-
-**Ghost nodes** are **read-only replicas** of nodes owned by other clients:
-
-- They are included solely to support message passing
-- They never contribute to loss or evaluation metrics
-- Gradients are not computed or aggregated for ghost nodes
 
 ---
 
@@ -206,9 +179,12 @@ Running the synthetic data generation script:
 python3 -m scripts.data.generate_synthetic
 ```
 
-produces an additional federated split directory at `./data/fed_witness_splits/`.
+produces one of the following federated split directories:
 
-This directory contains **pattern-aware federated splits** for each global graph split (`train/`, `val/`, `test/`). Each split directory has the following structure:
+- `./data/fed_partition_aware_splits_with_cross_edges/`
+- `./data/fed_partition_aware_splits_without_cross_edges/`
+
+Both directories contain **pattern-aware federated splits** for each global graph split (`train/`, `val/`, `test/`). Each split directory has the following structure:
 
 - `clients/client_XXXX.pt` — per-client subgraphs
 - `node_to_client.pt` — node-to-client assignment
@@ -220,27 +196,6 @@ The training script automatically uses these **pattern-aware splits** when the f
 ```json
 "partition_strategy": "partition aware"
 ```
-
----
-
-#### Sanity Checking Pattern Dispersion Across Clients
-
-To verify correct splitting behavior, the **dispersion statistics** are computed.
-
-For each pattern type, the following metrics are reported:
-
-- number of pattern instances evaluated,
-- fraction of instances achieving maximal dispersion across clients,
-- average number of distinct clients per pattern instance,
-- worst-case (minimum) dispersion observed.
-
-These statistics confirm that:
-
-- small patterns (e.g., 2- and 3-cycles) are almost always perfectly split,
-- larger patterns are consistently distributed across multiple clients,
-- no pattern ends up entirely within a single client.
-
-This provides strong empirical validation that the federated split respects **pattern-level heterogeneity**.
 
 ## Principal Neighborhood Aggregation (PNA)
 
@@ -277,7 +232,7 @@ This extended version incorporates several adaptations designed to improve patte
 - **Ego ID embeddings** (to preserve seed-identity across sampled mini-batches)
 - **Port ID embeddings** (to encode in/out-port numbers)
 - **Mini-batch neighborhood sampling** using PyG’s `NeighborLoader`
-- **Configurable fanout per hop** (default: `[10, 4]`)
+- **Configurable fanout per hop** (default: `[10, 10, 10, 10, 5, 5]`)
 
 To train and evaluate this model:
 
@@ -289,14 +244,14 @@ This version serves as the foundation for future **federated** extensions.
 
 ---
 
-### 3. Training Configuration
+### Training Configuration for Centralized PNA Model
 
 Both PNA variants share the following core hyperparameters:
 
 - **`hidden_dim = 64`**
   Dimensionality of node embeddings throughout the network.
 
-- **`num_layers = 2`**
+- **`num_layers = 6`**
   Number of GNN layers in the model.
 
 - **`dropout = 0.1`**
@@ -313,7 +268,7 @@ Additional hyperparameters apply to the extended PNA model with reverse message 
 - **`batch_size = 32`**
   Number of seed nodes sampled per mini-batch.
 
-- **`neighbors_per_hop = [10, 4]`**
+- **`neighbors_per_hop = [10, 10, 10, 10, 5, 5]`**
   Number of neighbors sampled at each hop for scalable neighborhood expansion.
 
 - **`ego_dim = 32`**
@@ -339,19 +294,7 @@ python3 -m scripts.training.train_federated_pna
 
 The federated setting introduces additional hyperparameters governing both the **federated splits generation** and the **federated training procedure**. This section documents the default configuration used throughout the experiments, along with a brief rationale for each choice.
 
-#### Federated Dataset Simulation
-
-- **`num_clients = 32`**
-  The 8192-node global graph is partitioned into 32 subgraphs, yielding approximately 256 nodes per client.
-  This creates a **realistically challenging** federated scenario: clients are small enough to introduce non-IID behavior but large enough to support stable local training.
-
-- **`louvain_resolution = 1.0`**
-  Uses the default modularity resolution for Louvain community detection.
-
-- **`metis_num_coms = 32`**
-  The Metis partitioning strategy is configured to produce exactly 32 partitions, ensuring that **each client corresponds to one contiguous graph community**, which maximizes structural separation between clients.
-
-#### Federated Learning Hyperparameters
+#### Federated Training Hyperparameters
 
 - **`partition_strategy`**
   Selects the partitioning strategy used in the experiment.
@@ -359,18 +302,42 @@ The federated setting introduces additional hyperparameters governing both the *
   `"partition aware"`, `"metis original"`, `"louvain original"`, `"metis original skewed"`, `"louvain original skewed"`, `"metis imbalance"`, `"louvain imbalance"`.
 
 - **`global_epochs = 100`**
-  The total number of global training rounds.
+  The total number of global communication rounds.
 
-- **`local_epochs = 2`**
-  Each client performs two passes over its local subgraph during every communication round.
+- **`local_epochs = 1`**
+  Number of local training epochs performed by each client per communication round. A single local epoch is used by default to limit client drift and emphasize the effects of graph partitioning.
 
-- **`client_fraction = 1.0`**
+- **`client_fraction = 0.5`**
   All clients participate in every communication round.
 
 - **`algorithm`**
   Specifies the federated learning algorithm used in the experiment.
   Currently supported options:
-  `"fedavg"`, `"fedprox"`.
+  `"fedavg"`, `"fedprox"`, `"scaffold"`.
+
+---
+
+#### Hyperparameters for Partition-Aware Splits
+
+- **`num_clients = 15`**
+  The global graph is split into 15 clients under the pattern-aware partitioning scheme.
+
+- **`include_cross_edges = true`**
+  Enables the inclusion of cross-client edges when constructing client subgraphs.
+  This allows clients to observe edges connecting to ghost nodes owned by other clients, which is essential for studying **cross-client communication**.
+
+---
+
+#### Hyperparameters for Louvain- and Metis-Based Splits
+
+- **`num_clients = 32`**
+  The 8192-node global graph is partitioned into 32 subgraphs, yielding approximately 256 nodes per client.
+
+- **`louvain_resolution = 1.0`**
+  Uses the default modularity resolution for Louvain community detection.
+
+- **`metis_num_coms = 32`**
+  The Metis partitioning strategy is configured to produce exactly 32 partitions, ensuring that **each client corresponds to one contiguous graph community**, which maximizes structural separation between clients.
 
 All configurations are available in `.configs/fed_configs.json` file.
 

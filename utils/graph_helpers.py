@@ -75,11 +75,12 @@ def build_hetero_neighbor_loader(
 
     use_cuda = (device is not None and device.type == "cuda")
 
-    cpu_cnt = os.cpu_count() or 2
-    num_workers = max(0, cpu_cnt // 2)
+    # Clamp DataLoader workers to avoid oversubscription on the cluster
+    NUM_WORKERS = 0  # set to 0 for debugging / safety; can try 2 later
 
-    persistent_workers = (num_workers > 0)
-    prefetch_factor = 2 if num_workers > 0 else None
+    num_workers = NUM_WORKERS
+    persistent_workers = False  # must be False if num_workers == 0
+    prefetch_factor = None      # only valid when num_workers > 0
 
     return NeighborLoader(
         hetero_data,
@@ -114,7 +115,12 @@ def build_full_eval_loader(
     }
 
     use_cuda = (device is not None and device.type == "cuda")
-    num_workers = max(1, os.cpu_count() // 2)
+
+    NUM_WORKERS = 0  # keep consistent with the training loader
+
+    num_workers = NUM_WORKERS
+    persistent_workers = False
+    prefetch_factor = None
 
     return NeighborLoader(
         hetero_data,
@@ -125,7 +131,7 @@ def build_full_eval_loader(
         drop_last=False,
         pin_memory=use_cuda,
         num_workers=num_workers,
-        persistent_workers=True,
-        prefetch_factor=2,
+        persistent_workers=persistent_workers,
+        prefetch_factor=prefetch_factor,
         filter_per_worker=True,
     )

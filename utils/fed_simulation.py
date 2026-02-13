@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 from sknetwork.clustering import Louvain
 from sklearn.cluster import KMeans
@@ -22,7 +23,7 @@ To address this, the original code is modified to account for this multi-label s
 def metis_original_split(global_data: Data,
                          num_clients: int,
                          metis_num_coms: int,
-                         seed: int | None = None,
+                         seed: Optional[int] = None,
                          alpha: float = 1.2,
                          client_assignment: str = "zipf",
                          return_node_indices: bool = False):
@@ -85,7 +86,7 @@ def metis_original_split(global_data: Data,
 def louvain_original_split(global_data: Data,
                            num_clients: int,
                            resolution: float = 1.0,
-                           seed: int | None = None,
+                           seed: Optional[int] = None,
                            alpha: float = 1.2,
                            client_assignment: str = "zipf",
                            return_node_indices: bool = False):
@@ -157,7 +158,7 @@ def louvain_original_split(global_data: Data,
 def metis_label_imbalance_split(global_data: Data,
                                 num_clients: int,
                                 metis_num_coms: int,
-                                seed: int | None = None,
+                                seed: Optional[int] = None,
                                 return_node_indices: bool = False):
     """
     Metis-based Label Imbalance Split for a single big graph
@@ -239,7 +240,7 @@ def metis_label_imbalance_split(global_data: Data,
 def louvain_label_imbalance_split(global_data: Data,
                                   num_clients: int,
                                   resolution: float = 1.0,
-                                  seed: int | None = None,
+                                  seed: Optional[int] = None,
                                   return_node_indices: bool = False):
     """
     Louvain-based Label Imbalance Split for a single big graph

@@ -68,6 +68,7 @@ class NodeClsTask:
         # cross-client comm flags from args
         self.enable_cross_client_comm = getattr(args, "enable_cross_client_comm", False)
         self.comm = getattr(args, "cross_client_comm", None)
+        self.cross_client_mix_alpha = getattr(args, "cross_client_mix_alpha", 1.0)
 
         # 1) Pre-process local homogeneous graph (client's split)
         name = f"client_{client_id}" if client_id is not None else "server"
@@ -150,6 +151,7 @@ class NodeClsTask:
             enable_cross_client_comm=self.enable_cross_client_comm,
             comm=self.comm,
             client_id=self.client_id,
+            ghost_mix_alpha=self.cross_client_mix_alpha,
         ).to(self.device)
 
         # 6) Build local training loader (mini-batch or full-batch)

@@ -40,6 +40,7 @@ PNA_CONFIG = ALL_PNA_CONFIG["reverse_mp_with_port_and_ego"]
 FED_CONFIG = ALL_FED_CONFIG["fed_learning_configs"]
 COMMUNITY_SPLITS_CONFIG = ALL_FED_CONFIG["louvain_and_metis_splits"]
 PARTITION_AWARE_SPLITS_CONFIG = ALL_FED_CONFIG["partition_aware_splits"]
+INCLUDE_CROSS_EDGES = PARTITION_AWARE_SPLITS_CONFIG["include_cross_edges"]
 
 ALGORITHM = FED_CONFIG["algorithm"]  # e.g. "fedavg"
 
@@ -52,6 +53,7 @@ USE_MINI_BATCH = PNA_CONFIG["use_mini_batch"]
 BATCH_SIZE = PNA_CONFIG["batch_size"]
 PORT_EMB_DIM = PNA_CONFIG["port_emb_dim"]
 ENABLE_CROSS_CLIENT_COMM = PNA_CONFIG.get("enable_cross_client_comm", False)
+CROSS_CLIENT_MIX_ALPHA = PNA_CONFIG.get("cross_client_mix_alpha", 1.0) # Default is overwriting local representation of ghost nodes with the global owned representation 
 
 DEFAULT_HPARAMS = PNA_CONFIG["default_hparams"]
 
@@ -103,9 +105,13 @@ elif PARTITION_STRATEGY == "louvain original skewed":              # with zipf-s
 elif PARTITION_STRATEGY == "metis original skewed":                
     FED_TRAIN_SPLITS_DIR = "./data/fed_metis_splits_zipf_skewed"
 elif PARTITION_STRATEGY == "partition aware":
-    FED_TRAIN_SPLITS_DIR = "./data/fed_witness_splits/train/clients"
-    FED_VAL_SPLITS_DIR  = "./data/fed_witness_splits/val/clients"
-    FED_TEST_SPLITS_DIR = "./data/fed_witness_splits/test/clients"
+    if INCLUDE_CROSS_EDGES:
+        data_folder_path = "./data/fed_partition_aware_splits_with_cross_edges"
+    else:
+        data_folder_path = "./data/fed_partition_aware_splits_without_cross_edges"
+    FED_TRAIN_SPLITS_DIR = os.path.join(data_folder_path, "train/clients")
+    FED_VAL_SPLITS_DIR  = os.path.join(data_folder_path, "val/clients")
+    FED_TEST_SPLITS_DIR = os.path.join(data_folder_path, "test/clients")
     NUM_CLIENTS = PARTITION_AWARE_SPLITS_CONFIG["num_clients"]
 else:
     raise ValueError(
@@ -136,6 +142,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         "local_epochs": GLOBAL_LOCAL_EPOCHS,  # client epochs per round
         "client_fraction": CLIENT_FRACTION,
         "enable_cross_client_comm": ENABLE_CROSS_CLIENT_COMM,
+        "cross_client_mix_alpha": CROSS_CLIENT_MIX_ALPHA,
         **DEFAULT_HPARAMS,
     }
     cfg = {**default_cfg, **hparams}
@@ -157,14 +164,17 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
 
     local_epochs = cfg["local_epochs"]          # how many epochs per client per round
     client_fraction = cfg["client_fraction"]    # fraction of clients per round, domain:(0,1]
-    enable_cross_client_comm = cfg["enable_cross_client_comm"] 
+    enable_cross_client_comm = cfg["enable_cross_client_comm"]
+    cross_client_mix_alpha = cfg["cross_client_mix_alpha"] 
 
     print(f"[FL-SETUP] Algorithm={ALGORITHM}")
     print(f"[FL-SETUP] PNA model hyperparameters: {cfg}")
     print(
         f"[FL-SETUP] num_clients={NUM_CLIENTS}, "
         f"num_rounds={num_rounds}, local_epochs={local_epochs}, "
-        f"client_fraction={client_fraction}"
+        f"client_fraction={client_fraction}, "
+        f"cross edges={INCLUDE_CROSS_EDGES}, "
+        f"cross-client communication={enable_cross_client_comm}"
     )
 
     model_dir = os.path.join(BEST_MODEL_PATH, f"run_{run_id}_seed{seed}")
@@ -284,6 +294,7 @@ def run_federated_experiment(seed, tasks, device, run_id, **hparams):
         # cross-client comm
         enable_cross_client_comm=enable_cross_client_comm,
         cross_client_comm=comm,
+        cross_client_mix_alpha=cross_client_mix_alpha,
     )
 
     # set up FL server & clients (algorithm-agnostic)
@@ -455,8 +466,8 @@ def main():
     )
 
     # For testing, use single seed
-    # seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2, BASE_SEED+3, BASE_SEED+4]
-    seeds = [BASE_SEED]
+    #seeds = [BASE_SEED]
+    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2]
 
     test_f1_scores = []
     for s in seeds:
@@ -491,7 +502,13 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name=f"PNA reverse MP {mode_str}, partition_strategy={PARTITION_STRATEGY}, num_clients={NUM_CLIENTS} ,local_epochs={base_hparams['local_epochs']}, client_fraction={base_hparams['client_fraction']}",
+        model_name=f"PNA reverse MP {mode_str}, " 
+                   f"partition_strategy={PARTITION_STRATEGY}, " 
+                   f"num_clients={NUM_CLIENTS}, " 
+                   f"local_epochs={base_hparams['local_epochs']}, " 
+                   f"client_fraction={base_hparams['client_fraction']}, "
+                   f"cross_edges={INCLUDE_CROSS_EDGES}, "
+                   f"cross_client_communication={ENABLE_CROSS_CLIENT_COMM}",
         runtime_seconds=runtime_sec,
     )
 
