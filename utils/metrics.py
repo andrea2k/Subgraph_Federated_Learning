@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from typing import Optional
 import os
 import csv
 from datetime import datetime, timedelta
@@ -93,7 +94,7 @@ def append_f1_score_to_csv(
     macro_mean_percent: float,
     seeds: list[int],
     model_name: str = "PNA baseline",
-    runtime_seconds: float | None = None,   
+    runtime_seconds: Optional[float] = None,  
 ):
     """
     Append a single row with mean/std per task (in %), macro mean (in %), runtime, and metadata.

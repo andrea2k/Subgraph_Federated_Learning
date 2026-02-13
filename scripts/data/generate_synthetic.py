@@ -174,8 +174,12 @@ def main():
     logging.info("Wrote label percentages to %s", os.path.join(labels_out_dir, "label_percentages.csv"))
 
     # Federated splits from witnesses
-    fed_root = os.path.join(out_dir, "fed_witness_splits")
-    os.makedirs(fed_root, exist_ok=True)
+    if INCLUDE_CROSS_EDGES:
+        fed_root = os.path.join(out_dir, "fed_partition_aware_splits_with_cross_edges")
+        os.makedirs(fed_root, exist_ok=True)
+    else:
+        fed_root = os.path.join(out_dir, "fed_partition_aware_splits_without_cross_edges")
+        os.makedirs(fed_root, exist_ok=True)
 
     tr_node_to_client = assign_clients_from_witnesses(
         num_nodes=tr.num_nodes,

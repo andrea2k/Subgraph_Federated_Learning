@@ -42,10 +42,12 @@ class CrossClientComm:
         global_nids: torch.Tensor,    # [N]
         owned_mask: torch.Tensor,     # [N] bool
         local_embs: torch.Tensor,     # [N, D] on device
+        mix_alpha: float = 1.0,       
     ) -> torch.Tensor:
         """
         Returns updated embeddings where ghost nodes (owned_mask = False)
-        are replaced with the owner's embeddings if available.
+        are blended with the owner's embeddings if available:
+        h_ghost <- (1 - alpha) * h_local + alpha * h_owner.
         """
         if layer not in self.embeddings:
             return local_embs
@@ -53,10 +55,19 @@ class CrossClientComm:
         emb_table = self.embeddings[layer]
         out = local_embs
 
+        if mix_alpha == 0.0:
+            # no mixing, keep local embeddings
+            return out
+
         ghost_idx = torch.where(~owned_mask)[0]
         for idx in ghost_idx.tolist():
             gid = int(global_nids[idx].item())
             if gid in emb_table:
-                out[idx] = emb_table[gid].to(local_embs.device)
+                owner_emb = emb_table[gid].to(local_embs.device)
+                if mix_alpha >= 1.0:
+                    # behaves like hard overwrite
+                    out[idx] = owner_emb
+                else:
+                    out[idx] = (1.0 - mix_alpha) * out[idx] + mix_alpha * owner_emb
 
         return out
