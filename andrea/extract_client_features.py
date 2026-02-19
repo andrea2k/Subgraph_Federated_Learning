@@ -46,22 +46,27 @@ def node_edge_density(g) -> tuple[int, int, float]:
     dens = (e / denom) if denom > 0 else 0.0
     return n, e, dens
 
-# build histogram vector of in-degrees and out-degrees for a directed graph
+# build vector of in-degrees and out-degrees for a directed graph
 def in_out_degree_arrays(g) -> tuple[np.ndarray, np.ndarray]:
     edge_index = g.edge_index
     n = int(g.num_nodes)
     src = edge_index[0].to(torch.long)
     dst = edge_index[1].to(torch.long)
-    out_deg = torch.bincount(src, minlength=n).numpy().astype(np.int64)
-    in_deg  = torch.bincount(dst, minlength=n).numpy().astype(np.int64)
+    out_deg = torch.bincount(src, minlength=n).cpu().numpy().astype(np.int64)
+    in_deg = torch.bincount(dst, minlength=n).cpu().numpy().astype(np.int64)
     return in_deg, out_deg
+
+# build a histogram for counting the degree occurrence
+def degree_hist_dense(deg: np.ndarray) -> Tuple[List[int], List[float]]:
+    h = np.bincount(deg).astype(np.float64)  # length = local max_deg + 1
+    return h.tolist()
 
 # per-label count vectors
 def label_counts_vec(g) -> np.ndarray:
     y = g.y
     if isinstance(y, torch.Tensor):
         y = y.detach()
-    return y.sum(dim=0).numpy().astype(np.float64)
+    return y.sum(dim=0).cpu().numpy().astype(np.float64)
 
 # first compute number of 1's per node, i.e how many positive labels a node has,
 # then we build histogram where index "i" means: how many nodes have i positive labels
@@ -71,7 +76,7 @@ def labelset_size_hist_counts(g) -> np.ndarray:
     if isinstance(y, torch.Tensor):
         y = y.detach()
     C = int(y.size(1))
-    ks = y.sum(dim=1).to(torch.long).numpy()  # 0..C
+    ks = y.sum(dim=1).to(torch.long).cpu().numpy()
     h = np.bincount(ks, minlength=C + 1).astype(np.float64)
     return h
 
@@ -106,7 +111,7 @@ def label_mixing_counts_vec(g) -> np.ndarray:
             for b in Tv.tolist():
                 M[a, b] += w
 
-    return M.reshape(-1).numpy().astype(np.float64)
+    return M.reshape(-1).cpu().numpy().astype(np.float64)
 
 def _write_df(df: pd.DataFrame, out_path: str):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -158,8 +163,8 @@ def extract_for_split(graph_df: pd.DataFrame, split_name: str) -> pd.DataFrame:
             "density": float(dens),
 
             # in-degree, out-degree
-            "in_degrees": in_d.astype(np.int64).tolist(),
-            "out_degrees": out_d.astype(np.int64).tolist(),
+            "in_deg_hist_counts": degree_hist_dense(in_d),
+            "out_deg_hist_counts": degree_hist_dense(out_d),
 
             # Motifs
             "motif_counts": np.asarray(motif_counts, dtype=np.float64).tolist(),
