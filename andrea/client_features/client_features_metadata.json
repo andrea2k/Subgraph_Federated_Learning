@@ -1,0 +1,37 @@
+{
+  "graph_param_csv": "./andrea/test_generation_parameters.csv",
+  "data_root": "./andrea/test_data",
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "motif_cols": [
+    "cycle2",
+    "cycle3",
+    "cycle4",
+    "cycle5",
+    "cycle6",
+    "scatter_gather",
+    "biclique"
+  ],
+  "notes": "Per-client cached features for fast subset heterogeneity. Arrays stored as list columns.",
+  "columns": [
+    "client_id",
+    "dataset_id",
+    "split",
+    "type",
+    "n_param",
+    "d_param",
+    "r_param",
+    "num_nodes",
+    "num_edges",
+    "density",
+    "in_degrees",
+    "out_degrees",
+    "motif_counts",
+    "label_counts",
+    "labelset_size_counts",
+    "label_mixing_counts"
+  ]
+}

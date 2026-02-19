@@ -3,24 +3,27 @@ import csv
 from itertools import product
 import pandas as pd
 import torch
+import numpy as np
 
-from utils.seed import set_seed, derive_seed 
+from utils.seed import set_seed, derive_seed
 from scripts.data.simulator import GraphSimulator
 
 from andrea.witness_funcs import (
     build_unique_in_out,
     cycles_C2, cycles_C3, cycles_C4, cycles_C5, cycles_C6,
-    SG2, BP2, 
+    SG2, BP2,
 )
 
 BASE_SEED = 0
-DATA_ROOT = "./andrea/graph_data"
-GRAPH_PARAM_CSV = "./andrea/multigraph_generation_parameters.csv"
+DATA_ROOT = "./andrea/test_data"
+GRAPH_PARAM_CSV = "./andrea/test_generation_parameters.csv"
 
-N_LIST = [2000, 4000, 6000, 8000, 10000, 12000]    # nodes
-D_LIST = [4, 6, 8]            # average degree
-R_LIST = [2.0, 3.0, 4.0]          # locality radius / delta
-GEN_LIST = ["random", "barabasi", "watts"]  # generator
+N_POOL = [30, 50, 70, 100, 150, 200]
+D_POOL = [2, 3, 4, 5, 6, 8, 10]
+R_POOL = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+GEN = ["chordal", "random", "barabasi", "watts"]
+
+NUM_GRAPHS = 16
 
 TASK_FUNCS = {
     "cycle2": lambda out_set, in_set: cycles_C2(out_set,in_set),
@@ -31,9 +34,10 @@ TASK_FUNCS = {
     "scatter_gather": lambda out_set, in_set: SG2(out_set, in_set),
     "biclique": lambda out_set, in_set: BP2(out_set, in_set),
 }
-
 TASKS = list(TASK_FUNCS.keys())
 
+# get the motifs tuples and mark the node's label based
+# on wether the motifs tuples contains the node
 def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
     edge_index = g.edge_index
     num_nodes = int(g.num_nodes)
@@ -49,7 +53,7 @@ def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
         motifs = task_funcs[task_name](out_set, in_set)  # list of tuples
         motifs_tuple[task_name] = motifs
 
-        # label_mode="all": mark all nodes in witness tuple
+        # mark all nodes in witness tuple
         for w in motifs:
             for u in w:
                 y[int(u), col] = 1.0
@@ -58,6 +62,7 @@ def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
     g.num_classes = y.shape[1]
     return g, motifs_tuple
 
+# get the motifs counts of a graph and store it in a csv file
 def write_motif_counts_csv(path, split_motifs, tasks=TASKS):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
@@ -68,59 +73,83 @@ def write_motif_counts_csv(path, split_motifs, tasks=TASKS):
             motifs = split_motifs[split_name]
             writer.writerow([split_name] + [len(motifs[t]) for t in tasks])
 
-def main():
+# generate a graph based on parameters n, d, r, generator_type
+def make_sim(n: int, d: int, r: float, generator: str) -> GraphSimulator:
+    return GraphSimulator(
+        num_nodes=n,
+        avg_degree=d,
+        num_edges=None,
+        network_type="type1",
+        readout="node",
+        node_feats=False,
+        bidirectional=False,
+        delta=r,
+        num_graphs=1,
+        generator=generator,
+    )
 
+# returns a dataset_id based on the generator-parameters
+def dataset_id(n: int, d: int, r: float, generator: str) -> str:
+    return f"data_{int(n)}_{int(d)}_{r}_{generator}"
+
+def main():
     set_seed(BASE_SEED)
+    rng = np.random.default_rng(BASE_SEED)
+
+    # --- build all possible unique parameter combinations ---
+    all_combos = list(product(N_POOL, D_POOL, R_POOL, GEN))
+    if NUM_GRAPHS > len(all_combos):
+        raise ValueError(f"NUM_GRAPHS={NUM_GRAPHS} > total combos={len(all_combos)}. Reduce NUM_GRAPHS or expand pools.")
+
+    # sample WITHOUT replacement to avoid directory collisions/overwrites
+    chosen_idx = rng.choice(len(all_combos), size=NUM_GRAPHS, replace=False)
+    sampled_params = [all_combos[i] for i in chosen_idx]
 
     rows = []
-    for (n, d, r, generator) in product(N_LIST, D_LIST, R_LIST, GEN_LIST):
+
+    for graph_id, (n, d, r, generator) in enumerate(sampled_params):
+        did = dataset_id(n, d, r, generator)
+        out_dir_pt = os.path.join(DATA_ROOT, did)
+
+        # unique split seeds per graph_id
         split_seeds = {
-        "train": derive_seed(BASE_SEED, f"train_{n}_{d}_{r}_{generator}"),
-        "val":   derive_seed(BASE_SEED, f"val_{n}_{d}_{r}_{generator}"),
-        "test":  derive_seed(BASE_SEED, f"test_{n}_{d}_{r}_{generator}"),
+            "train": derive_seed(BASE_SEED, f"train_g{graph_id}_{n}_{d}_{r}_{generator}"),
+            "val":   derive_seed(BASE_SEED, f"val_g{graph_id}_{n}_{d}_{r}_{generator}"),
+            "test":  derive_seed(BASE_SEED, f"test_g{graph_id}_{n}_{d}_{r}_{generator}"),
         }
 
-        def make_sim():
-            return GraphSimulator(
-            num_nodes=n,
-            avg_degree=d,
-            num_edges=None,
-            network_type="type1",
-            readout="node",
-            node_feats=False,
-            bidirectional=False,
-            delta=r,                
-            num_graphs=1,
-            generator=generator,    
-            )
-        
+        # generate train/val/test
         set_seed(split_seeds["train"])
-        tr = make_sim().generate_pytorch_graph().add_ports()
+        tr = make_sim(n, d, r, generator).generate_pytorch_graph().add_ports()
         tr, tr_motifs = set_y_and_get_motifs(tr, TASK_FUNCS)
 
         set_seed(split_seeds["val"])
-        va = make_sim().generate_pytorch_graph().add_ports()
+        va = make_sim(n, d, r, generator).generate_pytorch_graph().add_ports()
         va, va_motifs = set_y_and_get_motifs(va, TASK_FUNCS)
 
         set_seed(split_seeds["test"])
-        te = make_sim().generate_pytorch_graph().add_ports()
+        te = make_sim(n, d, r, generator).generate_pytorch_graph().add_ports()
         te, te_motifs = set_y_and_get_motifs(te, TASK_FUNCS)
 
-        out_dir_pt = f"{DATA_ROOT}/data_{n}_{d}_{r}_{generator}"
+        # write
         os.makedirs(out_dir_pt, exist_ok=True)
-
         torch.save(tr, os.path.join(out_dir_pt, "train.pt"))
         torch.save(va, os.path.join(out_dir_pt, "val.pt"))
         torch.save(te, os.path.join(out_dir_pt, "test.pt"))
-        
-        print(f"DATA GENERATED -> {out_dir_pt}")
+
         split_motifs = {"train": tr_motifs, "val": va_motifs, "test": te_motifs}
-        write_motif_counts_csv(f"{out_dir_pt}/motif_counts.csv", split_motifs, TASKS)
+        write_motif_counts_csv(os.path.join(out_dir_pt, "motif_counts.csv"), split_motifs, TASKS)
+
+        print(f"[{graph_id:02d}] DATA GENERATED -> {out_dir_pt}")
         
-        row = {
-            "n": n,
-            "d": d,
-            "r": r,
+        # registry row
+        rows.append({
+            "graph_id": graph_id,
+            "dataset_id": did,
+            "data_dir": out_dir_pt,
+            "n": int(n),
+            "d": int(d),
+            "r": float(r),
             "type": generator,
             "seed_train": split_seeds["train"],
             "seed_val": split_seeds["val"],
@@ -131,12 +160,11 @@ def main():
             "num_edges_train": int(tr.edge_index.size(1)),
             "num_edges_val": int(va.edge_index.size(1)),
             "num_edges_test": int(te.edge_index.size(1)),
-        }
+        })
         
-        rows.append(row)
-
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["n", "d", "r", "type"]).reset_index(drop=True)
+    # write registry CSV (keep generation order)
+    df = pd.DataFrame(rows).sort_values(["graph_id"]).reset_index(drop=True)
+    os.makedirs(os.path.dirname(GRAPH_PARAM_CSV), exist_ok=True)
     df.to_csv(GRAPH_PARAM_CSV, index=False)
     print(f"DATA PARAMETERS STORED -> {GRAPH_PARAM_CSV}")
 
