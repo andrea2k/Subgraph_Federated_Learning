@@ -1,8 +1,13 @@
+import os
+import math
+import random
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Sequence
+from dataclasses import dataclass
 
 FEATURE_DIR = "./andrea/client_features"
+
 
 # Make a valid probability distribution: add eps everywhere, renormalize.
 # function used before JS divergence
@@ -14,6 +19,7 @@ def _safe_prob(x: np.ndarray, eps: float = 1e-12) -> np.ndarray:
         return np.ones_like(x) / len(x)
     return x / s
 
+
 # Jensen–Shannon divergence (base-e)
 def js_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
     p = _safe_prob(p, eps)
@@ -22,7 +28,9 @@ def js_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
 
     def kl(a, b):
         return float(np.sum(a * (np.log(a) - np.log(b))))
+
     return 0.5 * kl(p, m) + 0.5 * kl(q, m)
+
 
 # Make sure the histogram lengths are equal for JSD
 def pad_to_length(v: Sequence[float], L: int) -> np.ndarray:
@@ -33,20 +41,24 @@ def pad_to_length(v: Sequence[float], L: int) -> np.ndarray:
     out[: v.size] = v
     return out
 
+
 def entropy(p: np.ndarray, eps: float = 1e-12) -> float:
     p = _safe_prob(p, eps)
     return float(-np.sum(p * np.log(p)))
 
-def compute_subset_metrics(df_split: pd.DataFrame, client_ids: List[int]) -> Dict[str, float]:
+
+def compute_subset_metrics(
+    df_split: pd.DataFrame, client_ids: List[int]
+) -> Dict[str, float]:
     sub = df_split[df_split["client_id"].isin(client_ids)].reset_index(drop=True)
     if len(sub) == 0:
         raise ValueError("No clients selected (client_ids not found in parquet).")
-    
+
     # (1) node count std/range
     n = sub["num_nodes"].to_numpy(dtype=np.float64)
     node_std = float(n.std(ddof=0))
     node_range = float(n.max() - n.min())
-    
+
     # (2) density std/range
     dens = sub["density"].to_numpy(dtype=np.float64)
     dens_std = float(dens.std(ddof=0))
@@ -65,28 +77,55 @@ def compute_subset_metrics(df_split: pd.DataFrame, client_ids: List[int]) -> Dic
     in_global = _safe_prob(in_mat.sum(axis=0))
     out_global = _safe_prob(out_mat.sum(axis=0))
 
-    in_jsds = [js_divergence(_safe_prob(in_mat[i]), in_global) for i in range(in_mat.shape[0])]
-    out_jsds = [js_divergence(_safe_prob(out_mat[i]), out_global) for i in range(out_mat.shape[0])]
+    in_jsds = [
+        js_divergence(_safe_prob(in_mat[i]), in_global) for i in range(in_mat.shape[0])
+    ]
+    out_jsds = [
+        js_divergence(_safe_prob(out_mat[i]), out_global)
+        for i in range(out_mat.shape[0])
+    ]
 
     # (4) motif profile JSD (client vs subset-global)
-    motif_mat = np.stack([np.asarray(v, dtype=np.float64) for v in sub["motif_counts"].tolist()], axis=0)
+    motif_mat = np.stack(
+        [np.asarray(v, dtype=np.float64) for v in sub["motif_counts"].tolist()], axis=0
+    )
     motif_global = _safe_prob(motif_mat.sum(axis=0))
-    motif_jsds = [js_divergence(_safe_prob(motif_mat[i]), motif_global) for i in range(motif_mat.shape[0])]
+    motif_jsds = [
+        js_divergence(_safe_prob(motif_mat[i]), motif_global)
+        for i in range(motif_mat.shape[0])
+    ]
 
     # (5) label prevalence JSD (normalize label_counts to sum=1 per client; global from pooled label_counts)
-    label_counts_mat = np.stack([np.asarray(v, dtype=np.float64) for v in sub["label_counts"].tolist()], axis=0)
+    label_counts_mat = np.stack(
+        [np.asarray(v, dtype=np.float64) for v in sub["label_counts"].tolist()], axis=0
+    )
     label_global = _safe_prob(label_counts_mat.sum(axis=0))
-    label_jsds = [js_divergence(_safe_prob(label_counts_mat[i]), label_global) for i in range(label_counts_mat.shape[0])]
+    label_jsds = [
+        js_divergence(_safe_prob(label_counts_mat[i]), label_global)
+        for i in range(label_counts_mat.shape[0])
+    ]
 
     # (6) labelset-size histogram JSD
-    lss_mat = np.stack([np.asarray(v, dtype=np.float64) for v in sub["labelset_size_counts"].tolist()], axis=0)
+    lss_mat = np.stack(
+        [np.asarray(v, dtype=np.float64) for v in sub["labelset_size_counts"].tolist()],
+        axis=0,
+    )
     lss_global = _safe_prob(lss_mat.sum(axis=0))
-    lss_jsds = [js_divergence(_safe_prob(lss_mat[i]), lss_global) for i in range(lss_mat.shape[0])]
+    lss_jsds = [
+        js_divergence(_safe_prob(lss_mat[i]), lss_global)
+        for i in range(lss_mat.shape[0])
+    ]
 
     # (7) label mixing matrix JSD
-    mix_mat = np.stack([np.asarray(v, dtype=np.float64) for v in sub["label_mixing_counts"].tolist()], axis=0)
+    mix_mat = np.stack(
+        [np.asarray(v, dtype=np.float64) for v in sub["label_mixing_counts"].tolist()],
+        axis=0,
+    )
     mix_global = _safe_prob(mix_mat.sum(axis=0))
-    mix_jsds = [js_divergence(_safe_prob(mix_mat[i]), mix_global) for i in range(mix_mat.shape[0])]
+    mix_jsds = [
+        js_divergence(_safe_prob(mix_mat[i]), mix_global)
+        for i in range(mix_mat.shape[0])
+    ]
 
     # (8) generator mix entropy (over subset)
     gen_counts = sub["type"].value_counts().to_numpy(dtype=np.float64)
@@ -114,49 +153,168 @@ def compute_subset_metrics(df_split: pd.DataFrame, client_ids: List[int]) -> Dic
         # node std / range (1)
         "node_count_std": node_std,
         "node_count_range": node_range,
-
         # density std / range (2)
         "density_std": dens_std,
         "density_range": dens_range,
-
         # in / out degree jsd (3)
         "in_degree_jsd_mean": float(np.mean(in_jsds)),
         "out_degree_jsd_mean": float(np.mean(out_jsds)),
-
         # motif count jsd (4)
         "motif_profile_jsd_mean": float(np.mean(motif_jsds)),
-
         # label prevalence jsd (5)
         "label_prev_jsd_mean": float(np.mean(label_jsds)),
-
         # labelset-size histogram jsd (6)
         "labelset_size_jsd_mean": float(np.mean(lss_jsds)),
-
         # label mixing matrix jsd (7)
         "label_mixing_jsd_mean": float(np.mean(mix_jsds)),
-
         # generator mix entropy (8)
         "generator_entropy": float(gen_ent),
         "generator_entropy_norm": float(gen_ent_norm),
-
         # param spread (n,d,r) (9)
         "param_cv2_mean": float(cv2_mean),
         "param_avg_pairwise_zdist": float(avg_pairwise_zdist),
         "param_cv2_n": float(cv2[0]),
         "param_cv2_d": float(cv2[1]),
         "param_cv2_r": float(cv2[2]),
-        "n_clients": int(len(sub)),
     }
+
+
+def sample_candidate_subsets(
+    client_ids: List[str], subset_size: int, num_candidates: int, rng: random.Random
+):
+    seen = set()
+    subsets = []
+    max_possible = (
+        math.comb(len(client_ids), subset_size) if len(client_ids) >= subset_size else 0
+    )
+    target = min(num_candidates, max_possible)
+    while len(subsets) < target:
+        cand = tuple(sorted(rng.sample(client_ids, subset_size)))
+        if cand not in seen:
+            seen.add(cand)
+            subsets.append(list(cand))
+    return subsets
+
+
+@dataclass
+class ClientData:
+    client_id: str
+    data_dir: str
+    train_g: object
+    val_g: object
+    test_g: object
+    train_h: object
+    val_h: object
+    test_h: object
+
+
+def select_clients(df_heterogeneity, target_metrics):
+    print(df_heterogeneity.columns.tolist())
+
+    chosen_all = []
+
+    for target_metric in target_metrics:
+        control_metrics = [m for m in target_metrics if m != target_metric]
+        chosen = pick_controlled_low_mid_high(
+            df=df_heterogeneity,
+            target_metric=target_metric,
+            control_metrics=control_metrics,
+        )
+        chosen_all.append(chosen)
+
+    chosen_df = pd.concat(chosen_all, axis=0).reset_index(drop=True)
+
+    print("\nChosen subsets:")
+    print(
+        chosen_df[
+            [
+                "subset_size",
+                "target_metric",
+                "level",
+                "subset_id",
+                "subset_clients",
+                "label_prev_jsd_mean",
+                "motif_profile_jsd_mean",
+                "in_degree_jsd_mean",
+            ]
+        ]
+    )
+
+    # load only the clients that are actually needed
+    needed_client_ids = set()
+    for s in chosen_df["subset_clients"]:
+        needed_client_ids.update(parse_subset_clients(s))
+
+    df_data = pd.read_csv(CSV_PATH).copy()
+    df_needed = df_data[df_data["graph_id"].isin(sorted(needed_client_ids))].copy()
+    print(f"\nNeed to load {len(df_needed)} unique clients.")
+
+    # load all the client graphs that are needed
+    id_to_client = {}
+    for _, row in df_needed.iterrows():
+        cid = int(row["graph_id"])
+        data_dir = row["data_dir"]
+        tr, va, te = load_client_from_dir(data_dir)
+        train_h = make_bidirected_hetero(tr)
+        val_h = make_bidirected_hetero(va)
+        test_h = make_bidirected_hetero(te)
+        id_to_client[cid] = ClientData(
+            client_id=str(cid),
+            data_dir=data_dir,
+            train_g=tr,
+            val_g=va,
+            test_g=te,
+            train_h=train_h,
+            val_h=val_h,
+            test_h=test_h,
+        )
+
+    return chosen_df, id_to_client
+
+
+SEED = 0
+NUM_CANDIDATE_SUBSETS = 50
+DIR = "andrea"
+
 
 def main():
     split = "train"
     df = pd.read_parquet(f"{FEATURE_DIR}/client_features_{split}.parquet")
-    # # example: pick 5 clients
-    # client_ids = df["client_id"].head(5).tolist()
-    client_ids = [0,3]
-    metrics = compute_subset_metrics(df, client_ids)
-    for k, v in metrics.items():
-        print(f"{k}: {v}")
+
+    client_ids = sorted(df["client_id"].unique().tolist())
+
+    rows = []
+
+    rng = random.Random(SEED)
+
+    for subset_size in range(4, 9):  # 4,5,6,7,8
+        subsets = sample_candidate_subsets(
+            client_ids=client_ids,
+            subset_size=subset_size,
+            num_candidates=NUM_CANDIDATE_SUBSETS,
+            rng=rng,
+        )
+
+        print(f"subset_size={subset_size}, sampled={len(subsets)}")
+
+        for i, subset in enumerate(subsets):
+            metrics = compute_subset_metrics(df, subset)
+
+            row = {
+                "subset_id": f"s{subset_size}_{i:03d}",
+                "subset_size": subset_size,
+                "subset_clients": "|".join(map(str, subset)),
+                **metrics,
+            }
+            rows.append(row)
+
+    subset_df = pd.DataFrame(rows)
+    subset_df.to_csv(os.path.join(DIR, "heterogeneity.csv"), index=False)
+    print(
+        f"Saved heterogeneity metrics for different subsets to:",
+        os.path.join(DIR, "heterogeneity.csv"),
+    )
+
 
 if __name__ == "__main__":
     main()

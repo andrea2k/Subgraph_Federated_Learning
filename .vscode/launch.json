@@ -1,0 +1,14 @@
+{
+    "configurations": [
+
+        {
+            "name": "Python Debugger: Python File",
+            "type": "python",
+            "request": "launch",
+            "module": "andrea.train_fedavg",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

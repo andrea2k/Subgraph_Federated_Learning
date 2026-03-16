@@ -8,6 +8,7 @@ from torch_geometric.utils import degree
 
 __all__ = ["PNANetReverseMP"]
 
+
 class PNANetReverseMP(nn.Module):
     """
     Single node type 'n' with two relations:
@@ -16,25 +17,26 @@ class PNANetReverseMP(nn.Module):
                       (= out-degree histogram of the original graph).
     We combine both directions via HeteroConv(..., aggr='sum').
     """
+
     def __init__(
         self,
         in_dim: int,
         hidden_dim: int,
         out_dim: int,
-        deg_fwd,                # histogram for in-degrees w.r.t. fwd edges
-        deg_rev,                # histogram for in-degrees w.r.t. rev edges
+        deg_fwd,  # histogram for in-degrees w.r.t. fwd edges
+        deg_rev,  # histogram for in-degrees w.r.t. rev edges
         num_layers: int = 6,
         dropout: float = 0.1,
-        ego_dim:int = 0,        # pass ego-ID dimension
+        ego_dim: int = 0,  # pass ego-ID dimension
         aggregators=None,
         scalers=None,
         towers: int = 4,
         pre_layers: int = 1,
         post_layers: int = 1,
         divide_input: bool = False,
-        combine: str = "sum",   # 'sum', 'mean', or 'max'
+        combine: str = "sum",  # 'sum', 'mean', or 'max'
         in_port_vocab_size=0,
-        out_port_vocab_size=0, 
+        out_port_vocab_size=0,
         port_emb_dim=0,
         *,
         enable_cross_client_comm: bool = False,
@@ -54,18 +56,20 @@ class PNANetReverseMP(nn.Module):
         self.client_id = client_id
         self.ghost_mix_alpha = float(ghost_mix_alpha)
 
-        self.in_port_vocab_size  = int(in_port_vocab_size)
+        self.in_port_vocab_size = int(in_port_vocab_size)
         self.out_port_vocab_size = int(out_port_vocab_size)
-        self.port_emb_dim        = int(port_emb_dim)
+        self.port_emb_dim = int(port_emb_dim)
 
-        self.in_port_emb  = None
+        self.in_port_emb = None
         self.out_port_emb = None
         edge_dim = 0
         if self.in_port_vocab_size > 0 and self.port_emb_dim > 0:
-            self.in_port_emb = nn.Embedding(self.in_port_vocab_size,  self.port_emb_dim)
+            self.in_port_emb = nn.Embedding(self.in_port_vocab_size, self.port_emb_dim)
             edge_dim += self.port_emb_dim
         if self.out_port_vocab_size > 0 and self.port_emb_dim > 0:
-            self.out_port_emb = nn.Embedding(self.out_port_vocab_size, self.port_emb_dim)
+            self.out_port_emb = nn.Embedding(
+                self.out_port_vocab_size, self.port_emb_dim
+            )
             edge_dim += self.port_emb_dim
 
         self.ego_dim = int(ego_dim)
@@ -73,11 +77,11 @@ class PNANetReverseMP(nn.Module):
         self.dropout = dropout
 
         self.convs = nn.ModuleList()
-        self.bns   = nn.ModuleList()
+        self.bns = nn.ModuleList()
 
         for _ in range(num_layers):
             conv_dict = {
-                ('n','fwd','n'): PNAConv(
+                ("n", "fwd", "n"): PNAConv(
                     in_channels=hidden_dim,
                     out_channels=hidden_dim,
                     aggregators=aggregators,
@@ -89,7 +93,7 @@ class PNANetReverseMP(nn.Module):
                     divide_input=divide_input,
                     edge_dim=edge_dim if edge_dim > 0 else None,
                 ),
-                ('n','rev','n'): PNAConv(
+                ("n", "rev", "n"): PNAConv(
                     in_channels=hidden_dim,
                     out_channels=hidden_dim,
                     aggregators=aggregators,
@@ -115,9 +119,9 @@ class PNANetReverseMP(nn.Module):
     def _ensure_dicts(self, x_dict, edge_index_dict):
         # Convenience: allow passing homogeneous x & edge_index via ('n','*','n')
         if isinstance(x_dict, torch.Tensor):
-            x_dict = {'n': x_dict}
+            x_dict = {"n": x_dict}
         return x_dict, edge_index_dict
-    
+
     def _edge_ports_to_attr(self, edge_attr_dict):
         """
         Expect edge_attr_dict[('n','fwd','n')] and edge_attr_dict[('n','rev','n')]
@@ -132,7 +136,7 @@ class PNANetReverseMP(nn.Module):
         for rel, ea in edge_attr_dict.items():
             # ea: [E, 2] longs: [in_port, out_port]
             assert ea.dim() == 2 and ea.size(-1) == 2, "Expect [in_port, out_port]"
-            in_ids  = ea[:, 0].long()
+            in_ids = ea[:, 0].long()
             out_ids = ea[:, 1].long()
             parts = []
             if self.in_port_emb is not None:
@@ -144,17 +148,17 @@ class PNANetReverseMP(nn.Module):
 
     def _cross_client_sync(
         self,
-        x: torch.Tensor,               # [N, hidden_dim]
+        x: torch.Tensor,  # [N, hidden_dim]
         layer_idx: int,
         global_nids: torch.Tensor | None,
         owned_mask: torch.Tensor | None,
     ) -> torch.Tensor:
         if (
-            not self.enable_cross_client_comm or
-            self.comm is None or
-            self.client_id is None or
-            global_nids is None or
-            owned_mask is None
+            not self.enable_cross_client_comm
+            or self.comm is None
+            or self.client_id is None
+            or global_nids is None
+            or owned_mask is None
         ):
             return x
 
@@ -173,7 +177,7 @@ class PNANetReverseMP(nn.Module):
             global_nids=global_nids,
             owned_mask=owned_mask,
             local_embs=x,
-            mix_alpha=self.ghost_mix_alpha,   
+            mix_alpha=self.ghost_mix_alpha,
         )
         return x
 
@@ -183,24 +187,30 @@ class PNANetReverseMP(nn.Module):
         edge_index_dict,
         *,
         edge_attr_dict=None,
-        global_nids: torch.Tensor | None = None,   # [N] global ids for 'n'
-        owned_mask: torch.Tensor | None = None,    # [N] bool for 'n'
-        device=None,                               # not strictly needed here
+        global_nids: torch.Tensor | None = None,  # [N] global ids for 'n'
+        owned_mask: torch.Tensor | None = None,  # [N] bool for 'n'
+        device=None,  # not strictly needed here
     ):
         x_dict, edge_index_dict = self._ensure_dicts(x_dict, edge_index_dict)
-        x = x_dict['n']
+        x = x_dict["n"]
         x = F.relu(self.input(x))
 
         # Build edge attrs for PNA from (in_port, out_port)
-        pna_edge_attrs = self._edge_ports_to_attr(edge_attr_dict) if edge_attr_dict is not None else None
+        pna_edge_attrs = (
+            self._edge_ports_to_attr(edge_attr_dict)
+            if edge_attr_dict is not None
+            else None
+        )
 
         for layer_idx, (conv, bn) in enumerate(zip(self.convs, self.bns)):
             if pna_edge_attrs is not None:
-                out_dict = conv({'n': x}, edge_index_dict, edge_attr_dict=pna_edge_attrs)
+                out_dict = conv(
+                    {"n": x}, edge_index_dict, edge_attr_dict=pna_edge_attrs
+                )
             else:
-                out_dict = conv({'n': x}, edge_index_dict)
+                out_dict = conv({"n": x}, edge_index_dict)
 
-            x = out_dict['n']
+            x = out_dict["n"]
             x = bn(x)
             x = F.relu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)

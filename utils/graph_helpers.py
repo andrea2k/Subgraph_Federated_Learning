@@ -13,7 +13,9 @@ def max_port_cols(d):
     whose edge_attr last two columns correspond to (in_port_id, out_port_id).
     """
     in_col, out_col = d.edge_attr.size(-1) - 2, d.edge_attr.size(-1) - 1
-    return int(d.edge_attr[:, in_col].max().item()), int(d.edge_attr[:, out_col].max().item())
+    return int(d.edge_attr[:, in_col].max().item()), int(
+        d.edge_attr[:, out_col].max().item()
+    )
 
 
 def check_and_strip_self_loops(data, name: str = ""):
@@ -53,9 +55,9 @@ def build_hetero_neighbor_loader(
         fanout_list = [fanout] * num_layers
     else:
         fanout_list = list(fanout)
-        assert len(fanout_list) == num_layers, (
-            f"fanout has {len(fanout_list)} entries but num_layers={num_layers}"
-        )
+        assert (
+            len(fanout_list) == num_layers
+        ), f"fanout has {len(fanout_list)} entries but num_layers={num_layers}"
 
     num_neighbors = {
         ("n", "fwd", "n"): fanout_list,
@@ -69,18 +71,16 @@ def build_hetero_neighbor_loader(
         if not isinstance(input_nodes, torch.Tensor):
             input_nodes = torch.tensor(input_nodes, dtype=torch.long)
         seed_nodes = input_nodes.long()
-
     # NeighborLoader expects input_nodes = (node_type, node_idx)
     input_nodes_arg = ("n", seed_nodes)
-
-    use_cuda = (device is not None and device.type == "cuda")
+    use_cuda = device is not None and device.type == "cuda"
 
     # Clamp DataLoader workers to avoid oversubscription on the cluster
     NUM_WORKERS = 0  # set to 0 for debugging / safety; can try 2 later
 
     num_workers = NUM_WORKERS
     persistent_workers = False  # must be False if num_workers == 0
-    prefetch_factor = None      # only valid when num_workers > 0
+    prefetch_factor = None  # only valid when num_workers > 0
 
     return NeighborLoader(
         hetero_data,
@@ -114,7 +114,7 @@ def build_full_eval_loader(
         ("n", "rev", "n"): fanout_all,
     }
 
-    use_cuda = (device is not None and device.type == "cuda")
+    use_cuda = device is not None and device.type == "cuda"
 
     NUM_WORKERS = 0  # keep consistent with the training loader
 
