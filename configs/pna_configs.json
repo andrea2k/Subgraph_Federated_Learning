@@ -40,7 +40,7 @@
 
     "default_hparams": {
       "hidden_dim": 64,
-      "num_layers": 2,
+      "num_layers": 6,
       "dropout": 0.1,
       "lr": 0.001,
       "weight_decay": 0.0001,

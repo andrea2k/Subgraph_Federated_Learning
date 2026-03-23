@@ -4,6 +4,7 @@ import json
 import random
 from pathlib import Path
 from typing import Dict, List, Tuple
+from itertools import product
 
 import pandas as pd
 import torch
@@ -20,12 +21,15 @@ from utils.graph_helpers import max_port_cols
 from utils.seed import set_seed
 
 CSV_PATH = "./andrea/test_generation_parameters.csv"
+EXPERIMENT_PATH = Path("./andrea/experiment.csv")
 SUBSET_PATH = "./andrea/heterogeneity.csv"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
 OUT_ROOT = "andrea/runs/experiment_fedavg_heterogeneity"
 
-SEED = 0
+SEEDS = [0, 1, 2, 3]
+ROUNDS = 100
+LOCAL_EPOCHS = 1
 CLIENT_FRACTION = 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -49,6 +53,18 @@ def load_cfg(config_path: str, key: str) -> Dict:
     cfg["port_emb_dim"] = cfg_obj.get("port_emb_dim", cfg.get("port_emb_dim", 8))
     cfg["num_epochs"] = cfg_obj.get("num_epochs", cfg.get("num_epochs", 1))
     return cfg
+
+
+def load_experiment_runs(experiment_path):
+    # load existing experiment log once
+    if experiment_path.exists():
+        existing_exp_df = pd.read_csv(experiment_path)
+        existing_run_dirs = set(existing_exp_df["out_dir"].astype(str).tolist())
+    else:
+        existing_exp_df = pd.DataFrame()
+        existing_run_dirs = set()
+
+    return existing_exp_df, existing_run_dirs
 
 
 def compute_global_port_vocab(*graph_lists: List) -> Tuple[int, int]:
@@ -314,8 +330,44 @@ def evaluate_fullbatch(
     }
 
 
-ROUNDS = 20
-LOCAL_EPOCHS = 1
+def get_label_stats_from_graph(graph):
+    """
+    graph: hetero graph with graph['n'].y of shape [num_nodes, num_tasks]
+    returns:
+        pos_cnt: [C]
+        neg_cnt: [C]
+        pos_weight: [C] for BCEWithLogitsLoss(pos_weight=...)
+    """
+    y = graph["n"].y.float()
+    pos_cnt = y.sum(dim=0)
+    total_cnt = torch.tensor(float(y.size(0)), device=y.device)
+    neg_cnt = total_cnt - pos_cnt
+
+    pos_weight = neg_cnt / torch.clamp(pos_cnt, min=1.0)
+
+    return pos_cnt, neg_cnt, pos_weight
+
+
+def build_criterion_for_client(graph, cfg, device):
+    """
+    Supports:
+      - minority_class_weight = None   -> plain BCE
+      - minority_class_weight = "auto" -> per-task pos_weight from training labels
+      - minority_class_weight = number -> constant scalar pos_weight for all tasks
+    """
+    mcw = cfg.get("minority_class_weight", None)
+
+    if mcw is None:
+        return nn.BCEWithLogitsLoss()
+
+    if mcw == "auto":
+        pos_cnt, neg_cnt, pos_weight = get_label_stats_from_graph(graph)
+        pos_weight = pos_weight.to(device)
+        print("[criterion] BCEWithLogitsLoss with AUTO pos_weight")
+        print("  pos_cnt   :", pos_cnt)
+        print("  neg_cnt   :", neg_cnt)
+        print("  pos_weight:", pos_weight)
+        return nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
 
 def run_fedavg_on_subset(
@@ -324,6 +376,8 @@ def run_fedavg_on_subset(
     seed: int,
     out_dir: str,
 ) -> Dict:
+
+    set_seed(seed)
 
     homo_train, homo_val, homo_test = [], [], []
     for c in subset_clients:
@@ -347,9 +401,7 @@ def run_fedavg_on_subset(
 
     # Global degree hists
     deg_fwd_hist, deg_rev_hist = compute_global_degree_hists(homo_train)
-    print(cfg["minority_class_weight"])
-    criterion = nn.BCEWithLogitsLoss()
-    return
+
     # ego_dim = 0 for full-batch training/evaluation
     ego_dim = 0
     global_model = make_model(
@@ -380,8 +432,11 @@ def run_fedavg_on_subset(
 
         for idx in selected:
             c = subset_clients[idx]
+            train_graph = c.train_h
+            test_graph = c.test_h
 
             # 1) initialize local model from global state
+            client_criterion = build_criterion_for_client(train_graph, cfg, DEVICE)
 
             local_model = make_model(
                 cfg,
@@ -398,10 +453,13 @@ def run_fedavg_on_subset(
 
             # 2) evaluate current global model on this client BEFORE local training
 
-            pre_metrics = evaluate_fullbatch(local_model, c.val_h, criterion, DEVICE)
+            pre_metrics = evaluate_fullbatch(
+                local_model, test_graph, client_criterion, DEVICE
+            )
 
             client_rows.append(
                 {
+                    "seed": seed,
                     "round": rnd,
                     "client_id": c.client_id,
                     "phase": "pre_local_val",
@@ -417,6 +475,7 @@ def run_fedavg_on_subset(
             for task_id in range(out_dim):
                 client_rows.append(
                     {
+                        "seed": seed,
                         "round": rnd,
                         "client_id": c.client_id,
                         "phase": "pre_local_val_task",
@@ -444,29 +503,33 @@ def run_fedavg_on_subset(
                 print(f"\n=== train client (full-batch) {c.client_id} ===")
                 train_loss = train_epoch_fullbatch(
                     local_model,
-                    c.train_h,
+                    train_graph,
                     optimizer,
-                    criterion,
+                    client_criterion,
                     DEVICE,
                 )
                 client_rows.append(
                     {
+                        "seed": seed,
                         "round": rnd,
                         "client_id": c.client_id,
                         "phase": "training",
                         "local_epoch": local_epoch,
                         "train_loss": float(train_loss),
-                        "train_num_nodes": int(c.train_h["n"].num_nodes),
+                        "train_num_nodes": int(train_graph["n"].num_nodes),
                     }
                 )
                 print("local_epoch:", local_epoch, "train_loss:", train_loss)
 
             # 4) evaluate model again (full-batch evaluation)
 
-            post_metrics = evaluate_fullbatch(local_model, c.val_h, criterion, DEVICE)
+            post_metrics = evaluate_fullbatch(
+                local_model, test_graph, client_criterion, DEVICE
+            )
 
             client_rows.append(
                 {
+                    "seed": seed,
                     "round": rnd,
                     "client_id": c.client_id,
                     "phase": "post_local_val",
@@ -481,6 +544,7 @@ def run_fedavg_on_subset(
             for task_id in range(out_dim):
                 client_rows.append(
                     {
+                        "seed": seed,
                         "round": rnd,
                         "client_id": c.client_id,
                         "phase": "post_local_val_task",
@@ -497,7 +561,7 @@ def run_fedavg_on_subset(
                     }
                 )
 
-            n_k = int(c.train_h["n"].num_nodes)
+            n_k = int(train_graph["n"].num_nodes)
             client_weights.append(n_k)
             client_states.append(
                 {
@@ -510,10 +574,19 @@ def run_fedavg_on_subset(
         global_model.load_state_dict(global_state, strict=True)
 
         for c in subset_clients:
-            metrics = evaluate_fullbatch(global_model, c.val_h, criterion, DEVICE)
+            train_graph = c.train_h
+            test_graph = c.test_h
+
+            # 1) initialize local model from global state
+            client_criterion = build_criterion_for_client(train_graph, cfg, DEVICE)
+
+            metrics = evaluate_fullbatch(
+                global_model, test_graph, client_criterion, DEVICE
+            )
 
             fedavg_rows.append(
                 {
+                    "seed": seed,
                     "round": rnd,
                     "client_id": c.client_id,
                     "phase": "global_val_client",
@@ -529,6 +602,7 @@ def run_fedavg_on_subset(
             for task_id in range(out_dim):
                 fedavg_rows.append(
                     {
+                        "seed": seed,
                         "round": rnd,
                         "client_id": c.client_id,
                         "phase": "global_val_client_task",
@@ -554,6 +628,11 @@ def run_fedavg_on_subset(
     local_rows = []
 
     for c in subset_clients:
+        train_graph = c.train_h
+        test_graph = c.test_h
+
+        # 1) initialize local model from global state
+        client_criterion = build_criterion_for_client(train_graph, cfg, DEVICE)
 
         local_model = make_model(
             cfg,
@@ -576,25 +655,29 @@ def run_fedavg_on_subset(
             print(f"\n=== train client (full-batch) {c.client_id} ===")
             train_loss = train_epoch_fullbatch(
                 local_model,
-                c.train_h,
+                train_graph,
                 optimizer,
-                criterion,
+                client_criterion,
                 DEVICE,
             )
             local_rows.append(
                 {
+                    "seed": seed,
                     "client_id": c.client_id,
                     "phase": "training",
                     "local_epoch": local_epoch,
                     "train_loss": float(train_loss),
-                    "num_train_nodes": int(c.train_h["n"].num_nodes),
+                    "num_train_nodes": int(train_graph["n"].num_nodes),
                 }
             )
             print("local_epoch:", local_epoch, "train_loss:", train_loss)
 
-            metrics = evaluate_fullbatch(local_model, c.val_h, criterion, DEVICE)
+            metrics = evaluate_fullbatch(
+                local_model, test_graph, client_criterion, DEVICE
+            )
             local_rows.append(
                 {
+                    "seed": seed,
                     "local_epoch": local_epoch,
                     "client_id": c.client_id,
                     "phase": "val",
@@ -609,6 +692,7 @@ def run_fedavg_on_subset(
             for task_id in range(out_dim):
                 local_rows.append(
                     {
+                        "seed": seed,
                         "local_epoch": local_epoch,
                         "client_id": c.client_id,
                         "phase": "val_task",
@@ -633,7 +717,7 @@ def run_fedavg_on_subset(
 # Main pipeline
 # =========================
 def main():
-    set_seed(SEED)
+
     ensure_dir(OUT_ROOT)
 
     df_heterogeneity = pd.read_csv(SUBSET_PATH).copy()
@@ -662,47 +746,49 @@ def main():
     )
 
     cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
+    existing_exp_df, existing_run_dirs = load_experiment_runs(EXPERIMENT_PATH)
 
     log_experiments = []
-    EXPERIMENT_PATH = Path("andrea/experiment.csv")
 
-    # load existing experiment log once
-    if EXPERIMENT_PATH.exists():
-        existing_exp_df = pd.read_csv(EXPERIMENT_PATH)
-        existing_run_dirs = set(existing_exp_df["out_dir"].astype(str).tolist())
-    else:
-        existing_exp_df = pd.DataFrame()
-        existing_run_dirs = set()
+    for seed, mcw, num_layers in product(SEEDS, ["auto", None], [3, 6]):
 
-    for _, row in chosen_df.iterrows():
-        subset_clients_ids = parse_subset_clients(row["subset_clients"])
-        subset_clients = [id_to_client[cid] for cid in subset_clients_ids]
-        subset_id = str(row["subset_id"])
+        cfg["minority_class_weight"] = mcw
+        cfg["num_layers"] = num_layers
 
-        run_dir = Path(OUT_ROOT) / f"{subset_id}_rounds{ROUNDS}_epoch{LOCAL_EPOCHS}"
+        for _, row in chosen_df.iterrows():
 
-        # if str(run_dir) in existing_run_dirs:
-        #     print(f"skip existing run: {str(run_dir)}")
-        #     break
+            subset_clients_ids = parse_subset_clients(row["subset_clients"])
+            subset_clients = [id_to_client[cid] for cid in subset_clients_ids]
+            subset_id = str(row["subset_id"])
 
-        ensure_dir(run_dir)
+            run_dir = (
+                Path(OUT_ROOT)
+                / f"{subset_id}_rounds{ROUNDS}_epoch{LOCAL_EPOCHS}_mcw{mcw}_layers{num_layers}_seed{seed}"
+            )
 
-        run_fedavg_on_subset(
-            subset_clients=subset_clients,
-            cfg=cfg,
-            seed=SEED,
-            out_dir=str(run_dir),
-        )
-        return
-        exp_row = row.to_dict()
-        exp_row["seed"] = SEED
-        exp_row["out_dir"] = str(run_dir)
-        exp_row["rounds"] = ROUNDS
-        exp_row["local_epochs"] = LOCAL_EPOCHS
-        log_experiments.append(exp_row)
+            if str(run_dir) in existing_run_dirs:
+                print(f"skip existing run: {str(run_dir)}")
+                break
 
-        print(f"logged performances under {run_dir}")
-        break
+            ensure_dir(run_dir)
+
+            run_fedavg_on_subset(
+                subset_clients=subset_clients,
+                cfg=cfg,
+                seed=seed,
+                out_dir=str(run_dir),
+            )
+
+            exp_row = row.to_dict()
+            exp_row["out_dir"] = str(run_dir)
+            exp_row["rounds"] = ROUNDS
+            exp_row["local_epochs"] = LOCAL_EPOCHS
+            exp_row["mcw"] = mcw
+            exp_row["num_layers"] = num_layers
+            exp_row["seed"] = seed
+            log_experiments.append(exp_row)
+            print(f"logged performances under {run_dir}")
+            break
 
     # only append if there are new runs
     if log_experiments:

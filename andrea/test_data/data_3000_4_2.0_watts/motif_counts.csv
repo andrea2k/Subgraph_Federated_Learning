@@ -1,0 +1,4 @@
+split,cycle2,cycle3,cycle4,cycle5
+train,0,737,373,183
+val,0,744,380,205
+test,0,731,348,173

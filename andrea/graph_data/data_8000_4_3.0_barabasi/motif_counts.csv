@@ -1,4 +1,0 @@
-split,cycle2,cycle3,cycle4,cycle5,cycle6,scatter_gather,biclique
-train,0,36,97,430,1566,221,135
-val,0,35,121,348,1230,215,97
-test,0,36,126,451,1550,251,109

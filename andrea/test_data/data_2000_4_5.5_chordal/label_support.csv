@@ -1,0 +1,13 @@
+split,task,motif_count,pos_nodes,pos_rate
+train,cycle2,189,342,0.171
+train,cycle3,184,454,0.227
+train,cycle4,162,468,0.234
+train,cycle5,190,546,0.273
+val,cycle2,189,345,0.1725
+val,cycle3,182,425,0.2125
+val,cycle4,209,530,0.265
+val,cycle5,215,572,0.286
+test,cycle2,200,364,0.182
+test,cycle3,171,407,0.2035
+test,cycle4,201,534,0.267
+test,cycle5,185,521,0.2605

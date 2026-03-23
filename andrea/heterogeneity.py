@@ -4,7 +4,6 @@ import random
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Sequence
-from dataclasses import dataclass
 
 FEATURE_DIR = "./andrea/client_features"
 
@@ -194,82 +193,6 @@ def sample_candidate_subsets(
             seen.add(cand)
             subsets.append(list(cand))
     return subsets
-
-
-@dataclass
-class ClientData:
-    client_id: str
-    data_dir: str
-    train_g: object
-    val_g: object
-    test_g: object
-    train_h: object
-    val_h: object
-    test_h: object
-
-
-def select_clients(df_heterogeneity, target_metrics):
-    print(df_heterogeneity.columns.tolist())
-
-    chosen_all = []
-
-    for target_metric in target_metrics:
-        control_metrics = [m for m in target_metrics if m != target_metric]
-        chosen = pick_controlled_low_mid_high(
-            df=df_heterogeneity,
-            target_metric=target_metric,
-            control_metrics=control_metrics,
-        )
-        chosen_all.append(chosen)
-
-    chosen_df = pd.concat(chosen_all, axis=0).reset_index(drop=True)
-
-    print("\nChosen subsets:")
-    print(
-        chosen_df[
-            [
-                "subset_size",
-                "target_metric",
-                "level",
-                "subset_id",
-                "subset_clients",
-                "label_prev_jsd_mean",
-                "motif_profile_jsd_mean",
-                "in_degree_jsd_mean",
-            ]
-        ]
-    )
-
-    # load only the clients that are actually needed
-    needed_client_ids = set()
-    for s in chosen_df["subset_clients"]:
-        needed_client_ids.update(parse_subset_clients(s))
-
-    df_data = pd.read_csv(CSV_PATH).copy()
-    df_needed = df_data[df_data["graph_id"].isin(sorted(needed_client_ids))].copy()
-    print(f"\nNeed to load {len(df_needed)} unique clients.")
-
-    # load all the client graphs that are needed
-    id_to_client = {}
-    for _, row in df_needed.iterrows():
-        cid = int(row["graph_id"])
-        data_dir = row["data_dir"]
-        tr, va, te = load_client_from_dir(data_dir)
-        train_h = make_bidirected_hetero(tr)
-        val_h = make_bidirected_hetero(va)
-        test_h = make_bidirected_hetero(te)
-        id_to_client[cid] = ClientData(
-            client_id=str(cid),
-            data_dir=data_dir,
-            train_g=tr,
-            val_g=va,
-            test_g=te,
-            train_h=train_h,
-            val_h=val_h,
-            test_h=test_h,
-        )
-
-    return chosen_df, id_to_client
 
 
 SEED = 0

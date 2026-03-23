@@ -4,8 +4,6 @@ pandas==2.2.3
 pymetis==2025.2.2
 scikit_learn==1.6.1
 scikit_network==0.33.0
-torch==2.6.0
-torch-sparse
-torch-scatter
-torch_geometric==2.6.1
 tqdm==4.67.1
+pyarrow
+jupyter nbconvert ipykernel matplotlib

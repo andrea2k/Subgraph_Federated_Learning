@@ -1,0 +1,4 @@
+split,cycle2,cycle3,cycle4,cycle5
+train,80,62,45,37
+val,93,56,48,26
+test,92,53,50,35
