@@ -3,6 +3,10 @@ __pycache__/
 gcn_utils.py
 simulator.py
 andrea/subgraph_data/
+andrea/test_data/
+andrea/experiment_test_runs/
+andrea/first_stage_results/
+andrea/first_stage_test_runs/
 /thesis/
 
 # ignore checkpoints folder as created by the server

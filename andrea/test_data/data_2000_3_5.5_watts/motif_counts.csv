@@ -1,4 +1,0 @@
-split,cycle2,cycle3,cycle4,cycle5
-train,0,501,224,104
-val,0,467,215,111
-test,0,477,222,100
