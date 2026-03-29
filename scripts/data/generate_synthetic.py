@@ -29,7 +29,8 @@ INCLUDE_CROSS_EDGES = FED_DATA_CONFIG["include_cross_edges"]
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
 
 # Here define the global variables
-BASE_SEED = FED_DATA_CONFIG["base_seed"] 
+BASE_SEED = FED_DATA_CONFIG["base_seed"]
+
 
 def check_port_columns(data, name="data"):
     assert data.edge_attr is not None, f"{name}: edge_attr is None"
@@ -38,7 +39,7 @@ def check_port_columns(data, name="data"):
 
     # by construction in add_ports(): the last 2 columns are [in_port, out_port]
     in_col, out_col = F - 2, F - 1
-    in_ports  = data.edge_attr[:, in_col].long()
+    in_ports = data.edge_attr[:, in_col].long()
     out_ports = data.edge_attr[:, out_col].long()
 
     print(f"[{name}] in_port  min={int(in_ports.min())}  max={int(in_ports.max())}")
@@ -48,7 +49,9 @@ def check_port_columns(data, name="data"):
     ei = data.edge_index
     for i in range(min(5, ei.size(1))):
         u, v = int(ei[0, i]), int(ei[1, i])
-        print(f"  e#{i}: {u}->{v} | in_port={int(in_ports[i])} out_port={int(out_ports[i])}")
+        print(
+            f"  e#{i}: {u}->{v} | in_port={int(in_ports[i])} out_port={int(out_ports[i])}"
+        )
 
 
 def write_label_stats(path, names, datasets):
@@ -68,15 +71,15 @@ def main():
     # Each split has a distinct and reproducible seed
     split_seeds = {
         "train": derive_seed(BASE_SEED, "train"),
-        "val":   derive_seed(BASE_SEED, "val"),
-        "test":  derive_seed(BASE_SEED, "test"),
+        "val": derive_seed(BASE_SEED, "val"),
+        "test": derive_seed(BASE_SEED, "test"),
     }
     logging.info("Split seeds: %s", split_seeds)
 
     # Below parameters are defined based on Appendix D.2 of the original paper
-    n = 200        # number of nodes
-    d = 6           # average degree
-    r = 11.1        # radius
+    n = 200  # number of nodes
+    d = 6  # average degree
+    r = 11.1  # radius
     num_graphs = 1  # one connected component generator call per data split to prevent data leakeage
     generator = "chordal"  # describes the random-circulant-like generator mentioned in the paper (to my understanding)
     bidirectional = False  # have a directed multigraph (needed for directed cycles)
@@ -89,14 +92,16 @@ def main():
             num_edges=None,
             network_type="type1",
             readout="node",
-            node_feats=False,   # for simplicity, ignore node features
+            node_feats=False,  # for simplicity, ignore node features
             bidirectional=bidirectional,
-            delta=r,                
+            delta=r,
             num_graphs=num_graphs,
-            generator=generator,    
+            generator=generator,
         )
 
-    logging.info("Generating train/val/test graphs (independent random circulant graphs).")
+    logging.info(
+        "Generating train/val/test graphs (independent random circulant graphs)."
+    )
     set_seed(split_seeds["train"])
     tr = make_sim().generate_pytorch_graph().add_ports()
 
@@ -112,17 +117,24 @@ def main():
     check_port_columns(te, "test")
 
     # Label + witness extraction
-    label_only_funcs, label_only_thresholds, motif_builders, names, thresholds = \
+    label_only_funcs, label_only_thresholds, motif_builders, names, thresholds = (
         define_subtasks_thresholds_and_witness_builders(
             cycle_max_instances_per_k=None,  # set e.g. 5000 if cycle enumeration is slow
             sg_max_instances=None,
             bp_max_instances=None,
         )
+    )
 
     logging.info("Computing labels + witnesses for train/val/test splits.")
-    tr, tr_w = set_y_with_labels_and_witnesses(tr, label_only_funcs, label_only_thresholds, motif_builders)
-    va, va_w = set_y_with_labels_and_witnesses(va, label_only_funcs, label_only_thresholds, motif_builders)
-    te, te_w = set_y_with_labels_and_witnesses(te, label_only_funcs, label_only_thresholds, motif_builders)
+    tr, tr_w = set_y_with_labels_and_witnesses(
+        tr, label_only_funcs, label_only_thresholds, motif_builders
+    )
+    va, va_w = set_y_with_labels_and_witnesses(
+        va, label_only_funcs, label_only_thresholds, motif_builders
+    )
+    te, te_w = set_y_with_labels_and_witnesses(
+        te, label_only_funcs, label_only_thresholds, motif_builders
+    )
 
     # Sanity checks: witnesses must imply positive labels
     # Sanity checks: witnesses must imply positive labels (task-semantic aware)
@@ -171,14 +183,19 @@ def main():
         output_csv=os.path.join(labels_out_dir, "label_percentages.csv"),
         add_mean=True,
     )
-    logging.info("Wrote label percentages to %s", os.path.join(labels_out_dir, "label_percentages.csv"))
+    logging.info(
+        "Wrote label percentages to %s",
+        os.path.join(labels_out_dir, "label_percentages.csv"),
+    )
 
     # Federated splits from witnesses
     if INCLUDE_CROSS_EDGES:
         fed_root = os.path.join(out_dir, "fed_partition_aware_splits_with_cross_edges")
         os.makedirs(fed_root, exist_ok=True)
     else:
-        fed_root = os.path.join(out_dir, "fed_partition_aware_splits_without_cross_edges")
+        fed_root = os.path.join(
+            out_dir, "fed_partition_aware_splits_without_cross_edges"
+        )
         os.makedirs(fed_root, exist_ok=True)
 
     tr_node_to_client = assign_clients_from_witnesses(
@@ -216,12 +233,27 @@ def main():
         witnesses=te_w,
     )
 
-    save_federated_clients(os.path.join(fed_root, "train"), tr, tr_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
-    save_federated_clients(os.path.join(fed_root, "val"),   va, va_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
-    save_federated_clients(os.path.join(fed_root, "test"),  te, te_node_to_client, include_cross_edges=INCLUDE_CROSS_EDGES)
+    save_federated_clients(
+        os.path.join(fed_root, "train"),
+        tr,
+        tr_node_to_client,
+        include_cross_edges=INCLUDE_CROSS_EDGES,
+    )
+    save_federated_clients(
+        os.path.join(fed_root, "val"),
+        va,
+        va_node_to_client,
+        include_cross_edges=INCLUDE_CROSS_EDGES,
+    )
+    save_federated_clients(
+        os.path.join(fed_root, "test"),
+        te,
+        te_node_to_client,
+        include_cross_edges=INCLUDE_CROSS_EDGES,
+    )
 
     logging.info("Saved federated witness splits under %s", fed_root)
-    
+
     torch.save(tr, os.path.join(out_dir, "train.pt"))
     torch.save(va, os.path.join(out_dir, "val.pt"))
     torch.save(te, os.path.join(out_dir, "test.pt"))

@@ -8,8 +8,12 @@ import numpy as np
 from utils.seed import set_seed, derive_seed
 from scripts.data.simulator import GraphSimulator
 
-from andrea.witness_funcs import (
-    build_unique_in_out,
+from utils.witness_funcs import (
+    build_in_out,
+    fan_in_three,
+    fan_out_three,
+    deg_in_three,
+    deg_out_three,
     cycles_C2,
     cycles_C3,
     cycles_C4,
@@ -23,24 +27,80 @@ BASE_SEED = 0
 DATA_ROOT = "./andrea/test_data"
 GRAPH_PARAM_CSV = "./andrea/test_generation_parameters.csv"
 
-N_POOL = [1000, 1500, 2000, 2500, 3000, 3500, 4000]
-D_POOL = [1, 2, 3, 4, 5, 6]
-R_POOL = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5]
+N_POOL = [2000, 4000]
+D_POOL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+R_POOL = [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5,
+    5.0,
+    5.5,
+    6.0,
+    6.5,
+    7.0,
+    7.5,
+    8.0,
+    8.5,
+    9,
+    9.5,
+    10,
+    10.5,
+    11,
+    11.5,
+]
 GEN = ["chordal", "watts"]
 
-NUM_GRAPHS = 840
+# BASE_SEED = 0
+# DATA_ROOT = "./andrea/big_graph_data"
+# GRAPH_PARAM_CSV = "./andrea/big_graph_generation_parameters.csv"
+
+# N_POOL = [8192]
+# D_POOL = [6]
+# R_POOL = [11.1]
+# GEN = ["chordal"]
 
 TASK_FUNCS = {
-    "cycle2": lambda out_set, in_set: cycles_C2(out_set, in_set),
-    "cycle3": lambda out_set, in_set: cycles_C3(out_set, in_set),
-    "cycle4": lambda out_set, in_set: cycles_C4(out_set, in_set),
-    "cycle5": lambda out_set, in_set: cycles_C5(out_set, in_set),
-    # "cycle6": lambda out_set, in_set: cycles_C6(out_set, in_set),
-    # "scatter_gather": lambda out_set, in_set: SG2(out_set, in_set),
-    # "biclique": lambda out_set, in_set: BP2(out_set, in_set),
+    # "deg_in_three": lambda adj: deg_in_three(adj["out_list"], adj["in_list"]),
+    # "deg_out_three": lambda adj: deg_out_three(adj["out_list"], adj["in_list"]),
+    # "fan_in_three": lambda adj: fan_in_three(adj["out_set"], adj["in_set"]),
+    # "fan_out_three": lambda adj: fan_out_three(adj["out_set"], adj["in_set"]),
+    "cycle2": lambda adj: cycles_C2(adj["out_set"], adj["in_set"]),
+    "cycle3": lambda adj: cycles_C3(adj["out_set"], adj["in_set"]),
+    "cycle4": lambda adj: cycles_C4(adj["out_set"], adj["in_set"]),
+    "cycle5": lambda adj: cycles_C5(adj["out_set"], adj["in_set"]),
+    "cycle6": lambda adj: cycles_C6(adj["out_set"], adj["in_set"]),
+    # "scatter_gather": lambda adj: SG2(adj["out_set"], adj["in_set"]),
+    # "biclique": lambda adj: BP2(adj["out_set"], adj["in_set"]),
 }
 TASKS = list(TASK_FUNCS.keys())
 SPLITS = ["train", "val", "test"]
+
+
+def nodes_to_label_from_witness(task_name, w):
+    # degree/fan tasks are singleton witnesses: (node,)
+    if task_name in {"deg_in_three", "deg_out_three", "fan_in_three", "fan_out_three"}:
+        return w
+
+    # cycle tasks: every node on the cycle is positive
+    if task_name.startswith("cycle"):
+        return w
+
+    # scatter-gather: only the sink node is positive
+    # witness format: (source, j1, j2, sink)
+    if task_name == "scatter_gather":
+        return (w[-1],)
+
+    # biclique: both sink-side/right-side nodes are positive
+    # witness format: (l1, l2, r1, r2)
+    if task_name == "biclique":
+        return (w[2], w[3])
+
+    raise ValueError(f"Unknown task name: {task_name}")
 
 
 # get the motifs tuples and mark the node's label based
@@ -49,7 +109,14 @@ def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
     edge_index = g.edge_index
     num_nodes = int(g.num_nodes)
 
-    out_set, in_set = build_unique_in_out(edge_index, num_nodes)
+    out_list, in_list, out_set, in_set = build_in_out(edge_index, num_nodes)
+
+    adj = {
+        "out_list": out_list,
+        "in_list": in_list,
+        "out_set": out_set,
+        "in_set": in_set,
+    }
 
     tasks = list(task_funcs.keys())
     y = torch.zeros((num_nodes, len(tasks)), dtype=torch.float32)
@@ -57,12 +124,11 @@ def set_y_and_get_motifs(g, task_funcs=TASK_FUNCS):
     motifs_tuple = {}
 
     for col, task_name in enumerate(tasks):
-        motifs = task_funcs[task_name](out_set, in_set)  # list of tuples
+        motifs = task_funcs[task_name](adj)
         motifs_tuple[task_name] = motifs
 
-        # mark all nodes in witness tuple
         for w in motifs:
-            for u in w:
+            for u in nodes_to_label_from_witness(task_name, w):
                 y[int(u), col] = 1.0
 
     g.y = y
@@ -118,8 +184,7 @@ def graph_basic_stats(g) -> dict:
 
     out_deg_raw = np.bincount(src, minlength=n).astype(np.int64)
     in_deg_raw = np.bincount(dst, minlength=n).astype(np.int64)
-
-    out_set, in_set = build_unique_in_out(edge_index, n)
+    _, _, out_set, in_set = build_in_out(edge_index, n)
     out_deg_unique = np.array([len(s) for s in out_set], dtype=np.int64)
     in_deg_unique = np.array([len(s) for s in in_set], dtype=np.int64)
 
@@ -246,6 +311,9 @@ def main():
 
     # --- build all possible unique parameter combinations ---
     all_combos = list(product(N_POOL, D_POOL, R_POOL, GEN))
+
+    NUM_GRAPHS = len(N_POOL) * len(D_POOL) * len(R_POOL) * len(GEN)
+
     if NUM_GRAPHS > len(all_combos):
         raise ValueError(
             f"NUM_GRAPHS={NUM_GRAPHS} > total combos={len(all_combos)}. Reduce NUM_GRAPHS or expand pools."

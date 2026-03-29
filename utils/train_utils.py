@@ -195,39 +195,27 @@ def _compute_multilabel_metrics_from_logits(
     return float(micro_f1), float(macro_pos_f1), pos_cnt, pos_rate
 
 
-def train_epoch(
-    model,
-    loader,
-    optimizer,
-    criterion,
-    device,
-    use_port_ids=False,
-    loss_fn=None,
-    step_preprocess=None,
-):
+def train_epoch(model, loader, optimizer, criterion, device, use_port_ids=False):
     """
     This method can be used for training both homogeneous and heterogeneous graphs
-    If loss_fn is provided, it will be used (OpenFGL-style hook).
     """
     model.train()
     total_loss = 0.0
     total_count = 0
+    i = 0
     for batch in loader:
+        i += 1
+        if i % 50 == 0:
+            print("train batch:", i)
         batch = batch.to(device)
-        """get all sampled node features, edges, labels and node count for one batch"""
         x_in, edge_in, y_true, n_nodes, is_hetero = _unpack_io(batch)
 
         # Add Ego (if enabled) and slice labels to seeds (if B known)
-        """ add ego node features to N-nodes, original node feature = (N,1), expanded to (N,1+B) """
-        """ y_used = (B,7), only the first B seed nodes are used to train the model """
         x_in_aug, y_used, B = _augment_with_ego_and_get_seed_slice(
             x_in, y_true, batch, is_hetero, model
         )
+
         # Assemble per-relation edge_attr dict [in_port, out_port]
-        """ get the edge features for each relation something like: {
-        ("n", "fwd", "n"): tensor shape [1130, 2],
-        ("n", "rev", "n"): tensor shape [1096, 2],
-        }   """
         edge_attr_dict = None
         if is_hetero and use_port_ids:
             edge_attr_dict = {}
@@ -246,7 +234,6 @@ def train_epoch(
                     edge_attr_dict[("n", "rev", "n")],
                 )
                 print(
-                    f"[NODES]: {n_nodes}\n"
                     f"[PORT] fwd edge_attr: {tuple(f_ea.shape)} (dtype={f_ea.dtype}) | rev edge_attr: {tuple(r_ea.shape)}"
                 )
             else:
@@ -257,7 +244,6 @@ def train_epoch(
 
         # Print training mode (full-batch or mini-batch)
         is_full_batch = (B is None) or (B == n_nodes)
-
         if not getattr(model, "_mode_printed", False):
             mode = "full-batch" if is_full_batch else "mini-batch (seed-only)"
             print(
@@ -275,96 +261,32 @@ def train_epoch(
             )
             model._ego_dbg_printed = True
 
-        # extract global_nids and owned_mask for cross-client comm
-        global_nids = None
-        owned_mask = None
-        if is_hetero:
-            if hasattr(batch["n"], "global_nid"):
-                global_nids = batch["n"].global_nid
-            if hasattr(batch["n"], "owned_mask"):
-                owned_mask = batch["n"].owned_mask
-        else:
-            if hasattr(batch, "global_nid"):
-                global_nids = batch.global_nid
-            if hasattr(batch, "owned_mask"):
-                owned_mask = batch.owned_mask
         optimizer.zero_grad()
 
-        # Call model with extra arguments so PNANetReverseMP can sync
-        """ get the model's prediction for the N nodes, out = shape(N,7)"""
         if use_port_ids:
-            out = model(
-                x_in_aug,
-                edge_in,
-                edge_attr_dict=edge_attr_dict,
-                global_nids=global_nids,
-                owned_mask=owned_mask,
-                device=device,
-            )
-
+            # Reverse-MP model (or any model that uses port information)
+            out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
         else:
-            out = model(
-                x_in_aug,
-                edge_in,
-                global_nids=global_nids,
-                owned_mask=owned_mask,
-                device=device,
-            )
-        """ only the first B predictions are relevant for training the model """
+            # Baseline model (no port IDs)
+            out = model(x_in_aug, edge_in)
+
         out_used = out[:B] if B is not None else out
-        if B is not None:
-            y_used = y_used[:B]
 
-        """ owned_mask_full is in our case always none """
-        # If client graph has owned_mask, compute loss only on owned nodes
-        owned_mask_full = None
-        if is_hetero:
-            if hasattr(batch["n"], "owned_mask"):
-                owned_mask_full = batch["n"].owned_mask
-        else:
-            if hasattr(batch, "owned_mask"):
-                owned_mask_full = batch.owned_mask
-
-        """ since owned mask full is none, count = B or n_nodes """
-        # If full-batch (or seed slicing returns all nodes), apply owned_mask
-        if owned_mask_full is not None and (B is None or B == n_nodes):
-            out_used = out_used[owned_mask_full]
-            y_used = y_used[owned_mask_full]
-            # count should be owned nodes
-            count = int(owned_mask_full.sum().item())
-        else:
-            count = B if B is not None else n_nodes
-
-        """ compute BCE-with-logits loss """
-        if loss_fn is not None:
-            # When we want to keep signature compatible with OpenFGL: (embedding, logits, label, mask)
-            loss = loss_fn(None, out_used, y_used.float(), None)
-        else:
-            loss = criterion(out_used, y_used.float())
+        loss = criterion(out_used, y_used.float())
         loss.backward()
-
-        if step_preprocess is not None:
-            step_preprocess()
         optimizer.step()
-        """ loss.item() is mean loss over the batch, so we convert it back to sum-like contribution 
-        and then finally divide it by the total number of seed nodes used for training """
+
+        count = B if B is not None else n_nodes
         total_loss += loss.item() * count
         total_count += count
-    """ average loss per node"""
+
     return total_loss / max(total_count, 1)
 
 
 @torch.no_grad()
-def evaluate_epoch(
-    model,
-    loader,
-    criterion,
-    device,
-    use_port_ids=False,
-    threshold: float = 0.5,
-):
+def evaluate_epoch(model, loader, criterion, device, use_port_ids=False):
     """
-    Evaluate on a loader. Supports homo/hetero graphs.
+    This method can be used for evaluating both homogeneous and heterogeneous graphs
     """
     model.eval()
 
@@ -375,8 +297,11 @@ def evaluate_epoch(
 
     all_logits = []
     all_labels = []
-
+    i = 0
     for batch in loader:
+        i += 1
+        if i % 50 == 0:
+            print("eval batch:", i)
         batch = batch.to(device)
         x_in, edge_in, y_true, n_nodes, is_hetero = _unpack_io(batch)
 
@@ -395,63 +320,21 @@ def evaluate_epoch(
                         ea = ea.long()
                     edge_attr_dict[rel] = ea
 
-        # extract global_nids and owned_mask for cross-client comm
-        global_nids = None
-        owned_mask = None
-        if is_hetero:
-            if hasattr(batch["n"], "global_nid"):
-                global_nids = batch["n"].global_nid
-            if hasattr(batch["n"], "owned_mask"):
-                owned_mask = batch["n"].owned_mask
-        else:
-            if hasattr(batch, "global_nid"):
-                global_nids = batch.global_nid
-            if hasattr(batch, "owned_mask"):
-                owned_mask = batch.owned_mask
-
-        # call model with extra arguments
         if use_port_ids:
-            out = model(
-                x_in_aug,
-                edge_in,
-                edge_attr_dict=edge_attr_dict,
-                global_nids=global_nids,
-                owned_mask=owned_mask,
-                device=device,
-            )
+            # Reverse-MP model (or any model that uses port information)
+            out = model(x_in_aug, edge_in, edge_attr_dict=edge_attr_dict)
         else:
-            out = model(
-                x_in_aug,
-                edge_in,
-                global_nids=global_nids,
-                owned_mask=owned_mask,
-                device=device,
-            )
+            # Baseline model (no port IDs)
+            out = model(x_in_aug, edge_in)
 
         out_used = out[:B] if B is not None else out
-        if B is not None:
-            y_used = y_used[:B]
-
-        owned_mask_full = None
-        if is_hetero:
-            if hasattr(batch["n"], "owned_mask"):
-                owned_mask_full = batch["n"].owned_mask
-        else:
-            if hasattr(batch, "owned_mask"):
-                owned_mask_full = batch.owned_mask
-
-        if owned_mask_full is not None and (B is None or B == n_nodes):
-            out_used = out_used[owned_mask_full]
-            y_used = y_used[owned_mask_full]
-            count = int(owned_mask_full.sum().item())
-        else:
-            count = int(B if B is not None else n_nodes)
 
         loss = criterion(out_used, y_used.float())
+        count = B if B is not None else n_nodes
         total_loss += loss.item() * count
         total_count += count
 
-        preds = torch.sigmoid(out_used) > threshold
+        preds = torch.sigmoid(out_used) > 0.5
         correct_pairs += (preds == y_used.bool()).sum().item()
         total_pairs += y_used.numel()
 
@@ -459,37 +342,10 @@ def evaluate_epoch(
         all_labels.append(y_used.detach().cpu())
 
     avg_loss = total_loss / max(total_count, 1)
-    pair_acc = correct_pairs / max(total_pairs, 1)
+    per_node_acc = correct_pairs / max(total_pairs, 1)
 
-    logits = torch.cat(all_logits, dim=0) if len(all_logits) else torch.empty((0,))
-    labels = torch.cat(all_labels, dim=0) if len(all_labels) else torch.empty((0,))
+    logits = torch.cat(all_logits, dim=0)
+    labels = torch.cat(all_labels, dim=0)
+    f1_score_per_task = compute_minority_f1_score_per_task(logits, labels)
 
-    minority_f1_per_task = compute_minority_f1_score_per_task(
-        logits, labels
-    )  # tensor [C]
-    minority_f1_per_task = minority_f1_per_task.detach().cpu().float()
-
-    micro_f1, macro_pos_f1, pos_cnt, pos_rate = _compute_multilabel_metrics_from_logits(
-        logits, labels, threshold=threshold
-    )
-
-    pos_cnt = [int(x) for x in pos_cnt]
-    pos_rate = [float(x) for x in pos_rate]
-
-    metrics = {
-        "scalar": {
-            "loss": float(avg_loss),
-            "pair_acc": float(pair_acc),
-            "micro_f1": float(micro_f1),
-            "macro_pos_f1": float(macro_pos_f1),
-            "macro_minority_f1": float(minority_f1_per_task.mean().item()),
-        },
-        "per_task": {
-            "minority_f1": minority_f1_per_task.tolist(),  # length C
-        },
-        "counts": {
-            "pos_cnt": pos_cnt,  # length C
-            "pos_rate": pos_rate,  # length C
-        },
-    }
-    return metrics
+    return avg_loss, per_node_acc, f1_score_per_task

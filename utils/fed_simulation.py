@@ -6,8 +6,12 @@ from torch_geometric.utils import to_scipy_sparse_matrix, to_networkx
 from torch_geometric.data import Data
 import pymetis as metis
 
-from utils.fed_partitioning import zipf_assign_communities_to_clients, equal_assign_communities_to_clients
-from andrea.get_subgraph import get_subgraph_pyg_data
+from utils.fed_partitioning import (
+    zipf_assign_communities_to_clients,
+    equal_assign_communities_to_clients,
+)
+from andrea.split_graph_code.get_subgraph import get_subgraph_pyg_data
+
 """
 The implementation of the Label Imbalance Split (LIS) simulation strategy  
 for the Metis-based and Louvain-based data partitioning techniques is adapted 
@@ -20,13 +24,16 @@ However, in the global graph generated for this work, each node has 11 binary la
 To address this, the original code is modified to account for this multi-label scenario.
 """
 
-def metis_original_split(global_data: Data,
-                         num_clients: int,
-                         metis_num_coms: int,
-                         seed: Optional[int] = None,
-                         alpha: float = 1.2,
-                         client_assignment: str = "zipf",
-                         return_node_indices: bool = False):
+
+def metis_original_split(
+    global_data: Data,
+    num_clients: int,
+    metis_num_coms: int,
+    seed: Optional[int] = None,
+    alpha: float = 1.2,
+    client_assignment: str = "zipf",
+    return_node_indices: bool = False,
+):
     """
     Metis-based original subgraph-FL split (structure-only, no label handling)
     with Zipf-skewed client sizes.
@@ -35,7 +42,9 @@ def metis_original_split(global_data: Data,
       - 'zipf'   : Zipf-skewed client sizes (realistic, heavy-tailed)
       - 'equal'  : Approximately equal-sized clients (controlled setting)
     """
-    print(f"Conducting subgraph-FL Metis (original, {client_assignment}-assigned) simulation...")
+    print(
+        f"Conducting subgraph-FL Metis (original, {client_assignment}-assigned) simulation..."
+    )
 
     # convert to NetworkX and partition with Metis
     graph_nx = to_networkx(global_data, to_undirected=True)
@@ -64,7 +73,9 @@ def metis_original_split(global_data: Data,
             seed=seed,
         )
     else:
-        raise ValueError(f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'.")
+        raise ValueError(
+            f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'."
+        )
 
     # if the user only wants the node indices, return them without computing local subgraphs
     if return_node_indices:
@@ -83,13 +94,15 @@ def metis_original_split(global_data: Data,
     return local_data
 
 
-def louvain_original_split(global_data: Data,
-                           num_clients: int,
-                           resolution: float = 1.0,
-                           seed: Optional[int] = None,
-                           alpha: float = 1.2,
-                           client_assignment: str = "zipf",
-                           return_node_indices: bool = False):
+def louvain_original_split(
+    global_data: Data,
+    num_clients: int,
+    resolution: float = 1.0,
+    seed: Optional[int] = None,
+    alpha: float = 1.2,
+    client_assignment: str = "zipf",
+    return_node_indices: bool = False,
+):
     """
     Louvain-based original subgraph-FL split (structure-only, no label handling)
     with Zipf-skewed client sizes.
@@ -98,7 +111,9 @@ def louvain_original_split(global_data: Data,
       - 'zipf'   : Zipf-skewed client sizes (realistic, heavy-tailed)
       - 'equal'  : Approximately equal-sized clients (controlled setting)
     """
-    print(f"Conducting subgraph-FL Louvain (original, {client_assignment}-assigned) simulation...")
+    print(
+        f"Conducting subgraph-FL Louvain (original, {client_assignment}-assigned) simulation..."
+    )
 
     num_nodes = global_data.num_nodes
 
@@ -136,7 +151,9 @@ def louvain_original_split(global_data: Data,
             seed=seed,
         )
     else:
-        raise ValueError(f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'.")
+        raise ValueError(
+            f"Unknown client_assignment='{client_assignment}'. Expected 'zipf' or 'equal'."
+        )
 
     # if the user only wants the node indices, return them without computing local subgraphs
     if return_node_indices:
@@ -155,11 +172,13 @@ def louvain_original_split(global_data: Data,
     return local_data
 
 
-def metis_label_imbalance_split(global_data: Data,
-                                num_clients: int,
-                                metis_num_coms: int,
-                                seed: Optional[int] = None,
-                                return_node_indices: bool = False):
+def metis_label_imbalance_split(
+    global_data: Data,
+    num_clients: int,
+    metis_num_coms: int,
+    seed: Optional[int] = None,
+    return_node_indices: bool = False,
+):
     """
     Metis-based Label Imbalance Split for a single big graph
     with multi-task labels y in {0,1}^{N x T}.
@@ -237,11 +256,13 @@ def metis_label_imbalance_split(global_data: Data,
     return local_data
 
 
-def louvain_label_imbalance_split(global_data: Data,
-                                  num_clients: int,
-                                  resolution: float = 1.0,
-                                  seed: Optional[int] = None,
-                                  return_node_indices: bool = False):
+def louvain_label_imbalance_split(
+    global_data: Data,
+    num_clients: int,
+    resolution: float = 1.0,
+    seed: Optional[int] = None,
+    return_node_indices: bool = False,
+):
     """
     Louvain-based Label Imbalance Split for a single big graph
     with multi-task labels y in {0,1}^{N x T}.
@@ -259,10 +280,12 @@ def louvain_label_imbalance_split(global_data: Data,
 
     # louvain communities on the adjacency
     adj_csr = to_scipy_sparse_matrix(global_data.edge_index, num_nodes=num_nodes)
-    louvain = Louvain(modularity="newman",
-                      resolution=resolution,
-                      return_aggregate=True,
-                      random_state=seed)
+    louvain = Louvain(
+        modularity="newman",
+        resolution=resolution,
+        return_aggregate=True,
+        random_state=seed,
+    )
     com_assignments = louvain.fit_predict(adj_csr)  # community ID per node
 
     # build per-community label distributions (vectors of length num_classes)

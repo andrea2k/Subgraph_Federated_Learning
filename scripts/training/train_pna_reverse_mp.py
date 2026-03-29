@@ -8,9 +8,19 @@ import torch.nn as nn
 
 from utils.metrics import append_f1_score_to_csv, start_epoch_csv, append_epoch_csv
 from utils.seed import set_seed
-from utils.train_utils import load_datasets, ensure_node_features, train_epoch, evaluate_epoch
+from utils.train_utils import (
+    load_datasets,
+    ensure_node_features,
+    train_epoch,
+    evaluate_epoch,
+)
 from utils.hetero import make_bidirected_hetero
-from utils.graph_helpers import max_port_cols, check_and_strip_self_loops, build_hetero_neighbor_loader, build_full_eval_loader
+from utils.graph_helpers import (
+    max_port_cols,
+    check_and_strip_self_loops,
+    build_hetero_neighbor_loader,
+    build_full_eval_loader,
+)
 from models.pna_reverse_mp import PNANetReverseMP, compute_directional_degree_hists
 
 CONFIG_PATH = "./configs/pna_configs.json"
@@ -78,7 +88,7 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     port_emb_dim = cfg["port_emb_dim"]
     num_epochs = cfg["num_epochs"]
     num_layers = cfg["num_layers"]
-    num_hops = num_layers # there is one hop per layer in PNA conv
+    num_hops = num_layers  # there is one hop per layer in PNA conv
     neighbors_per_hop = cfg["neighbors_per_hop"]
     hidden_dim = cfg["hidden_dim"]
     dropout = cfg["dropout"]
@@ -96,29 +106,29 @@ def run_pna(seed, tasks, device, run_id, **hparams):
 
     # Check for self loops and remove if any
     train_data = check_and_strip_self_loops(train_data, "train")
-    val_data   = check_and_strip_self_loops(val_data, "val")
-    test_data  = check_and_strip_self_loops(test_data, "test")
+    val_data = check_and_strip_self_loops(val_data, "val")
+    test_data = check_and_strip_self_loops(test_data, "test")
 
     # Assign constant features
     train_data = ensure_node_features(train_data)
-    val_data   = ensure_node_features(val_data)
-    test_data  = ensure_node_features(test_data)
+    val_data = ensure_node_features(val_data)
+    test_data = ensure_node_features(test_data)
 
     # Find maximum port in and out degrees if port IDs are present
     if use_port_ids:
         tr_in_max, tr_out_max = max_port_cols(train_data)
         va_in_max, va_out_max = max_port_cols(val_data)
         te_in_max, te_out_max = max_port_cols(test_data)
-        in_port_vocab_size  = max(tr_in_max,  va_in_max,  te_in_max)  + 1
+        in_port_vocab_size = max(tr_in_max, va_in_max, te_in_max) + 1
         out_port_vocab_size = max(tr_out_max, va_out_max, te_out_max) + 1
     else:
-        in_port_vocab_size  = 0
+        in_port_vocab_size = 0
         out_port_vocab_size = 0
 
     # Convert the data into HeteroData format
     train_h = make_bidirected_hetero(train_data)
-    val_h   = make_bidirected_hetero(val_data)
-    test_h  = make_bidirected_hetero(test_data)
+    val_h = make_bidirected_hetero(val_data)
+    test_h = make_bidirected_hetero(test_data)
 
     # PNA degree histograms per direction
     deg_fwd_hist, deg_rev_hist = compute_directional_degree_hists(
@@ -129,36 +139,36 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     # Compute per-task pos_weight if enabled
     auto_pos_weight = None
     if isinstance(minority_class_weight, str) and minority_class_weight == "auto":
-        y_train = train_h['n'].y.float()
-        pos_counts = y_train.sum(dim=0)                 # [num_tasks]
-        neg_counts = (1.0 - y_train).sum(dim=0)         # [num_tasks]
+        y_train = train_h["n"].y.float()
+        pos_counts = y_train.sum(dim=0)  # [num_tasks]
+        neg_counts = (1.0 - y_train).sum(dim=0)  # [num_tasks]
         eps = 1e-8
         auto_pos_weight = neg_counts / (pos_counts + eps)
 
     # Decide batch sizes depending on mini-batch vs full-batch mode
     if use_mini_batch:
         train_batch_size = batch_size
-        val_batch_size   = batch_size
-        test_batch_size  = batch_size
+        val_batch_size = batch_size
+        test_batch_size = batch_size
         # print(f"[TRAIN MODE] mini-batch | B={train_batch_size}")
     else:
-        train_batch_size = train_h['n'].num_nodes
-        val_batch_size   = val_h['n'].num_nodes
-        test_batch_size  = test_h['n'].num_nodes
+        train_batch_size = train_h["n"].num_nodes
+        val_batch_size = val_h["n"].num_nodes
+        test_batch_size = test_h["n"].num_nodes
         # print(f"[TRAIN MODE] FULL-BATCH | "
         #     f"train B={train_batch_size}, val B={val_batch_size}, test B={test_batch_size}")
-        
+
     # Set ego IDs
     if use_ego_ids:
         ego_dim = train_batch_size if cfg.get("ego_dim") is None else cfg["ego_dim"]
-        #print(f"Training with Ego IDs... ego_dim={ego_dim}")
+        # print(f"Training with Ego IDs... ego_dim={ego_dim}")
     else:
         ego_dim = 0
-        #print("Training without Ego IDs...")
+        # print("Training without Ego IDs...")
 
     # Define the model
-    in_dim = train_h['n'].x.size(-1) if 'x' in train_h['n'] else 1
-    out_dim = train_h['n'].y.size(-1)
+    in_dim = train_h["n"].x.size(-1) if "x" in train_h["n"] else 1
+    out_dim = train_h["n"].y.size(-1)
 
     # print(f"Number of layers using in training: {num_layers}")
     # print(f"Number of hops for NeighborLoader: {num_hops}")
@@ -215,21 +225,21 @@ def run_pna(seed, tasks, device, run_id, **hparams):
         # Use -1 neighbors to pull the full k-hop neighborhood, one batch per split
         train_loader = build_full_eval_loader(
             train_h,
-            batch_size=train_batch_size,   # equal to num_nodes
+            batch_size=train_batch_size,  # equal to num_nodes
             num_layers=num_hops,
             device=device,
         )
 
         valid_loader = build_full_eval_loader(
             val_h,
-            batch_size=val_batch_size,    
+            batch_size=val_batch_size,
             num_layers=num_hops,
             device=device,
         )
 
         test_loader = build_full_eval_loader(
             test_h,
-            batch_size=test_batch_size,   
+            batch_size=test_batch_size,
             num_layers=num_hops,
             device=device,
         )
@@ -243,9 +253,13 @@ def run_pna(seed, tasks, device, run_id, **hparams):
     # Minority class weighting via pos_weight
     if isinstance(minority_class_weight, str) and minority_class_weight == "auto":
         # Use per-task pos_weight computed from training labels
-        assert auto_pos_weight is not None, "auto_pos_weight should have been computed above"
+        assert (
+            auto_pos_weight is not None
+        ), "auto_pos_weight should have been computed above"
         criterion = nn.BCEWithLogitsLoss(pos_weight=auto_pos_weight.to(device))
-        print(f"Using automatic per-task minority weighting: {auto_pos_weight.tolist()}")
+        print(
+            f"Using automatic per-task minority weighting: {auto_pos_weight.tolist()}"
+        )
     elif minority_class_weight is not None:
         # Use a uniform scalar pos_weight across all tasks
         pos_weight = torch.full((out_dim,), float(minority_class_weight), device=device)
@@ -262,7 +276,7 @@ def run_pna(seed, tasks, device, run_id, **hparams):
         model_name=MODEL_NAME,
         seed=seed,
         tasks=tasks,
-        out_dir=f"./results/metrics/epoch_logs/{MODEL_NAME}"
+        out_dir=f"./results/metrics/epoch_logs/{MODEL_NAME}",
     )
 
     best_ckpt_path = os.path.join(model_dir, "best_model.pt")
@@ -317,14 +331,26 @@ def main():
     start_ts = time.perf_counter()
 
     # Define the sub-tasks
-    tasks = ["deg-in", "deg-out", "fan-in", "fan-out", "C2", "C3", "C4", "C5", "C6", "S-G", "B-C"]
+    tasks = [
+        "deg-in",
+        "deg-out",
+        "fan-in",
+        "fan-out",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "S-G",
+        "B-C",
+    ]
 
     # Example hyperparameter config for this run.
     # For hyperparameter tuning, you can vary these and call run_pna with different kwargs.
     base_hparams = dict(
         num_layers=DEFAULT_HPARAMS["num_layers"],
         neighbors_per_hop=DEFAULT_HPARAMS["neighbors_per_hop"],
-        minority_class_weight=DEFAULT_HPARAMS["minority_class_weight"],  
+        minority_class_weight=DEFAULT_HPARAMS["minority_class_weight"],
         use_ego_ids=USE_EGO_IDS,
         use_mini_batch=USE_MINI_BATCH,
         batch_size=BATCH_SIZE,
@@ -337,8 +363,8 @@ def main():
         weight_decay=DEFAULT_HPARAMS["weight_decay"],
     )
 
-    #seeds = [BASE_SEED]
-    seeds = [BASE_SEED, BASE_SEED+1, BASE_SEED+2] # Average over 3 epochs
+    # seeds = [BASE_SEED]
+    seeds = [BASE_SEED, BASE_SEED + 1, BASE_SEED + 2]  # Average over 3 epochs
     test_f1_scores = []
     for s in seeds:
         _, test_f1 = run_pna(s, tasks, device, run_id=run_id, **base_hparams)
@@ -346,14 +372,16 @@ def main():
 
     all_f1 = torch.stack(test_f1_scores, dim=0)
     mean_f1 = all_f1.mean(dim=0)
-    std_f1  = all_f1.std(dim=0, unbiased=False)
+    std_f1 = all_f1.std(dim=0, unbiased=False)
 
     macro_mean = mean_f1.mean().item() * 100
 
     mode_str = "mini-batch" if USE_MINI_BATCH else "full-batch"
-    print(f"\nPNA reverse message passing with {mode_str} training, "
-        f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS} — macro minority F1 over 5 runs: {macro_mean:.2f}%")
-    
+    print(
+        f"\nPNA reverse message passing with {mode_str} training, "
+        f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS} — macro minority F1 over 5 runs: {macro_mean:.2f}%"
+    )
+
     row = " | ".join(
         f"{n}: {100*m:.2f}±{100*s:.2f}%"
         for n, m, s in zip(tasks, mean_f1.tolist(), std_f1.tolist())
@@ -372,7 +400,7 @@ def main():
         std_f1=std_f1,
         macro_mean_percent=macro_mean,
         seeds=seeds,
-        model_name = (
+        model_name=(
             f"PNA reverse MP with {mode_str} training, "
             f"port numbers={USE_PORT_IDS}, & ego IDs={USE_EGO_IDS}, "
             f"neigh={neigh}, seeds={seeds}, "
@@ -380,6 +408,7 @@ def main():
         ),
         runtime_seconds=runtime_sec,
     )
+
 
 if __name__ == "__main__":
     main()

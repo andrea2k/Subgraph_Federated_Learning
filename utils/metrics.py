@@ -7,34 +7,35 @@ import pandas as pd
 from pathlib import Path
 import torch
 
+
 def compute_minority_f1_score_per_task(logits, labels, threshold=0.5):
     probs = torch.sigmoid(logits)
-    preds = (probs > threshold)
+    preds = probs > threshold
     y = labels.bool()
 
     N, C = y.shape
     f1_scores = torch.zeros(C, dtype=torch.float32, device=logits.device)
     epsilon = 1e-12
-    
+
     for c in range(C):
         y_c = y[:, c]
 
         # Find the minority class (either 0 or 1)
         pos = y_c.sum()
         neg = y_c.numel() - pos
-        minority_is_one = (pos <= neg) 
+        minority_is_one = pos <= neg
 
         if minority_is_one:
-            y_pos    = y_c
+            y_pos = y_c
             pred_pos = preds[:, c]
         else:
-            y_pos    = ~y_c
+            y_pos = ~y_c
             pred_pos = ~preds[:, c]
 
         true_pos = (y_pos & pred_pos).sum().float()
         false_pos = ((~y_pos) & pred_pos).sum().float()
         false_neg = (y_pos & (~pred_pos)).sum().float()
-        
+
         precision = true_pos / (true_pos + false_pos + epsilon)
         recall = true_pos / (true_pos + false_neg + epsilon)
         f1 = 2 * precision * recall / (precision + recall + epsilon)
@@ -44,15 +45,15 @@ def compute_minority_f1_score_per_task(logits, labels, threshold=0.5):
 
 
 def compute_label_percentages(
-    input_csv = "./data/y_sums.csv",
-    output_csv = "./results/metrics/label_percentages.csv",
-    add_mean = True
+    input_csv="./data/y_sums.csv",
+    output_csv="./results/metrics/label_percentages.csv",
+    add_mean=True,
 ):
-    '''
-    Read label totals from `input_csv`compute per-split 
+    """
+    Read label totals from `input_csv`compute per-split
     percentages for each task, optionally append
     a 'mean_over_splits' row, and save to CSV.
-    '''
+    """
     df = pd.read_csv(input_csv)
     if "total" not in df.columns:
         raise ValueError("Input CSV must include a 'total' column.")
@@ -94,7 +95,7 @@ def append_f1_score_to_csv(
     macro_mean_percent: float,
     seeds: list[int],
     model_name: str = "PNA baseline",
-    runtime_seconds: Optional[float] = None,  
+    runtime_seconds: Optional[float] = None,
 ):
     """
     Append a single row with mean/std per task (in %), macro mean (in %), runtime, and metadata.
@@ -108,10 +109,12 @@ def append_f1_score_to_csv(
 
     # Build the default header for this run
     mean_cols = [f"{t}_mean_pct" for t in tasks]
-    std_cols  = [f"{t}_std_pct"  for t in tasks]
+    std_cols = [f"{t}_std_pct" for t in tasks]
     default_header = (
         ["timestamp_iso", "model", "n_runs", "seeds", "macro_mean_pct"]
-        + mean_cols + std_cols + ["runtime"]  # <— include runtime by default
+        + mean_cols
+        + std_cols
+        + ["runtime"]  # <— include runtime by default
     )
 
     # See if file already exists and if it has a header; keep compatibility
@@ -137,7 +140,7 @@ def append_f1_score_to_csv(
 
     # Prepare row values
     mean_pct = (mean_f1 * 100.0).tolist()
-    std_pct  = (std_f1  * 100.0).tolist()
+    std_pct = (std_f1 * 100.0).tolist()
 
     row = {
         "timestamp_iso": datetime.now().isoformat(timespec="seconds"),
@@ -146,11 +149,13 @@ def append_f1_score_to_csv(
         "seeds": ",".join(map(str, seeds)),
         "macro_mean_pct": round(macro_mean_percent, 2),
         **{c: round(v, 2) for c, v in zip(mean_cols, mean_pct)},
-        **{c: round(v, 2) for c, v in zip(std_cols,  std_pct)},
+        **{c: round(v, 2) for c, v in zip(std_cols, std_pct)},
     }
 
     # Add runtime field (string "HH:MM:SS"); if missing, leave empty
-    row["runtime"] = _fmt_runtime_hhmmss(runtime_seconds) if runtime_seconds is not None else ""
+    row["runtime"] = (
+        _fmt_runtime_hhmmss(runtime_seconds) if runtime_seconds is not None else ""
+    )
 
     # Write (create header if file doesn't exist)
     with open(out_csv, "a", newline="") as f:
@@ -162,10 +167,12 @@ def append_f1_score_to_csv(
         w.writerow(row)
 
 
-def start_epoch_csv(model_name: str,
-                    seed: int,
-                    tasks: list,
-                    out_dir: str = "./results/metrics/epoch_logs") -> str:
+def start_epoch_csv(
+    model_name: str,
+    seed: int,
+    tasks: list,
+    out_dir: str = "./results/metrics/epoch_logs",
+) -> str:
     """
     Creates a timestamped CSV for per-epoch metrics and writes the header.
     Returns the full path to the CSV file.
@@ -175,7 +182,9 @@ def start_epoch_csv(model_name: str,
     fname = f"{ts}_{model_name}_seed{seed}.csv"
     path = os.path.join(out_dir, fname)
 
-    header = ["epoch", "train_loss", "val_loss", "val_macro_minF1"] + [f"val_{t}_minF1" for t in tasks]
+    header = ["epoch", "train_loss", "val_loss", "val_macro_minF1"] + [
+        f"val_{t}_minF1" for t in tasks
+    ]
 
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -187,11 +196,9 @@ def start_epoch_csv(model_name: str,
     return path
 
 
-def append_epoch_csv(csv_path: str,
-                     epoch: int,
-                     train_loss: float,
-                     val_loss: float,
-                     val_f1_tensor) -> None:
+def append_epoch_csv(
+    csv_path: str, epoch: int, train_loss: float, val_loss: float, val_f1_tensor
+) -> None:
     """
     Appends a single epoch row to the CSV. val_f1_tensor is shape [num_tasks].
     """
@@ -201,7 +208,9 @@ def append_epoch_csv(csv_path: str,
         vals = list(val_f1_tensor)
     macro = float(sum(vals) / len(vals))
 
-    row = [int(epoch), float(train_loss), float(val_loss), float(macro)] + [float(v) for v in vals]
+    row = [int(epoch), float(train_loss), float(val_loss), float(macro)] + [
+        float(v) for v in vals
+    ]
 
     with open(csv_path, "a", newline="") as f:
         csv.writer(f).writerow(row)
@@ -214,6 +223,10 @@ def write_fed_split_sizes(writer, split_type: str, client_list):
             num_nodes = int(data.num_nodes)
         else:
             num_nodes = data.x.size(0)
-        # number of edges 
-        num_edges = data.edge_index.size(1) if getattr(data, "edge_index", None) is not None else 0
+        # number of edges
+        num_edges = (
+            data.edge_index.size(1)
+            if getattr(data, "edge_index", None) is not None
+            else 0
+        )
         writer.writerow([split_type, cid, num_nodes, num_edges])
