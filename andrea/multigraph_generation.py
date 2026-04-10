@@ -24,11 +24,11 @@ from utils.witness_funcs import (
 )
 
 BASE_SEED = 0
-DATA_ROOT = "./andrea/test_data"
-GRAPH_PARAM_CSV = "./andrea/test_generation_parameters.csv"
+DATA_ROOT = "./andrea/cluster_data"
+GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
 
-N_POOL = [2000, 4000]
-D_POOL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+N_POOL = [3800, 3900, 4000, 4100, 4200]
+D_POOL = [4]
 R_POOL = [
     1.0,
     1.5,
@@ -45,15 +45,10 @@ R_POOL = [
     7.0,
     7.5,
     8.0,
-    8.5,
-    9,
-    9.5,
-    10,
-    10.5,
-    11,
-    11.5,
+    9.0,
+    10.0,
 ]
-GEN = ["chordal", "watts"]
+GEN = ["chordal"]
 
 # BASE_SEED = 0
 # DATA_ROOT = "./andrea/big_graph_data"
@@ -305,6 +300,89 @@ def add_cross_split_summary(row: dict, tasks=TASKS) -> dict:
     return row
 
 
+import os
+
+
+def graph_outputs_exist(out_dir_pt: str) -> bool:
+    required_files = [
+        os.path.join(out_dir_pt, "motif_counts.csv"),
+        os.path.join(out_dir_pt, "label_support.csv"),
+        *[os.path.join(out_dir_pt, f"{split}.pt") for split in SPLITS],
+    ]
+    return all(
+        os.path.isfile(path) and os.path.getsize(path) > 0 for path in required_files
+    )
+
+
+def load_split_task_summary_from_csv(path: str, tasks=TASKS) -> dict:
+    df = pd.read_csv(path)
+
+    out = {}
+    for split_name in SPLITS:
+        sub = df[df["split"] == split_name].set_index("task")
+
+        split_dict = {}
+        for task_name in tasks:
+            motif_count = int(sub.loc[task_name, "motif_count"])
+            pos_nodes = int(sub.loc[task_name, "pos_nodes"])
+            pos_rate = float(sub.loc[task_name, "pos_rate"])
+
+            split_dict[f"{task_name}_motif_count"] = motif_count
+            split_dict[f"{task_name}_pos_nodes"] = pos_nodes
+            split_dict[f"{task_name}_pos_rate"] = pos_rate
+            split_dict[f"{task_name}_all_zero"] = int(pos_nodes == 0)
+
+        out[split_name] = split_dict
+
+    return out
+
+
+def load_split_basic_from_pt(out_dir_pt: str) -> dict:
+    out = {}
+    for split_name in SPLITS:
+        g = torch.load(os.path.join(out_dir_pt, f"{split_name}.pt"), weights_only=False)
+        out[split_name] = graph_basic_stats(g)
+    return out
+
+
+def build_registry_row(
+    graph_id: int,
+    n: int,
+    d: int,
+    r: float,
+    generator: str,
+    did: str,
+    out_dir_pt: str,
+    split_basic: dict,
+    split_task_summary: dict,
+) -> dict:
+    split_seeds = {
+        "train": derive_seed(BASE_SEED, f"train_g{graph_id}_{n}_{d}_{r}_{generator}"),
+        "val": derive_seed(BASE_SEED, f"val_g{graph_id}_{n}_{d}_{r}_{generator}"),
+        "test": derive_seed(BASE_SEED, f"test_g{graph_id}_{n}_{d}_{r}_{generator}"),
+    }
+
+    row = {
+        "graph_id": graph_id,
+        "dataset_id": did,
+        "data_dir": out_dir_pt,
+        "n": int(n),
+        "d": int(d),
+        "r": float(r),
+        "type": generator,
+        "seed_train": split_seeds["train"],
+        "seed_val": split_seeds["val"],
+        "seed_test": split_seeds["test"],
+    }
+
+    for split_name in SPLITS:
+        row.update(prefix_keys(split_basic[split_name], f"{split_name}_"))
+        row.update(prefix_keys(split_task_summary[split_name], f"{split_name}_"))
+
+    row = add_cross_split_summary(row, TASKS)
+    return row
+
+
 def main():
     set_seed(BASE_SEED)
     rng = np.random.default_rng(BASE_SEED)
@@ -329,7 +407,29 @@ def main():
         did = dataset_id(n, d, r, generator)
         out_dir_pt = os.path.join(DATA_ROOT, did)
 
-        # unique split seeds per graph_id
+        if graph_outputs_exist(out_dir_pt):
+            print(f"Using existing data for {did}")
+
+            split_basic = load_split_basic_from_pt(out_dir_pt)
+            split_task_summary = load_split_task_summary_from_csv(
+                os.path.join(out_dir_pt, "label_support.csv"),
+                TASKS,
+            )
+
+            row = build_registry_row(
+                graph_id=graph_id,
+                n=n,
+                d=d,
+                r=r,
+                generator=generator,
+                did=did,
+                out_dir_pt=out_dir_pt,
+                split_basic=split_basic,
+                split_task_summary=split_task_summary,
+            )
+            rows.append(row)
+            continue
+
         split_seeds = {
             "train": derive_seed(
                 BASE_SEED, f"train_g{graph_id}_{n}_{d}_{r}_{generator}"
@@ -343,9 +443,7 @@ def main():
         split_basic = {}
         split_task_summary = {}
 
-        # generate train/val/test
         for split_name in SPLITS:
-
             g = (
                 make_sim(n, d, r, generator, split_seeds[split_name])
                 .generate_pytorch_graph()
@@ -353,44 +451,40 @@ def main():
             )
 
             g, motifs = set_y_and_get_motifs(g, TASK_FUNCS)
-
             split_graphs[split_name] = g
             split_motifs[split_name] = motifs
             split_basic[split_name] = graph_basic_stats(g)
             split_task_summary[split_name] = split_task_stats(g, motifs, TASKS)
 
         os.makedirs(out_dir_pt, exist_ok=True)
+
         for split_name in SPLITS:
             torch.save(
                 split_graphs[split_name], os.path.join(out_dir_pt, f"{split_name}.pt")
             )
 
         write_motif_counts_csv(
-            os.path.join(out_dir_pt, "motif_counts.csv"), split_motifs, TASKS
+            os.path.join(out_dir_pt, "motif_counts.csv"),
+            split_motifs,
+            TASKS,
         )
         write_label_support_csv(
-            os.path.join(out_dir_pt, "label_support.csv"), split_task_summary, TASKS
+            os.path.join(out_dir_pt, "label_support.csv"),
+            split_task_summary,
+            TASKS,
         )
 
-        # registry row
-        row = {
-            "graph_id": graph_id,
-            "dataset_id": did,
-            "data_dir": out_dir_pt,
-            "n": int(n),
-            "d": int(d),
-            "r": float(r),
-            "type": generator,
-            "seed_train": split_seeds["train"],
-            "seed_val": split_seeds["val"],
-            "seed_test": split_seeds["test"],
-        }
-
-        for split_name in SPLITS:
-            row.update(prefix_keys(split_basic[split_name], f"{split_name}_"))
-            row.update(prefix_keys(split_task_summary[split_name], f"{split_name}_"))
-
-        row = add_cross_split_summary(row, TASKS)
+        row = build_registry_row(
+            graph_id=graph_id,
+            n=n,
+            d=d,
+            r=r,
+            generator=generator,
+            did=did,
+            out_dir_pt=out_dir_pt,
+            split_basic=split_basic,
+            split_task_summary=split_task_summary,
+        )
         rows.append(row)
 
         print(f"[{graph_id:04d}] DATA GENERATED -> {out_dir_pt}")
@@ -398,7 +492,7 @@ def main():
     df = pd.DataFrame(rows).sort_values(["graph_id"]).reset_index(drop=True)
     os.makedirs(os.path.dirname(GRAPH_PARAM_CSV), exist_ok=True)
     df.to_csv(GRAPH_PARAM_CSV, index=False)
-    print(f"DATA PARAMETERS STORED -> {GRAPH_PARAM_CSV}")
+    print(f"{NUM_GRAPHS} DATA PARAMETERS STORED -> {GRAPH_PARAM_CSV}")
 
 
 if __name__ == "__main__":

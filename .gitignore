@@ -3,26 +3,6 @@ __pycache__/
 gcn_utils.py
 simulator.py
 andrea/test_data/
+andrea/cluster_data/
 /thesis/
-
-# ignore checkpoints folder as created by the server
-/checkpoints
-
-# ignore checkpoints 
-checkpoints/
-
-# ignore server logs
-logs/
-
-# ignore unused data files
-data/*
-
-# re-add directories under data/
-!data/fed_partition_aware_splits/
-!data/fed_partition_aware_splits_without_cross_edges/
-!data/fed_partition_aware_splits_with_cross_edges/
-!data/seeds/
-!data/train.pt
-!data/test.pt
-!data/val.pt
-!data/y_sums.csv
+andrea/heterogeneity/heterogeneity_all_pairs.csv
