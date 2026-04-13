@@ -44,7 +44,7 @@ RUNS_ROOT = "andrea/runs"
 # Training setup
 # -----------------------------------------------------------------------------
 ROUNDS = 80
-LOCAL_EPOCHS = 10
+LOCAL_EPOCHS = 1
 CLIENT_FRACTION = 1.0
 SELECTION_METRIC = "loss"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -134,7 +134,8 @@ def main():
                 f"Starting with {len(subset_clients)}-client fedavg training",
                 row["subset_clients"],
             )
-
+            print(meta)
+            print(ROUNDS, LOCAL_EPOCHS)
             fed_paths = run_fedavg(
                 subset_clients,
                 cfg,

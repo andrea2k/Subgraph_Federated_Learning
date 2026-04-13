@@ -120,20 +120,20 @@ def main():
 
     for cfg, meta in sweep:
         seed = int(meta["seed"])
-
         for _, row in chosen_df.iterrows():
 
             subset_id = parse_subset_clients(row["subset_clients"])
             run_start = time.perf_counter()
 
-            subset_clients = [id_to_client[graph_id] for graph_id in subset_id][0:2]
+            subset_clients = [id_to_client[graph_id] for graph_id in subset_id]
 
             print()
             print(
                 f"Starting with {len(subset_clients)}-client fedprox training",
                 row["subset_clients"],
             )
-
+            print(meta)
+            print(ROUNDS, LOCAL_EPOCHS, FEDPROX_MU)
             fed_paths = run_fedprox(
                 subset_clients,
                 cfg,

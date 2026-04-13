@@ -1,6 +1,5 @@
 #!/bin/sh
 #SBATCH --job-name=local
-#SBATCH --exclude=gpu05
 #SBATCH --account=ewi-st-dis
 #SBATCH --partition=general
 #SBATCH --qos=short
@@ -8,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
-#SBATCH --mem=4G
+#SBATCH --mem=3G
 #SBATCH --output=/home/nfs/ali7/Subgraph_Federated_Learning/logs/slurm/%j.out
 #SBATCH --error=/home/nfs/ali7/Subgraph_Federated_Learning/logs/slurm/%j.err
 

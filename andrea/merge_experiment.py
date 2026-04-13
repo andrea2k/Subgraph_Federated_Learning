@@ -11,6 +11,7 @@ from andrea.helper_funcs.fl_run_helper import upsert_experiment_rows
 SOURCE_DIRS = [
     Path("./andrea/local_clustering_experiment"),
     Path("./andrea/fedavg_clustering_experiment"),
+    Path("./andrea/fedprox_clustering_experiment"),
 ]
 
 MERGED_LOG_CSV = Path("./andrea/experiment_log.csv")

@@ -134,6 +134,8 @@ def main():
                 f"Starting with {len(id_to_client)} local training",
                 row["subset_clients"],
             )
+            print(meta)
+            print(ROUNDS, LOCAL_EPOCHS)
             for graph_id in subset_id:
                 client = id_to_client[graph_id]
                 family = graph_to_family[str(graph_id)]
