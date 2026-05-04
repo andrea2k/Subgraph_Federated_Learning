@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from contextlib import contextmanager
 
+
 def set_seed(
     seed: int,
     *,
@@ -17,7 +18,7 @@ def set_seed(
     Set seeds for Python, NumPy, and PyTorch.
     """
     if set_python_hashseed:
-        os.environ["PYTHONHASHSEED"] = str(seed) 
+        os.environ["PYTHONHASHSEED"] = str(seed)
 
     random.seed(seed)
     np.random.seed(seed)

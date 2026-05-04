@@ -1,7 +1,6 @@
 import os
 import json
-from typing import List, Optional
-
+from typing import List, Optional, Sequence, Dict
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -61,18 +60,9 @@ def profile_slope(v: np.ndarray) -> float:
 
 
 def rough_shape_family(v: np.ndarray) -> str:
-    """
-    Hand-defined family assignment from raw task profile p_i.
 
-    This is intentionally simple and fixed:
-    - flat_balanced: low slope, low spread
-    - mild/strong increasing: positive slope with moderate/high spread
-    - mild/strong decreasing: negative slope with moderate/high spread
-    - mixed: everything else
-    """
     v = np.asarray(v, dtype=np.float64)
     slope = profile_slope(v)
-    spread = float(v.max() - v.min())
 
     if slope <= SLOPE_THRESH and slope >= -SLOPE_THRESH:
         return "flat_balanced"
@@ -90,6 +80,84 @@ def rough_shape_family(v: np.ndarray) -> str:
             return "strong_decreasing"
 
     return "error"
+
+
+# -----------------------------------------------------------------------------
+# Heterogeneity helpers
+# -----------------------------------------------------------------------------
+def safe_prob(x: np.ndarray, eps: float = 1e-20) -> np.ndarray:
+    x = np.asarray(x, dtype=np.float64)
+    x = x + eps
+    s = x.sum()
+    if s <= 0:
+        return np.ones_like(x) / max(len(x), 1)
+    return x / s
+
+
+def js_divergence(p: Sequence[float], q: Sequence[float], eps: float = 1e-12) -> float:
+    p = safe_prob(np.asarray(p, dtype=np.float64), eps)
+    q = safe_prob(np.asarray(q, dtype=np.float64), eps)
+    m = 0.5 * (p + q)
+
+    def kl(a: np.ndarray, b: np.ndarray) -> float:
+        return float(np.sum(a * (np.log(a) - np.log(b))))
+
+    return 0.5 * kl(p, m) + 0.5 * kl(q, m)
+
+
+def compute_selected_subset_heterogeneity_logs(
+    selected_df: pd.DataFrame,
+) -> Dict[str, float]:
+    if len(selected_df) == 0:
+        return {}
+
+    p_cols = [f"p_{task}" for task in TASKS]
+    P = selected_df[p_cols].to_numpy(dtype=np.float64)
+
+    # Pairwise JSD across all selected clients
+    pairwise_jsds = []
+    for i in range(len(P)):
+        for j in range(i + 1, len(P)):
+            pairwise_jsds.append(js_divergence(P[i], P[j]))
+
+    # Mean centroid profile per family, then pairwise JSD between family centroids
+    family_centroids = []
+    for family in FAMILY_ORDER:
+        fam_sub = selected_df[selected_df["shape_family"] == family]
+        if len(fam_sub) == 0:
+            continue
+        centroid = fam_sub[p_cols].to_numpy(dtype=np.float64).mean(axis=0)
+        family_centroids.append(centroid)
+
+    centroid_jsds = []
+    for i in range(len(family_centroids)):
+        for j in range(i + 1, len(family_centroids)):
+            centroid_jsds.append(
+                js_divergence(family_centroids[i], family_centroids[j])
+            )
+
+    logs: Dict[str, float] = {
+        "task_profile_jsd_mean": (
+            float(np.mean(pairwise_jsds)) if len(pairwise_jsds) > 0 else 0.0
+        ),
+        "task_profile_jsd_median": (
+            float(np.median(pairwise_jsds)) if len(pairwise_jsds) > 0 else 0.0
+        ),
+        "task_profile_jsd_max": (
+            float(np.max(pairwise_jsds)) if len(pairwise_jsds) > 0 else 0.0
+        ),
+        "between_family_centroid_jsd_mean": (
+            float(np.mean(centroid_jsds)) if len(centroid_jsds) > 0 else 0.0
+        ),
+    }
+
+    # Raw per-task spread across selected clients
+    for task in TASKS:
+        logs[f"{task}_pos_rate_std_across_clients"] = float(
+            selected_df[f"p_{task}"].std(ddof=0)
+        )
+
+    return logs
 
 
 # -----------------------------------------------------------------------------
@@ -288,6 +356,8 @@ def build_combined_manifest_from_selected(selected_df: pd.DataFrame) -> pd.DataF
         sub["shape_family"].value_counts().reindex(FAMILY_ORDER, fill_value=0).to_dict()
     )
 
+    heterogeneity_logs = compute_selected_subset_heterogeneity_logs(sub)
+
     row = {
         "family": "combined_five_family_benchmark",
         "subset_id": subset_id,
@@ -309,6 +379,7 @@ def build_combined_manifest_from_selected(selected_df: pd.DataFrame) -> pd.DataF
         "mean_p_min": float(sub["p_min"].mean()),
         "mean_p_spread": float(sub["p_spread"].mean()),
         "max_dist_to_family_center": float(sub["dist_to_family_center"].max()),
+        **heterogeneity_logs,
     }
 
     return pd.DataFrame([row])
@@ -338,6 +409,15 @@ def main() -> None:
 
     # 4) Build subset manifest (one row per family) for training pipeline
     combined_manifest_df = build_combined_manifest_from_selected(selected_df)
+    columns = [
+        "task_profile_jsd_mean",
+        "task_profile_jsd_median",
+        "task_profile_jsd_max",
+        "between_family_centroid_jsd_mean",
+    ]
+    print(combined_manifest_df[columns])
+    columns = [f"{task}_pos_rate_std_across_clients" for task in TASKS]
+    print(combined_manifest_df[columns])
     combined_manifest_csv = os.path.join(OUT_DIR, "selected_subset.csv")
     combined_manifest_df.to_csv(combined_manifest_csv, index=False)
 

@@ -21,11 +21,11 @@ from andrea.helper_funcs.load_client_helper import (
     load_clients,
 )
 
-SELECT_SUBSET_PATH = "clustering"
+SELECT_SUBSET_PATH = "clustering_rep"
 SELECT_SUBSET = "selected_subset"
 
 EXPERIMENT_LOG_FOLDER = "local_clustering_experiment"
-DATA_DIR = "clustering/cluster_generation_parameters.csv"
+DATA_DIR = f"{SELECT_SUBSET_PATH}/cluster_generation_parameters.csv"
 
 # SELECT_SUBSET_PATH = "heterogeneity"
 # SELECT_SUBSET = "selected_pairs"
@@ -85,6 +85,24 @@ def main():
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
 
+    cols = [
+        "task_profile_jsd_mean",
+        "subset_id",
+        "subset_size",
+        "gamma",
+    ]
+    print(chosen_df[cols])
+
+    cols = [
+        "family_counts_json",
+    ]
+
+    chosen_df["family_counts"] = chosen_df["family_counts_json"].apply(
+        lambda s: ", ".join(f"{k}: {v}" for k, v in json.loads(s).items())
+    )
+
+    print(chosen_df[cols].to_string(index=False))
+
     ONLY_SEED = os.environ.get("ONLY_SEED")
     if ONLY_SEED is not None:
         SEEDS = [int(ONLY_SEED)]
@@ -135,7 +153,7 @@ def main():
                 row["subset_clients"],
             )
             print(meta)
-            print(ROUNDS, LOCAL_EPOCHS)
+            print("SEED:", seed, "ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
             for graph_id in subset_id:
                 client = id_to_client[graph_id]
                 family = graph_to_family[str(graph_id)]

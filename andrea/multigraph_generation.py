@@ -24,11 +24,19 @@ from utils.witness_funcs import (
 )
 
 BASE_SEED = 0
-DATA_ROOT = "./andrea/cluster_data"
-GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
+
+# DATA_ROOT = "./andrea/cluster_data"
+# GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
+
+DATA_ROOT = "./andrea/cluster_data_benchmarkA"
+GRAPH_PARAM_CSV = "./andrea/clustering_benchmarkA/cluster_generation_parameters.csv"
 
 N_POOL = [3800, 3900, 4000, 4100, 4200]
-D_POOL = [4]
+D_POOL = [
+    3,
+    4,
+    5,
+]
 R_POOL = [
     1.0,
     1.5,
@@ -45,10 +53,17 @@ R_POOL = [
     7.0,
     7.5,
     8.0,
+    8.5,
     9.0,
+    9.5,
     10.0,
+    10.5,
+    11.0,
+    11.5,
 ]
 GEN = ["chordal"]
+
+REPEATS_PER_CELL = 4
 
 # BASE_SEED = 0
 # DATA_ROOT = "./andrea/big_graph_data"
@@ -149,8 +164,8 @@ def make_sim(n: int, d: int, r: float, generator: str, seed) -> GraphSimulator:
 
 
 # returns a dataset_id based on the generator-parameters
-def dataset_id(n: int, d: int, r: float, generator: str) -> str:
-    return f"data_{int(n)}_{int(d)}_{r}_{generator}"
+def dataset_id(n: int, d: int, r: float, generator: str, rep: int) -> str:
+    return f"data_{int(n)}_{int(d)}_{r}_{generator}_rep{rep}"
 
 
 def prefix_keys(d: dict, prefix: str) -> dict:

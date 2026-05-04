@@ -23,11 +23,11 @@ from andrea.helper_funcs.load_client_helper import (
     load_clients,
 )
 
-SELECT_SUBSET_PATH = "clustering"
+SELECT_SUBSET_PATH = "clustering_rep"
 SELECT_SUBSET = "selected_subset"
 
 EXPERIMENT_LOG_FOLDER = "gcflplus_clustering_experiment"
-DATA_DIR = "clustering/cluster_generation_parameters.csv"
+DATA_DIR = f"{SELECT_SUBSET_PATH}/cluster_generation_parameters.csv"
 
 SELECTED_SUBSETS_CSV_PATH = f"./andrea/{SELECT_SUBSET_PATH}/{SELECT_SUBSET}.csv"
 EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv")
@@ -48,14 +48,15 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # -----------------------------------------------------------------------------
 # GCFL+ setup
 # -----------------------------------------------------------------------------
-WARMUP_ROUNDS = 10
-MIN_CLUSTER_SIZE = 4
-MIN_CHILD_SIZE = 4
+WARMUP_ROUNDS = 5
+MIN_CLUSTER_SIZE = 2
+MIN_CHILD_SIZE = 1
 
-GRAD_SEQ_LEN = 10
+GRAD_SEQ_LEN = 5
+# EPS1_QUANTILE = 0.35
+# EPS2_QUANTILE = 0.6
 EPS1_QUANTILE = 0.25
-EPS2_QUANTILE = 0.75
-
+EPS2_QUANTILE = 0.7
 # -----------------------------------------------------------------------------
 # Sweep setup
 # -----------------------------------------------------------------------------
@@ -90,6 +91,24 @@ def main():
 
     id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
+
+    cols = [
+        "task_profile_jsd_mean",
+        "subset_id",
+        "subset_size",
+        "gamma",
+    ]
+    print(chosen_df[cols])
+
+    cols = [
+        "family_counts_json",
+    ]
+
+    chosen_df["family_counts"] = chosen_df["family_counts_json"].apply(
+        lambda s: ", ".join(f"{k}: {v}" for k, v in json.loads(s).items())
+    )
+
+    print(chosen_df[cols].to_string(index=False))
 
     ONLY_SEED = os.environ.get("ONLY_SEED")
     if ONLY_SEED is not None:
@@ -140,13 +159,23 @@ def main():
             )
             print(meta)
             print(
+                "SEED:",
+                seed,
+                "ROUNDS:",
                 ROUNDS,
+                "LOCAL_EPOCHS:",
                 LOCAL_EPOCHS,
+                "WARMUP_ROUNDS",
                 WARMUP_ROUNDS,
+                "MIN_CLUSTER_SIZE",
                 MIN_CLUSTER_SIZE,
+                "MIN_CHILD_SIZE",
                 MIN_CHILD_SIZE,
+                "GRAD_SEQ_LEN",
                 GRAD_SEQ_LEN,
+                "EPS1_QUANTILE",
                 EPS1_QUANTILE,
+                "EPS2_QUANTILE",
                 EPS2_QUANTILE,
             )
 
@@ -187,6 +216,7 @@ def main():
             gcfl_row.update(
                 {
                     "subset_clients": str(row["subset_clients"]),
+                    "gamma": row["gamma"],
                 }
             )
 

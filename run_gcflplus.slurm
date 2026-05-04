@@ -3,16 +3,13 @@
 #SBATCH --account=ewi-st-dis
 #SBATCH --partition=general
 #SBATCH --qos=medium
-#SBATCH --time=06:00:00
+#SBATCH --time=15:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
 #SBATCH --mem=3G
 #SBATCH --output=/home/nfs/ali7/Subgraph_Federated_Learning/logs/slurm/%j.out
 #SBATCH --error=/home/nfs/ali7/Subgraph_Federated_Learning/logs/slurm/%j.err
-
-mkdir -p /home/nfs/ali7/Subgraph_Federated_Learning/logs/slurm
-mkdir -p /home/nfs/ali7/Subgraph_Federated_Learning/andrea
 
 export PROJ=/tudelft.net/staff-umbrella/CSE3000GLTD/ali
 export SIF=$PROJ/pytorch2.2.2-cuda11.8-ubuntu22.04-fraudGT_v2.sif
