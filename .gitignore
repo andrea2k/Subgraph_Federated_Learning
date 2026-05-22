@@ -5,5 +5,7 @@ simulator.py
 andrea/test_data/
 andrea/cluster_data/
 andrea/cluster_data_rep/
+andrea/runs/
+andrea/checkpoints/
 /thesis/
 andrea/heterogeneity/heterogeneity_all_pairs.csv
