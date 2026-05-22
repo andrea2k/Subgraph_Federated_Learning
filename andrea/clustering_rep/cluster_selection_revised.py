@@ -92,23 +92,6 @@ def rate_col(task: str) -> str:
     return f"{SPLIT}_{task}_pos_rate"
 
 
-def dataset_id_from_row(row: pd.Series) -> str:
-    """
-    Recover a readable dataset id.
-
-    Priority:
-    1) explicit dataset_id column from generation csv
-    2) basename of data_dir
-    3) fallback reconstruction
-    """
-    if "dataset_id" in row and pd.notna(row["dataset_id"]):
-        return str(row["dataset_id"])
-    if "data_dir" in row and pd.notna(row["data_dir"]):
-        return os.path.basename(str(row["data_dir"]).rstrip("/"))
-    graph_type = str(row["type"]) if "type" in row else "graph"
-    return f"data_{int(row['n'])}_{int(row['d'])}_{row['r']}_{graph_type}"
-
-
 def gamma_tag(gamma: float) -> str:
     return str(gamma).replace(".", "p")
 
@@ -273,7 +256,6 @@ def build_profile_table(
     - assign each client to the nearest target family centroid
     """
     out = df.copy()
-    out["dataset_id"] = out.apply(dataset_id_from_row, axis=1)
     p_cols: List[str] = []
     for task in TASKS:
         pcol = f"p_{task}"
@@ -854,6 +836,7 @@ def main() -> None:
         all_manifest_df.to_csv(
             os.path.join(OUT_DIR, "selected_subset.csv"), index=False
         )
+    print("Done!")
 
 
 if __name__ == "__main__":

@@ -13,9 +13,10 @@ SOURCE_DIRS = [
     Path("./andrea/fedavg_clustering_experiment"),
     Path("./andrea/fedprox_clustering_experiment"),
     Path("./andrea/gcflplus_clustering_experiment"),
+    Path("./andrea/apple_clustering_experiment"),
 ]
 
-MERGED_LOG_CSV = Path("./andrea/experiment_log_rep.csv")
+MERGED_LOG_CSV = Path("./andrea/experiment_log_specialized_0.05_exp4.csv")
 
 
 def find_experiment_logs(source_dirs: list[Path]) -> list[Path]:

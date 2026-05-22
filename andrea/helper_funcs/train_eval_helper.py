@@ -89,8 +89,12 @@ def augment_batch_x_with_ego(batch, use_ego_ids: bool, ego_dim: int):
 
 def get_label_stats_from_graph(graph):
     y = graph["n"].y.float()
-    pos_cnt = y.sum(dim=0)
-    total_cnt = torch.tensor(float(y.size(0)), device=y.device)
+    if "label_mask" in graph["n"]:
+        mask = graph["n"].label_mask.float()
+    else:
+        mask = torch.ones_like(y)
+    pos_cnt = (y * mask).sum(dim=0)
+    total_cnt = mask.sum(dim=0)
     neg_cnt = total_cnt - pos_cnt
     pos_weight = neg_cnt / torch.clamp(pos_cnt, min=1.0)
     return pos_cnt, neg_cnt, pos_weight
@@ -100,7 +104,7 @@ def build_criterion_for_client(graph, cfg, device):
     mcw = cfg.get("minority_class_weight", None)
 
     if mcw is None:
-        return nn.BCEWithLogitsLoss()
+        return nn.BCEWithLogitsLoss(reduction="none")
 
     if mcw == "auto":
         pos_cnt, neg_cnt, pos_weight = get_label_stats_from_graph(graph)
@@ -109,11 +113,33 @@ def build_criterion_for_client(graph, cfg, device):
         print("  pos_cnt   :", pos_cnt)
         print("  neg_cnt   :", neg_cnt)
         print("  pos_weight:", pos_weight)
-        return nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        return nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
 
     return nn.BCEWithLogitsLoss(
-        pos_weight=torch.full((graph["n"].y.size(1),), float(mcw), device=device)
+        pos_weight=torch.full((graph["n"].y.size(1),), float(mcw), device=device),
+        reduction="none",
     )
+
+
+def get_seed_label_mask(batch, B: int):
+    if "label_mask" not in batch["n"]:
+        return None
+    return batch["n"].label_mask[:B].float()
+
+
+def masked_loss_from_logits(criterion, logits, labels, label_mask=None):
+    raw_loss = criterion(logits, labels.float())
+
+    if raw_loss.ndim == 0:
+        return raw_loss
+
+    if label_mask is None:
+        return raw_loss.mean()
+
+    label_mask = label_mask.to(raw_loss.device).float()
+    denom = label_mask.sum().clamp_min(1.0)
+
+    return (raw_loss * label_mask).sum() / denom
 
 
 def compute_minority_f1_score_per_task(logits, labels, threshold=0.5):
@@ -203,7 +229,15 @@ def train_epoch_neighbor(
         )
 
         out_seed = out[:B]
-        loss = criterion(out_seed, y_seed.float())
+
+        label_mask_seed = get_seed_label_mask(batch, B)
+        loss = masked_loss_from_logits(
+            criterion,
+            out_seed,
+            y_seed.float(),
+            label_mask_seed,
+        )
+
         loss.backward()
         optimizer.step()
 
@@ -249,7 +283,14 @@ def train_epoch_neighbor_fedprox(
         )
 
         out_seed = out[:B]
-        base_loss = criterion(out_seed, y_seed.float())
+
+        label_mask_seed = get_seed_label_mask(batch, B)
+        base_loss = masked_loss_from_logits(
+            criterion,
+            out_seed,
+            y_seed.float(),
+            label_mask_seed,
+        )
 
         if aggregated:
             prox_reg = torch.zeros((), device=device)
@@ -314,7 +355,13 @@ def evaluate_loader(
         out_used = out[:B]
         y_used = y_seed
 
-        loss = criterion(out_used, y_used.float())
+        loss = masked_loss_from_logits(
+            criterion,
+            out_used,
+            y_used.float(),
+            label_mask=None,
+        )
+
         total_loss += loss.item() * B
         total_count += B
 

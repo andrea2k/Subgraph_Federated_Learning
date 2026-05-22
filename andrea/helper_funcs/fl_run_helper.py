@@ -49,6 +49,11 @@ def ensure_dir(path: str | Path) -> Path:
     return path
 
 
+def checkpoint_root_from_runs_root(runs_root: str | Path) -> Path:
+    runs_root = Path(runs_root)
+    return ensure_dir(runs_root.parent / "checkpoints")
+
+
 def _model_tag_from_cfg(cfg: Dict) -> str:
     return build_model_tag(
         cfg.get("minority_class_weight", None),
@@ -84,7 +89,7 @@ def create_local_run_paths(
     )
     return RunPaths(
         csv_path=root / f"{stem}.csv",
-        ckpt_path=root / f"{stem}.pt",
+        ckpt_path=checkpoint_root_from_runs_root(local_root) / f"{stem}.pt",
     )
 
 
@@ -107,7 +112,7 @@ def create_fedavg_run_paths(
     )
     return RunPaths(
         csv_path=root / f"{stem}.csv",
-        ckpt_path=root / f"{stem}.pt",
+        ckpt_path=checkpoint_root_from_runs_root(fedavg_root) / f"{stem}.pt",
     )
 
 
@@ -132,7 +137,7 @@ def create_fedprox_run_paths(
     )
     return RunPaths(
         csv_path=root / f"{stem}.csv",
-        ckpt_path=root / f"{stem}.pt",
+        ckpt_path=checkpoint_root_from_runs_root(fedprox_root) / f"{stem}.pt",
     )
 
 
@@ -151,7 +156,7 @@ def upsert_experiment_rows(log_csv: str | Path, rows: List[Dict]) -> int:
         log_csv.parent.mkdir(parents=True, exist_ok=True)
         full = new_df
 
-    subset = ["out_csv", "ckpt_path"]
+    subset = ["out_csv"]
     full = full.drop_duplicates(subset=subset, keep="last")
     full.to_csv(log_csv, index=False)
 
@@ -522,7 +527,6 @@ def run_local_experiment(
 
     train_loader, val_loader, test_loader = build_client_loaders(client, cfg, device)
     criterion = build_criterion_for_client(train_graph, cfg, device)
-
     model = make_model(
         cfg,
         ctx["x_dim"],
@@ -693,7 +697,7 @@ def run_local(
         seed,
     )
 
-    if run_paths.csv_path.exists() and run_paths.ckpt_path.exists():
+    if run_paths.csv_path.exists():
         return run_paths
 
     run_local_experiment(
@@ -1040,7 +1044,7 @@ def run_fedavg(
         seed,
     )
 
-    if run_paths.csv_path.exists() and run_paths.ckpt_path.exists():
+    if run_paths.csv_path.exists():
         return run_paths
 
     run_fedavg_experiment(
@@ -1388,7 +1392,7 @@ def run_fedprox(
         seed,
     )
 
-    if run_paths.csv_path.exists() and run_paths.ckpt_path.exists():
+    if run_paths.csv_path.exists():
         return run_paths
 
     run_fedprox_experiment(

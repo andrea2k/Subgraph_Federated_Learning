@@ -21,9 +21,15 @@ from andrea.helper_funcs.load_client_helper import (
     ProgressPrinter,
     parse_subset_clients,
     load_clients,
+    audit_loaded_q_label_masks,
 )
 
-SELECT_SUBSET_PATH = "clustering_rep"
+
+SELECT_SUBSET_PATH = "clustering_q_label_heterogeneity"
+# SELECT_SUBSET_PATH = "clustering_masked"
+# SELECT_SUBSET_PATH = "clustering_rep"
+# SELECT_SUBSET_PATH = "clustering"
+
 SELECT_SUBSET = "selected_subset"
 
 EXPERIMENT_LOG_FOLDER = "gcflplus_clustering_experiment"
@@ -86,10 +92,61 @@ def load_cfg(config_path: str, key: str) -> Dict:
     return cfg
 
 
+def add_subset_metadata(log_row: Dict, row: pd.Series) -> None:
+    """
+    Add old-compatible and task-specialized metadata to an experiment-log row.
+    """
+    log_row["subset_clients"] = str(row["subset_clients"])
+
+    log_row["gamma"] = (
+        row["gamma"]
+        if "gamma" in row.index and pd.notna(row["gamma"])
+        else row.get("q_value", row.get("mask_fraction", None))
+    )
+
+    extra_cols = [
+        # New q-controlled heterogeneity fields.
+        "q_value",
+        "q_iid",
+        "q_other_share",
+        "q_assigned_share",
+        "q_allocation_mode",
+        "global_visible_positive_support_fraction_ideal",
+        # Backward-compatible old names.
+        "mask_fraction",
+        "specialization_fraction",
+        "designed_heterogeneity",
+        "global_visible_support_fraction_ideal",
+        # Diagnostics.
+        "task_profile_jsd_mean",
+        "task_profile_jsd_median",
+        "task_profile_jsd_max",
+        "between_family_centroid_jsd_mean",
+        # Benchmark metadata.
+        "controlled_benchmark",
+        "mask_mode",
+        "family",
+        "subset_id",
+    ]
+
+    for col in extra_cols:
+        if col in row.index:
+            log_row[f"manifest_{col}" if col == "subset_id" else col] = row.get(
+                col, None
+            )
+
+
 def main():
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
     id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
+
+    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True)
+
+    if os.environ.get("MASK_AUDIT_ONLY") == "1":
+        print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
+        return
+
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
 
     cols = [
@@ -97,13 +154,15 @@ def main():
         "subset_id",
         "subset_size",
         "gamma",
+        "mask_fraction",
     ]
+    cols = [col for col in cols if col in chosen_df.columns]
     print(chosen_df[cols])
 
     cols = [
         "family_counts_json",
     ]
-
+    cols = [col for col in cols if col in chosen_df.columns]
     chosen_df["family_counts"] = chosen_df["family_counts_json"].apply(
         lambda s: ", ".join(f"{k}: {v}" for k, v in json.loads(s).items())
     )
@@ -179,6 +238,16 @@ def main():
                 EPS2_QUANTILE,
             )
 
+            for client in subset_clients:
+                print(
+                    "client:",
+                    client.graph_id,
+                    "dataset:",
+                    client.dataset_id,
+                    "mask_meta:",
+                    client.mask_meta,
+                )
+
             gcfl_paths = run_gcfl(
                 subset_clients,
                 cfg,
@@ -213,12 +282,8 @@ def main():
                 eps2_quantile=EPS2_QUANTILE,
                 selection_metric=SELECTION_METRIC,
             )
-            gcfl_row.update(
-                {
-                    "subset_clients": str(row["subset_clients"]),
-                    "gamma": row["gamma"],
-                }
-            )
+
+            add_subset_metadata(gcfl_row, row)
 
             upsert_experiment_rows(EXPERIMENT_LOG_CSV, [gcfl_row])
 

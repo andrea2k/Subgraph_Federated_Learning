@@ -72,7 +72,7 @@ def create_gcfl_run_paths(
     seed: int,
 ) -> GcflRunPaths:
     root = ensure_dir(gcfl_root)
-
+    ckpt_root = ensure_dir(Path(gcfl_root).parent / "checkpoints")
     stem = (
         f"gcflplus"
         f"{subset_id}"
@@ -89,7 +89,7 @@ def create_gcfl_run_paths(
     )
     return GcflRunPaths(
         csv_path=root / f"{stem}.csv",
-        ckpt_path=root / f"{stem}.pt",
+        ckpt_path=ckpt_root / f"{stem}.pt",
         clusters_csv_path=root / f"{stem}_clusters.csv",
     )
 
@@ -1573,11 +1573,7 @@ def run_gcfl(
         seed,
     )
 
-    if (
-        run_paths.csv_path.exists()
-        and run_paths.ckpt_path.exists()
-        and run_paths.clusters_csv_path.exists()
-    ):
+    if run_paths.csv_path.exists() and run_paths.clusters_csv_path.exists():
         return run_paths
 
     run_gcfl_experiment(
