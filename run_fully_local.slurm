@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --job-name=fedprox
+#SBATCH --job-name=fully_local
 #SBATCH --account=ewi-st-dis
 #SBATCH --partition=general
 #SBATCH --qos=medium
@@ -26,4 +26,4 @@ echo "Running on $(hostname)"
 nvidia-smi
 ls -l "$SIF"
 
-srun apptainer exec --nv "$SIF" python -u -m andrea.run_multihead.run_fedprox
+srun apptainer exec --nv "$SIF" python -u -m andrea.run_multihead.run_fully_local

@@ -26,4 +26,4 @@ echo "Running on $(hostname)"
 nvidia-smi
 ls -l "$SIF"
 
-srun apptainer exec --nv "$SIF" python -u -m andrea.run_fedavg
+srun apptainer exec --nv "$SIF" python -u -m andrea.run_multihead.run_fedavg

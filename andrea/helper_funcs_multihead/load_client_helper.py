@@ -449,6 +449,189 @@ def collect_needed_client_ids(chosen_df: pd.DataFrame) -> List[int]:
     return sorted(needed_client_ids)
 
 
+def _json_list(value) -> list:
+    if value is None or pd.isna(value):
+        return []
+    if isinstance(value, list):
+        return value
+    return json.loads(str(value))
+
+
+def _q_tag_from_row(row: pd.Series) -> str:
+    q_value = row.get("q_value", row.get("mask_fraction", None))
+    if q_value is None or pd.isna(q_value):
+        return "unknown"
+    return str(int(round(float(q_value) * 100)))
+
+
+def _base_ids_from_selected_subset_row(row: pd.Series) -> List[int]:
+    """
+    Extract the original unmasked base graph ID from a selected_subset row.
+    Preferred source: base_graph_ids_json.
+    Fallback source: membership_json.
+    """
+    if "base_graph_ids_json" in row.index and pd.notna(row["base_graph_ids_json"]):
+        base_ids = [int(x) for x in _json_list(row["base_graph_ids_json"])]
+        if base_ids:
+            return sorted(set(base_ids))
+
+    if "membership_json" in row.index and pd.notna(row["membership_json"]):
+        membership = json.loads(str(row["membership_json"]))
+        base_ids = sorted({int(x["base_graph_id"]) for x in membership})
+        if base_ids:
+            return base_ids
+
+    raise ValueError(
+        "Could not find base graph IDs. Expected base_graph_ids_json or membership_json."
+    )
+
+
+def load_local_centralized_client_from_subset_row(
+    subset_row: pd.Series,
+    csv_path: str,
+    *,
+    verbose: bool = True,
+) -> ClientData:
+    """
+    Load the original unmasked base graph for one selected subset row.
+
+    This is the local-centralized upper bound:
+      - no communication,
+      - one model,
+      - original base graph,
+      - full train labels visible,
+      - no q-task label masking.
+
+    The selected_subset row is q-specific, so we create a q-specific pseudo
+    dataset_id to prevent output CSV collisions between q=0.2, q=0.5, q=0.8.
+    """
+    df_data = pd.read_csv(csv_path).copy()
+
+    base_ids = _base_ids_from_selected_subset_row(subset_row)
+    if len(base_ids) != 1:
+        raise ValueError(
+            f"Expected exactly one base graph for local-centralized baseline, got {base_ids}"
+        )
+
+    base_graph_id = int(base_ids[0])
+
+    candidates = pd.DataFrame()
+
+    if "base_graph_id" in df_data.columns:
+        base_col = pd.to_numeric(df_data["base_graph_id"], errors="coerce")
+        candidates = df_data[base_col.eq(base_graph_id)].copy()
+
+    if candidates.empty and "graph_id" in df_data.columns:
+        graph_col = pd.to_numeric(df_data["graph_id"], errors="coerce")
+        candidates = df_data[graph_col.eq(base_graph_id)].copy()
+
+    if candidates.empty:
+        raise ValueError(
+            f"Could not find base graph {base_graph_id} in registry {csv_path}."
+        )
+
+    source_row = candidates.iloc[0].copy()
+
+    data_dir = str(source_row["data_dir"])
+
+    if "base_dataset_id" in source_row.index and pd.notna(
+        source_row["base_dataset_id"]
+    ):
+        base_dataset_id = str(source_row["base_dataset_id"])
+    else:
+        base_dataset_id = str(source_row["dataset_id"])
+
+    q_tag = _q_tag_from_row(subset_row)
+
+    pseudo_graph_id = f"base{base_graph_id}_q{q_tag}"
+    pseudo_dataset_id = f"{base_dataset_id}_local_centralized_q{q_tag}"
+
+    if verbose:
+        print("\n" + "=" * 100)
+        print("LOAD LOCAL-CENTRALIZED BASE GRAPH")
+        print("=" * 100)
+        print("base_graph_id:", base_graph_id)
+        print("base_dataset_id:", base_dataset_id)
+        print("pseudo_graph_id:", pseudo_graph_id)
+        print("pseudo_dataset_id:", pseudo_dataset_id)
+        print("data_dir:", data_dir)
+        print("q_tag:", q_tag)
+        print("IMPORTANT: mask_meta=None, so train labels are fully visible.")
+        print("=" * 100)
+
+    train_g, val_g, test_g = load_client_from_dir(data_dir)
+
+    # Critical line: no mask. This keeps the base graph fully supervised.
+    train_g, val_g, test_g = apply_mask_to_splits(
+        train_g,
+        val_g,
+        test_g,
+        mask_meta=None,
+    )
+
+    train_h = make_bidirected_hetero(train_g)
+    val_h = make_bidirected_hetero(val_g)
+    test_h = make_bidirected_hetero(test_g)
+
+    train_h["n"].label_mask = train_g.label_mask.float()
+    val_h["n"].label_mask = val_g.label_mask.float()
+    test_h["n"].label_mask = test_g.label_mask.float()
+
+    return ClientData(
+        graph_id=str(pseudo_graph_id),
+        data_dir=data_dir,
+        dataset_id=pseudo_dataset_id,
+        train_g=train_g,
+        val_g=val_g,
+        test_g=test_g,
+        train_h=train_h,
+        val_h=val_h,
+        test_h=test_h,
+        mask_meta=None,
+    )
+
+
+def audit_local_centralized_client(client: ClientData, *, strict: bool = True) -> None:
+    """
+    Sanity check for the local-centralized upper bound.
+    All train/val/test label masks must be full ones.
+    """
+    print("\n" + "=" * 100)
+    print("AUDIT LOCAL-CENTRALIZED CLIENT")
+    print("=" * 100)
+    print("graph_id:", client.graph_id)
+    print("dataset_id:", client.dataset_id)
+    print("data_dir:", client.data_dir)
+    print("mask_meta:", client.mask_meta)
+
+    _assert_or_warn(
+        client.mask_meta is None,
+        "local-centralized client should have mask_meta=None",
+        strict=strict,
+    )
+    _assert_or_warn(
+        _mask_is_all_ones(client.train_g),
+        "local-centralized train label_mask is not all ones",
+        strict=strict,
+    )
+    _assert_or_warn(
+        _mask_is_all_ones(client.val_g),
+        "local-centralized val label_mask is not all ones",
+        strict=strict,
+    )
+    _assert_or_warn(
+        _mask_is_all_ones(client.test_g),
+        "local-centralized test label_mask is not all ones",
+        strict=strict,
+    )
+
+    counts = _mask_debug_counts(client.train_g)
+    print("train visible_pos:", dict(zip(TASKS, counts["visible_pos"])))
+    print("train hidden_pos :", dict(zip(TASKS, counts["hidden_pos"])))
+    print("train hidden_neg :", dict(zip(TASKS, counts["hidden_neg"])))
+    print("PASS local-centralized audit")
+
+
 def _assert_or_warn(condition: bool, message: str, *, strict: bool) -> None:
     if condition:
         return
@@ -747,189 +930,6 @@ def audit_loaded_q_label_masks(
         print("\n" + "=" * 100)
         print(f"ALL LOADED Q LABEL MASK AUDITS PASSED | audited_groups={audited}")
         print("=" * 100)
-
-
-def _json_list(value) -> list:
-    if value is None or pd.isna(value):
-        return []
-    if isinstance(value, list):
-        return value
-    return json.loads(str(value))
-
-
-def _q_tag_from_row(row: pd.Series) -> str:
-    q_value = row.get("q_value", row.get("mask_fraction", None))
-    if q_value is None or pd.isna(q_value):
-        return "unknown"
-    return str(int(round(float(q_value) * 100)))
-
-
-def _base_ids_from_selected_subset_row(row: pd.Series) -> List[int]:
-    """
-    Extract the original unmasked base graph ID from a selected_subset row.
-    Preferred source: base_graph_ids_json.
-    Fallback source: membership_json.
-    """
-    if "base_graph_ids_json" in row.index and pd.notna(row["base_graph_ids_json"]):
-        base_ids = [int(x) for x in _json_list(row["base_graph_ids_json"])]
-        if base_ids:
-            return sorted(set(base_ids))
-
-    if "membership_json" in row.index and pd.notna(row["membership_json"]):
-        membership = json.loads(str(row["membership_json"]))
-        base_ids = sorted({int(x["base_graph_id"]) for x in membership})
-        if base_ids:
-            return base_ids
-
-    raise ValueError(
-        "Could not find base graph IDs. Expected base_graph_ids_json or membership_json."
-    )
-
-
-def load_local_centralized_client_from_subset_row(
-    subset_row: pd.Series,
-    csv_path: str,
-    *,
-    verbose: bool = True,
-) -> ClientData:
-    """
-    Load the original unmasked base graph for one selected subset row.
-
-    This is the local-centralized upper bound:
-      - no communication,
-      - one model,
-      - original base graph,
-      - full train labels visible,
-      - no q-task label masking.
-
-    The selected_subset row is q-specific, so we create a q-specific pseudo
-    dataset_id to prevent output CSV collisions between q=0.2, q=0.5, q=0.8.
-    """
-    df_data = pd.read_csv(csv_path).copy()
-
-    base_ids = _base_ids_from_selected_subset_row(subset_row)
-    if len(base_ids) != 1:
-        raise ValueError(
-            f"Expected exactly one base graph for local-centralized baseline, got {base_ids}"
-        )
-
-    base_graph_id = int(base_ids[0])
-
-    candidates = pd.DataFrame()
-
-    if "base_graph_id" in df_data.columns:
-        base_col = pd.to_numeric(df_data["base_graph_id"], errors="coerce")
-        candidates = df_data[base_col.eq(base_graph_id)].copy()
-
-    if candidates.empty and "graph_id" in df_data.columns:
-        graph_col = pd.to_numeric(df_data["graph_id"], errors="coerce")
-        candidates = df_data[graph_col.eq(base_graph_id)].copy()
-
-    if candidates.empty:
-        raise ValueError(
-            f"Could not find base graph {base_graph_id} in registry {csv_path}."
-        )
-
-    source_row = candidates.iloc[0].copy()
-
-    data_dir = str(source_row["data_dir"])
-
-    if "base_dataset_id" in source_row.index and pd.notna(
-        source_row["base_dataset_id"]
-    ):
-        base_dataset_id = str(source_row["base_dataset_id"])
-    else:
-        base_dataset_id = str(source_row["dataset_id"])
-
-    q_tag = _q_tag_from_row(subset_row)
-
-    pseudo_graph_id = f"base{base_graph_id}_q{q_tag}"
-    pseudo_dataset_id = f"{base_dataset_id}_local_centralized_q{q_tag}"
-
-    if verbose:
-        print("\n" + "=" * 100)
-        print("LOAD LOCAL-CENTRALIZED BASE GRAPH")
-        print("=" * 100)
-        print("base_graph_id:", base_graph_id)
-        print("base_dataset_id:", base_dataset_id)
-        print("pseudo_graph_id:", pseudo_graph_id)
-        print("pseudo_dataset_id:", pseudo_dataset_id)
-        print("data_dir:", data_dir)
-        print("q_tag:", q_tag)
-        print("IMPORTANT: mask_meta=None, so train labels are fully visible.")
-        print("=" * 100)
-
-    train_g, val_g, test_g = load_client_from_dir(data_dir)
-
-    # Critical line: no mask. This keeps the base graph fully supervised.
-    train_g, val_g, test_g = apply_mask_to_splits(
-        train_g,
-        val_g,
-        test_g,
-        mask_meta=None,
-    )
-
-    train_h = make_bidirected_hetero(train_g)
-    val_h = make_bidirected_hetero(val_g)
-    test_h = make_bidirected_hetero(test_g)
-
-    train_h["n"].label_mask = train_g.label_mask.float()
-    val_h["n"].label_mask = val_g.label_mask.float()
-    test_h["n"].label_mask = test_g.label_mask.float()
-
-    return ClientData(
-        graph_id=str(pseudo_graph_id),
-        data_dir=data_dir,
-        dataset_id=pseudo_dataset_id,
-        train_g=train_g,
-        val_g=val_g,
-        test_g=test_g,
-        train_h=train_h,
-        val_h=val_h,
-        test_h=test_h,
-        mask_meta=None,
-    )
-
-
-def audit_local_centralized_client(client: ClientData, *, strict: bool = True) -> None:
-    """
-    Sanity check for the local-centralized upper bound.
-    All train/val/test label masks must be full ones.
-    """
-    print("\n" + "=" * 100)
-    print("AUDIT LOCAL-CENTRALIZED CLIENT")
-    print("=" * 100)
-    print("graph_id:", client.graph_id)
-    print("dataset_id:", client.dataset_id)
-    print("data_dir:", client.data_dir)
-    print("mask_meta:", client.mask_meta)
-
-    _assert_or_warn(
-        client.mask_meta is None,
-        "local-centralized client should have mask_meta=None",
-        strict=strict,
-    )
-    _assert_or_warn(
-        _mask_is_all_ones(client.train_g),
-        "local-centralized train label_mask is not all ones",
-        strict=strict,
-    )
-    _assert_or_warn(
-        _mask_is_all_ones(client.val_g),
-        "local-centralized val label_mask is not all ones",
-        strict=strict,
-    )
-    _assert_or_warn(
-        _mask_is_all_ones(client.test_g),
-        "local-centralized test label_mask is not all ones",
-        strict=strict,
-    )
-
-    counts = _mask_debug_counts(client.train_g)
-    print("train visible_pos:", dict(zip(TASKS, counts["visible_pos"])))
-    print("train hidden_pos :", dict(zip(TASKS, counts["hidden_pos"])))
-    print("train hidden_neg :", dict(zip(TASKS, counts["hidden_neg"])))
-    print("PASS local-centralized audit")
 
 
 def load_clients(

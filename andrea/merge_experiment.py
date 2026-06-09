@@ -1,22 +1,34 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
-import os
 import pandas as pd
 
-from andrea.helper_funcs.fl_run_helper import upsert_experiment_rows
+
+# ============================================================
+# New multi-head experiment-log folders
+# ============================================================
 
 SOURCE_DIRS = [
-    Path("./andrea/local_clustering_experiment"),
-    Path("./andrea/fedavg_clustering_experiment"),
-    Path("./andrea/fedprox_clustering_experiment"),
-    Path("./andrea/gcflplus_clustering_experiment"),
-    Path("./andrea/apple_clustering_experiment"),
+    # non-communication baselines
+    Path("./andrea/fully_local_multihead_clustering_experiment"),
+    Path("./andrea/local_centralized_multihead_clustering_experiment"),
+    # multi-head FL baselines
+    Path("./andrea/fedavg_multihead_clustering_experiment"),
+    Path("./andrea/fedprox_multihead_clustering_experiment"),
+    Path("./andrea/gcflplus_multihead_clustering_experiment"),
+    # APPLE multi-head variants
+    Path("./andrea/apple_taskhead_clustering_experiment"),
+    Path("./andrea/apple_backbone_taskhead_clustering_experiment"),
+    Path("./andrea/apple_fedavg_backbone_taskhead_clustering_experiment"),
+    # NEW oracle-q ablation
+    Path("./andrea/apple_fedavg_backbone_oracleq_taskhead_clustering_experiment"),
 ]
 
-MERGED_LOG_CSV = Path("./andrea/experiment_log_specialized_0.05_exp4.csv")
+
+# New merged output name.
+# This should be the file that your plotting notebook reads next.
+MERGED_LOG_CSV = Path("./andrea/q_multihead_fedavg_backbone_oracleq_taskhead.csv")
 
 
 def find_experiment_logs(source_dirs: list[Path]) -> list[Path]:
@@ -27,131 +39,206 @@ def find_experiment_logs(source_dirs: list[Path]) -> list[Path]:
             print(f"[skip] missing directory: {root}")
             continue
 
-        # include experiment_log.csv and experiment_log_<seed>.csv
+        # Include:
+        #   experiment_log.csv
+        #   experiment_log_0.csv
+        #   experiment_log_1.csv
+        #   experiment_log_2.csv
         for path in root.rglob("experiment_log*.csv"):
             logs.append(path)
 
-    # stable order
     logs = sorted(set(p.resolve() for p in logs))
     return [Path(p) for p in logs]
 
 
-def main():
+def upsert_experiment_rows_local(csv_path: Path, rows: list[dict]) -> None:
+    """
+    Local version of upsert_experiment_rows.
 
+    We keep this merge script self-contained so it does not matter whether
+    the helper is from helper_funcs or helper_funcs_multihead.
+    """
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    new_df = pd.DataFrame(rows)
+
+    if csv_path.exists():
+        old_df = pd.read_csv(csv_path)
+        merged = pd.concat([old_df, new_df], axis=0, ignore_index=True)
+    else:
+        merged = new_df.copy()
+
+    # out_csv uniquely identifies one experiment run.
+    # If a row appears again, keep the latest one.
+    if "out_csv" in merged.columns:
+        merged = merged.drop_duplicates(subset=["out_csv"], keep="last")
+    else:
+        merged = merged.drop_duplicates(keep="last")
+
+    merged.to_csv(csv_path, index=False)
+
+
+def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize method names that may still be ambiguous in older logs.
+
+    This mainly separates APPLE variants using output filename and/or
+    apple_mixing_mode.
+    """
+    df = df.copy()
+
+    if "out_csv" not in df.columns:
+        return df
+
+    out_csv = df["out_csv"].astype(str)
+
+    is_apple_fedavg_backbone_oracleq_taskhead = out_csv.str.contains(
+        "apple_fedavg_backbone_oracleq_taskhead", na=False
+    )
+    is_apple_fedavg_backbone_taskhead = out_csv.str.contains(
+        "apple_fedavg_backbone_taskhead", na=False
+    )
+    is_apple_backbone_taskhead = out_csv.str.contains(
+        "apple_backbone_taskhead", na=False
+    )
+    is_apple_taskhead = out_csv.str.contains("apple_taskhead", na=False)
+
+    if "apple_mixing_mode" in df.columns:
+        mix = df["apple_mixing_mode"].astype(str)
+
+        is_apple_fedavg_backbone_oracleq_taskhead = (
+            is_apple_fedavg_backbone_oracleq_taskhead
+            | mix.eq("fedavg_backbone_oracleq_task_head")
+        )
+
+        is_apple_fedavg_backbone_taskhead = is_apple_fedavg_backbone_taskhead | mix.eq(
+            "fedavg_backbone_task_head"
+        )
+
+        is_apple_backbone_taskhead = is_apple_backbone_taskhead | mix.eq(
+            "backbone_task_head"
+        )
+
+        is_apple_taskhead = is_apple_taskhead | mix.eq("task_head")
+
+    # Avoid overlap. The most specific methods win first.
+    is_apple_fedavg_backbone_taskhead = (
+        is_apple_fedavg_backbone_taskhead & ~is_apple_fedavg_backbone_oracleq_taskhead
+    )
+
+    is_apple_backbone_taskhead = (
+        is_apple_backbone_taskhead
+        & ~is_apple_fedavg_backbone_taskhead
+        & ~is_apple_fedavg_backbone_oracleq_taskhead
+    )
+
+    is_apple_taskhead = (
+        is_apple_taskhead
+        & ~is_apple_backbone_taskhead
+        & ~is_apple_fedavg_backbone_taskhead
+        & ~is_apple_fedavg_backbone_oracleq_taskhead
+    )
+
+    df.loc[is_apple_taskhead, "run_type"] = "apple_taskhead"
+    df.loc[is_apple_taskhead, "algorithm"] = "apple_taskhead"
+    df.loc[is_apple_taskhead, "apple_variant"] = "task_head"
+
+    df.loc[is_apple_backbone_taskhead, "run_type"] = "apple_backbone_taskhead"
+    df.loc[is_apple_backbone_taskhead, "algorithm"] = "apple_backbone_taskhead"
+    df.loc[is_apple_backbone_taskhead, "apple_variant"] = "backbone_task_head"
+
+    df.loc[
+        is_apple_fedavg_backbone_taskhead,
+        "run_type",
+    ] = "apple_fedavg_backbone_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_taskhead,
+        "algorithm",
+    ] = "apple_fedavg_backbone_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_taskhead,
+        "apple_variant",
+    ] = "fedavg_backbone_task_head"
+
+    df.loc[
+        is_apple_fedavg_backbone_oracleq_taskhead,
+        "run_type",
+    ] = "apple_fedavg_backbone_oracleq_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_oracleq_taskhead,
+        "algorithm",
+    ] = "apple_fedavg_backbone_oracleq_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_oracleq_taskhead,
+        "apple_variant",
+    ] = "fedavg_backbone_oracleq_task_head"
+
+    return df
+
+
+def main() -> None:
     log_paths = find_experiment_logs(SOURCE_DIRS)
 
     if not log_paths:
         raise FileNotFoundError("No experiment_log*.csv files found.")
 
-    total_rows = 0
+    print("Found experiment logs:")
+    for path in log_paths:
+        print(f"  {path}")
+
+    # Start fresh every time, so old merged rows do not accidentally remain.
+    if MERGED_LOG_CSV.exists():
+        print()
+        print(f"[remove old merged file] {MERGED_LOG_CSV}")
+        MERGED_LOG_CSV.unlink()
+
+    total_input_rows = 0
 
     for log_path in log_paths:
-
         df = pd.read_csv(log_path)
+
         if df.empty:
             print(f"[skip] empty log: {log_path}")
             continue
 
-        rows = df.to_dict(orient="records")
-        total_rows += len(rows)
+        df = normalize_known_variants(df)
 
-        upsert_experiment_rows(MERGED_LOG_CSV, rows)
+        total_input_rows += len(df)
+        rows = df.to_dict(orient="records")
+
+        print(f"[merge] {log_path} -> rows={len(df)}")
+        upsert_experiment_rows_local(MERGED_LOG_CSV, rows)
 
     merged_df = pd.read_csv(MERGED_LOG_CSV)
+
     print()
-    print(f"total experiments run: {len(merged_df)}")
+    print("============================================================")
+    print("MERGE DONE")
+    print("============================================================")
+    print(f"input rows before upsert: {total_input_rows}")
+    print(f"merged rows after upsert: {len(merged_df)}")
     print(f"saved to: {MERGED_LOG_CSV}")
 
-    return
-    chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
+    if "run_type" in merged_df.columns:
+        print()
+        print("Rows by run_type:")
+        print(merged_df["run_type"].value_counts(dropna=False))
 
-    id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
-    base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
+    if "q_value" in merged_df.columns:
+        print()
+        print("Rows by q_value:")
+        print(merged_df["q_value"].value_counts(dropna=False).sort_index())
 
-    ONLY_SEED = os.environ.get("ONLY_SEED")
-    if ONLY_SEED is not None:
-        SEEDS = [int(ONLY_SEED)]
-        print("working only with seed:", SEEDS)
-        EXPERIMENT_LOG_CSV = Path(
-            f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log_{ONLY_SEED}.csv"
+    if "seed" in merged_df.columns and "run_type" in merged_df.columns:
+        print()
+        print("Rows by run_type and seed:")
+        print(
+            pd.crosstab(
+                merged_df["run_type"],
+                merged_df["seed"],
+                dropna=False,
+            )
         )
-    else:
-        SEEDS = [0, 1, 2]
-        print("working with all seed:", SEEDS)
-        EXPERIMENT_LOG_CSV = Path(
-            f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
-        )
-
-    sweep = list(
-        iter_sweep_cfgs(
-            base_cfg,
-            seeds=SEEDS,
-            mcw=MCW,
-            num_layers=NUM_LAYERS,
-            lrs=LRS,
-            weight_decays=WEIGHT_DECAYS,
-            dropouts=DROPOUTS,
-            hidden_dims=HIDDEN_DIMS,
-            use_ego_ids=USE_EGO_IDS,
-            batch_sizes=BATCH_SIZE,
-        )
-    )
-
-    total_runs = len(sweep) * len(chosen_df)
-    print("Number of runs:", total_runs)
-    progress = ProgressPrinter(total_runs)
-
-    for cfg, meta in sweep:
-        seed = int(meta["seed"])
-
-        for _, row in chosen_df.iterrows():
-
-            subset_id = parse_subset_clients(row["subset_clients"])
-
-            run_start = time.perf_counter()
-
-            subset_clients = [id_to_client[graph_id] for graph_id in subset_id]
-
-            print()
-            print(
-                f"Starting with {len(id_to_client)}-client fedavg training",
-                row["subset_clients"],
-            )
-
-            fed_paths = run_fedavg(
-                subset_clients,
-                cfg,
-                seed,
-                RUNS_ROOT,
-                rounds=ROUNDS,
-                local_epochs=LOCAL_EPOCHS,
-                client_fraction=CLIENT_FRACTION,
-                device=DEVICE,
-                selection_metric=SELECTION_METRIC,
-            )
-
-            fed_row = build_fedavg_log_row(
-                subset_clients=subset_clients,
-                cfg=cfg,
-                seed=seed,
-                run_paths=fed_paths,
-                rounds=ROUNDS,
-                local_epochs=LOCAL_EPOCHS,
-                client_fraction=CLIENT_FRACTION,
-                selection_metric=SELECTION_METRIC,
-            )
-            fed_row.update(
-                {
-                    "subset_clients": str(row["subset_clients"]),
-                }
-            )
-
-            upsert_experiment_rows(EXPERIMENT_LOG_CSV, [fed_row])
-
-            progress.step(
-                label=f"fedavg done -> {fed_paths.csv_path}",
-                run_start_time=run_start,
-            )
 
 
 if __name__ == "__main__":
