@@ -6,6 +6,8 @@ andrea/test_data/
 andrea/cluster_data/
 andrea/cluster_data_rep/
 andrea/runs/
+andrea/runs_old/
 andrea/checkpoints/
+andrea/checkpoints_old/
 /thesis/
 andrea/heterogeneity/heterogeneity_all_pairs.csv

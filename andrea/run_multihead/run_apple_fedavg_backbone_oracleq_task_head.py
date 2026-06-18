@@ -91,6 +91,8 @@ HIDDEN_DIMS = [64]
 USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
 
+MASK_SPLITS = ("train", "val", "test")
+
 
 def load_cfg(config_path: str, key: str) -> Dict:
     with open(config_path, "r") as f:
@@ -191,9 +193,23 @@ def build_client_metadata(row: pd.Series, subset_clients) -> Dict[str, Dict]:
 def main():
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
-    id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
+    id_to_client = load_clients(
+        chosen_df,
+        csv_path=ALL_DATA_LOGS,
+        verbose=True,
+        mask_splits=MASK_SPLITS,
+    )
 
-    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True)
+    audit_loaded_q_label_masks(
+        chosen_df,
+        id_to_client,
+        strict=True,
+        mask_splits=MASK_SPLITS,
+    )
+
+    if os.environ.get("MASK_AUDIT_ONLY") == "1":
+        print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
+        return
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     # Oracle-q task-head architecture/mixing flags.
@@ -346,6 +362,11 @@ def main():
             )
 
             add_subset_metadata(apple_row, row)
+            apple_row["mask_splits"] = "|".join(MASK_SPLITS)
+            apple_row["selection_modes"] = "full|visible"
+            apple_row["eval_protocols"] = (
+                "oracle_full|realistic_visible|realistic_selection_oracle"
+            )
             upsert_experiment_rows(experiment_log_csv, [apple_row])
 
             progress.step(

@@ -21,14 +21,19 @@ SOURCE_DIRS = [
     Path("./andrea/apple_taskhead_clustering_experiment"),
     Path("./andrea/apple_backbone_taskhead_clustering_experiment"),
     Path("./andrea/apple_fedavg_backbone_taskhead_clustering_experiment"),
-    # NEW oracle-q ablation
+    # oracle-q ablation
     Path("./andrea/apple_fedavg_backbone_oracleq_taskhead_clustering_experiment"),
+    # q-init learned DR ablation
+    Path("./andrea/apple_fedavg_backbone_qinit_taskhead_clustering_experiment"),
+    # FedALA variants
+    Path("./andrea/fedala_fedavg_multihead_clustering_experiment"),
+    Path("./andrea/fedala_head_only_multihead_clustering_experiment"),
 ]
 
 
 # New merged output name.
 # This should be the file that your plotting notebook reads next.
-MERGED_LOG_CSV = Path("./andrea/q_multihead_fedavg_backbone_oracleq_taskhead.csv")
+MERGED_LOG_CSV = Path("./andrea/q_multihead_80.csv")
 
 
 def find_experiment_logs(source_dirs: list[Path]) -> list[Path]:
@@ -92,6 +97,9 @@ def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
 
     out_csv = df["out_csv"].astype(str)
 
+    is_apple_fedavg_backbone_qinit_taskhead = out_csv.str.contains(
+        "apple_fedavg_backbone_qinit_taskhead", na=False
+    )
     is_apple_fedavg_backbone_oracleq_taskhead = out_csv.str.contains(
         "apple_fedavg_backbone_oracleq_taskhead", na=False
     )
@@ -105,6 +113,11 @@ def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
 
     if "apple_mixing_mode" in df.columns:
         mix = df["apple_mixing_mode"].astype(str)
+
+        is_apple_fedavg_backbone_qinit_taskhead = (
+            is_apple_fedavg_backbone_qinit_taskhead
+            | mix.eq("fedavg_backbone_qinit_task_head")
+        )
 
         is_apple_fedavg_backbone_oracleq_taskhead = (
             is_apple_fedavg_backbone_oracleq_taskhead
@@ -123,13 +136,16 @@ def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
 
     # Avoid overlap. The most specific methods win first.
     is_apple_fedavg_backbone_taskhead = (
-        is_apple_fedavg_backbone_taskhead & ~is_apple_fedavg_backbone_oracleq_taskhead
+        is_apple_fedavg_backbone_taskhead
+        & ~is_apple_fedavg_backbone_oracleq_taskhead
+        & ~is_apple_fedavg_backbone_qinit_taskhead
     )
 
     is_apple_backbone_taskhead = (
         is_apple_backbone_taskhead
         & ~is_apple_fedavg_backbone_taskhead
         & ~is_apple_fedavg_backbone_oracleq_taskhead
+        & ~is_apple_fedavg_backbone_qinit_taskhead
     )
 
     is_apple_taskhead = (
@@ -137,6 +153,7 @@ def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
         & ~is_apple_backbone_taskhead
         & ~is_apple_fedavg_backbone_taskhead
         & ~is_apple_fedavg_backbone_oracleq_taskhead
+        & ~is_apple_fedavg_backbone_qinit_taskhead
     )
 
     df.loc[is_apple_taskhead, "run_type"] = "apple_taskhead"
@@ -172,6 +189,42 @@ def normalize_known_variants(df: pd.DataFrame) -> pd.DataFrame:
         is_apple_fedavg_backbone_oracleq_taskhead,
         "apple_variant",
     ] = "fedavg_backbone_oracleq_task_head"
+
+    df.loc[
+        is_apple_fedavg_backbone_qinit_taskhead,
+        "run_type",
+    ] = "apple_fedavg_backbone_qinit_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_qinit_taskhead,
+        "algorithm",
+    ] = "apple_fedavg_backbone_qinit_taskhead"
+    df.loc[
+        is_apple_fedavg_backbone_qinit_taskhead,
+        "apple_variant",
+    ] = "fedavg_backbone_qinit_task_head"
+
+    # ------------------------------------------------------------
+    # FedALA variants
+    # ------------------------------------------------------------
+    is_fedala_fedavg = out_csv.str.contains("fedala_all", na=False)
+    is_fedala_head_only = out_csv.str.contains("fedala_head_only", na=False)
+
+    if "fedala_mode" in df.columns:
+        fedala_mode = df["fedala_mode"].astype(str)
+
+        is_fedala_fedavg = is_fedala_fedavg | fedala_mode.eq("all")
+        is_fedala_head_only = is_fedala_head_only | fedala_mode.eq("head_only")
+
+    # Avoid overlap.
+    is_fedala_fedavg = is_fedala_fedavg & ~is_fedala_head_only
+
+    df.loc[is_fedala_fedavg, "run_type"] = "fedala_fedavg"
+    df.loc[is_fedala_fedavg, "algorithm"] = "fedala_fedavg"
+    df.loc[is_fedala_fedavg, "fedala_variant"] = "all_model"
+
+    df.loc[is_fedala_head_only, "run_type"] = "fedala_head_only"
+    df.loc[is_fedala_head_only, "algorithm"] = "fedala_head_only"
+    df.loc[is_fedala_head_only, "fedala_variant"] = "head_only"
 
     return df
 

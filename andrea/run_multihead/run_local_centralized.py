@@ -231,6 +231,11 @@ def main():
                 "training_scope": "unmasked_base_graph",
                 "communication": "none",
                 "baseline_role": "upper_bound_full_supervision",
+                "mask_splits": "none",
+                "selection_modes": "full",
+                "eval_protocols": (
+                    "oracle_full|realistic_visible|realistic_selection_oracle"
+                ),
                 "subset_clients": str(row["subset_clients"]),
                 "q_value": row.get("q_value", None),
                 "mask_fraction": row.get("mask_fraction", None),
@@ -263,6 +268,11 @@ def main():
             local_log_row["communication"] = "none"
             local_log_row["baseline_role"] = "upper_bound_full_supervision"
             local_log_row["display_name"] = "Local-centralized upper bound"
+            local_log_row["mask_splits"] = "none"
+            local_log_row["selection_modes"] = "full"
+            local_log_row["eval_protocols"] = (
+                "oracle_full|realistic_visible|realistic_selection_oracle"
+            )
 
             # Important: local-centralized is subset-level, not one row per virtual client family.
             local_log_row["family"] = "local_centralized_base_graph"

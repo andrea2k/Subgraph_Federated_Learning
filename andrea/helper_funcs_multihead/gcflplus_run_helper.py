@@ -16,6 +16,7 @@ from andrea.helper_funcs_multihead.fl_run_helper import (
     _subset_clients_str,
     append_eval_rows,
     append_train_row,
+    append_mean_eval_row,
     build_model_context,
     build_runtime_clients,
     ensure_dir,
@@ -776,9 +777,20 @@ def run_gcfl_experiment(
     cluster_rows: List[Dict] = []
     applied_split_event_idx = 0
 
-    best_loss = float("inf")
-    best_round = -1
-    best_clusters_snapshot = snapshot_clusters(clusters)
+    initial_clusters_snapshot = snapshot_clusters(clusters)
+
+    best_by_eval_mode = {
+        "full": {
+            "value": float("inf"),
+            "round": -1,
+            "clusters_snapshot": initial_clusters_snapshot,
+        },
+        "visible": {
+            "value": float("inf"),
+            "round": -1,
+            "clusters_snapshot": initial_clusters_snapshot,
+        },
+    }
 
     generator = torch.Generator().manual_seed(seed)
 
@@ -849,29 +861,35 @@ def run_gcfl_experiment(
                         local_epoch=local_epoch_idx,
                     )
 
-                post_metrics = evaluate_loader(
-                    local_model,
-                    runtime.val_loader,
-                    runtime.criterion,
-                    device,
-                    use_ego_ids=ctx["use_ego_ids"],
-                    ego_dim=ctx["ego_dim"],
-                    threshold=0.5,
-                )
-                append_eval_rows(
-                    rows,
-                    run_type="gcfl_plus",
-                    algorithm="gcfl_plus",
-                    subset_id=subset_id,
-                    subset_clients=subset_clients_str,
-                    seed=seed,
-                    phase="val_epoch",
-                    split="val",
-                    graph_id=str(runtime.client.graph_id),
-                    dataset_id=str(runtime.client.dataset_id),
-                    metrics=post_metrics,
-                    round_idx=round_idx,
-                )
+                for eval_mask_mode in ("full", "visible"):
+                    post_metrics = evaluate_loader(
+                        local_model,
+                        runtime.val_loader,
+                        runtime.criterion,
+                        device,
+                        use_ego_ids=ctx["use_ego_ids"],
+                        ego_dim=ctx["ego_dim"],
+                        threshold=0.5,
+                        eval_mask_mode=eval_mask_mode,
+                    )
+
+                    append_eval_rows(
+                        rows,
+                        run_type="gcfl_plus",
+                        algorithm="gcfl_plus",
+                        subset_id=subset_id,
+                        subset_clients=subset_clients_str,
+                        seed=seed,
+                        phase=f"val_epoch_{eval_mask_mode}",
+                        split="val",
+                        graph_id=str(runtime.client.graph_id),
+                        dataset_id=str(runtime.client.dataset_id),
+                        metrics=post_metrics,
+                        round_idx=round_idx,
+                        eval_mask_mode=eval_mask_mode,
+                        selection_protocol=None,
+                        selected_by=None,
+                    )
 
                 client_states[idx].W = clone_state_dict(local_model.state_dict())
                 client_states[idx].dW = subtract_state_dicts(
@@ -1318,132 +1336,140 @@ def run_gcfl_experiment(
 
         clusters = new_clusters
 
-        round_eval_infos = []
-        for cluster_id in sorted(clusters.keys()):
-            cluster = clusters[cluster_id]
-            cluster_model = make_model(
-                cfg,
-                ctx["x_dim"],
-                ctx["out_dim"],
-                ctx["deg_fwd_hist"],
-                ctx["deg_rev_hist"],
-                ctx["ego_dim"],
-                ctx["in_vocab"],
-                ctx["out_vocab"],
-            ).to(device)
-            cluster_model.load_state_dict(cluster.state_dict, strict=True)
+        for eval_mask_mode in ("full", "visible"):
+            round_eval_infos = []
 
-            for idx in cluster.member_indices:
-                runtime = runtime_clients[idx]
-                metrics = evaluate_loader(
-                    cluster_model,
-                    runtime.val_loader,
-                    runtime.criterion,
-                    device,
-                    use_ego_ids=ctx["use_ego_ids"],
-                    ego_dim=ctx["ego_dim"],
-                    threshold=0.5,
+            for cluster_id in sorted(clusters.keys()):
+                cluster = clusters[cluster_id]
+
+                cluster_model = make_model(
+                    cfg,
+                    ctx["x_dim"],
+                    ctx["out_dim"],
+                    ctx["deg_fwd_hist"],
+                    ctx["deg_rev_hist"],
+                    ctx["ego_dim"],
+                    ctx["in_vocab"],
+                    ctx["out_vocab"],
+                ).to(device)
+                cluster_model.load_state_dict(cluster.state_dict, strict=True)
+
+                for idx in cluster.member_indices:
+                    runtime = runtime_clients[idx]
+
+                    metrics = evaluate_loader(
+                        cluster_model,
+                        runtime.val_loader,
+                        runtime.criterion,
+                        device,
+                        use_ego_ids=ctx["use_ego_ids"],
+                        ego_dim=ctx["ego_dim"],
+                        threshold=0.5,
+                        eval_mask_mode=eval_mask_mode,
+                    )
+                    round_eval_infos.append(metrics)
+
+                    print("gcfl+ eval on client:", runtime.client.graph_id)
+                    print(
+                        "gcfl+ round:",
+                        round_idx,
+                        "cluster:",
+                        cluster_id,
+                        "eval_mask_mode:",
+                        eval_mask_mode,
+                        "val_loss:",
+                        metrics["scalar"]["loss"],
+                    )
+                    print(
+                        "val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"]
+                    )
+                    print("val_minority_f1:", metrics["per_task"]["minority_f1"])
+                    print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+
+                    append_eval_rows(
+                        rows,
+                        run_type="gcfl_plus",
+                        algorithm="gcfl_plus",
+                        subset_id=subset_id,
+                        subset_clients=subset_clients_str,
+                        seed=seed,
+                        phase=f"cluster_val_client_{eval_mask_mode}",
+                        split="val",
+                        graph_id=str(runtime.client.graph_id),
+                        dataset_id=str(runtime.client.dataset_id),
+                        metrics=metrics,
+                        round_idx=round_idx,
+                        eval_mask_mode=eval_mask_mode,
+                        selection_protocol=None,
+                        selected_by=None,
+                    )
+
+            append_mean_eval_row(
+                rows,
+                run_type="gcfl_plus",
+                algorithm="gcfl_plus",
+                subset_id=subset_id,
+                subset_clients=subset_clients_str,
+                seed=seed,
+                phase=f"gcfl_round_diag_{eval_mask_mode}",
+                split="val",
+                round_idx=round_idx,
+                eval_infos=round_eval_infos,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
+            )
+
+            # Add GCFL+-specific diagnostic columns to the just-appended mean row.
+            rows[-1].update(
+                {
+                    "num_active_clusters": len(clusters),
+                    "active_cluster_ids": "|".join(
+                        str(cid) for cid in sorted(clusters.keys())
+                    ),
+                    "num_split_triggered": sum(
+                        1
+                        for row in cluster_rows
+                        if row["seed"] == seed
+                        and row["round"] == round_idx
+                        and row["split_triggered"] == 1
+                    ),
+                    "num_split_applied": sum(
+                        1
+                        for row in cluster_rows
+                        if row["seed"] == seed
+                        and row["round"] == round_idx
+                        and row["split_applied"] == 1
+                    ),
+                    "num_singleton_cut_candidates": sum(
+                        1
+                        for row in cluster_rows
+                        if row["seed"] == seed
+                        and row["round"] == round_idx
+                        and row.get("singleton_graph_id") is not None
+                    ),
+                }
+            )
+
+            mean_scalar = weighted_scalar_summary(round_eval_infos)
+            current_value = mean_scalar[selection_metric]
+
+            print(
+                "current vs best:",
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "current:",
+                current_value,
+                "best:",
+                best_by_eval_mode[eval_mask_mode]["value"],
+            )
+
+            if current_value < best_by_eval_mode[eval_mask_mode]["value"]:
+                best_by_eval_mode[eval_mask_mode]["value"] = current_value
+                best_by_eval_mode[eval_mask_mode]["round"] = round_idx
+                best_by_eval_mode[eval_mask_mode]["clusters_snapshot"] = (
+                    snapshot_clusters(clusters)
                 )
-                round_eval_infos.append(metrics)
-
-                print("gcfl+ eval on client:", runtime.client.graph_id)
-                print(
-                    "gcfl+ round:",
-                    round_idx,
-                    "cluster:",
-                    cluster_id,
-                    "val_loss:",
-                    metrics["scalar"]["loss"],
-                )
-                print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
-                print("val_minority_f1:", metrics["per_task"]["minority_f1"])
-                print("val_positive_f1:", metrics["per_task"]["positive_f1"])
-
-                append_eval_rows(
-                    rows,
-                    run_type="gcfl_plus",
-                    algorithm="gcfl_plus",
-                    subset_id=subset_id,
-                    subset_clients=subset_clients_str,
-                    seed=seed,
-                    phase="cluster_val_client",
-                    split="val",
-                    graph_id=str(runtime.client.graph_id),
-                    dataset_id=str(runtime.client.dataset_id),
-                    metrics=metrics,
-                    round_idx=round_idx,
-                )
-
-        mean_scalar = weighted_scalar_summary(round_eval_infos)
-        rows.append(
-            {
-                "run_type": "gcfl_plus",
-                "algorithm": "gcfl_plus",
-                "subset_id": subset_id,
-                "subset_clients": subset_clients_str,
-                "seed": seed,
-                "graph_id": "all",
-                "dataset_id": "all",
-                "phase": "gcfl_round_diag",
-                "split": "val",
-                "task": None,
-                "round": round_idx,
-                "local_epoch": None,
-                "train_loss": None,
-                "eval_loss": mean_scalar["loss"],
-                "pair_acc": mean_scalar["pair_acc"],
-                "subset_acc": mean_scalar["subset_acc"],
-                "micro_f1": mean_scalar["micro_f1"],
-                "macro_f1": mean_scalar["macro_f1"],
-                "macro_pos_f1": mean_scalar["macro_pos_f1"],
-                "macro_minority_f1": mean_scalar["macro_minority_f1"],
-                "num_nodes": sum(
-                    int(metrics["counts"]["num_nodes"]) for metrics in round_eval_infos
-                ),
-                "tp": None,
-                "fp": None,
-                "tn": None,
-                "fn": None,
-                "precision": None,
-                "recall": None,
-                "f1": None,
-                "positive_f1": None,
-                "minority_f1": None,
-                "pos_cnt": None,
-                "pos_rate": None,
-                "num_active_clusters": len(clusters),
-                "active_cluster_ids": "|".join(
-                    str(cid) for cid in sorted(clusters.keys())
-                ),
-                "num_split_triggered": sum(
-                    1
-                    for row in cluster_rows
-                    if row["seed"] == seed
-                    and row["round"] == round_idx
-                    and row["split_triggered"] == 1
-                ),
-                "num_split_applied": sum(
-                    1
-                    for row in cluster_rows
-                    if row["seed"] == seed
-                    and row["round"] == round_idx
-                    and row["split_applied"] == 1
-                ),
-                "num_singleton_cut_candidates": sum(
-                    1
-                    for row in cluster_rows
-                    if row["seed"] == seed
-                    and row["round"] == round_idx
-                    and row.get("singleton_graph_id") is not None
-                ),
-            }
-        )
-        current_value = mean_scalar[selection_metric]
-        print("current vs best:", current_value, best_loss)
-        if current_value < best_loss:
-            best_loss = current_value
-            best_round = round_idx
-            best_clusters_snapshot = snapshot_clusters(clusters)
 
         run_elapsed = time.perf_counter() - run_start_time
         print(f"run time: {format_seconds(run_elapsed)}")
@@ -1451,9 +1477,13 @@ def run_gcfl_experiment(
         print(f"==================== round {round_idx} / {rounds} ====================")
         print("=======================================================")
 
-    best_clusters = restore_clusters(best_clusters_snapshot)
+    # Legacy/default checkpoint uses full-validation-selected clusters.
+    best_clusters = restore_clusters(best_by_eval_mode["full"]["clusters_snapshot"])
+    best_round = best_by_eval_mode["full"]["round"]
+    best_loss = best_by_eval_mode["full"]["value"]
 
     checkpoint = {
+        # Legacy-compatible full-selection clusters.
         "clusters": {
             cid: {
                 "member_indices": list(cluster.member_indices),
@@ -1464,6 +1494,24 @@ def run_gcfl_experiment(
             }
             for cid, cluster in best_clusters.items()
         },
+        # New dual-selection cluster snapshots.
+        "clusters_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["clusters_snapshot"],
+            "visible": best_by_eval_mode["visible"]["clusters_snapshot"],
+        },
+        "best_round_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["round"],
+            "visible": best_by_eval_mode["visible"]["round"],
+        },
+        "best_value_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["value"],
+            "visible": best_by_eval_mode["visible"]["value"],
+        },
+        "eval_protocols": [
+            "oracle_full",
+            "realistic_visible",
+            "realistic_selection_oracle",
+        ],
         "cfg": cfg,
         "seed": seed,
         "best_round": best_round,
@@ -1485,56 +1533,94 @@ def run_gcfl_experiment(
         "deg_fwd_hist": ctx["deg_fwd_hist"].cpu(),
         "deg_rev_hist": ctx["deg_rev_hist"].cpu(),
     }
+
     torch.save(checkpoint, run_paths.ckpt_path)
     print(f"saved best checkpoint -> {run_paths.ckpt_path}")
 
-    for split_name in ["train", "val", "test"]:
-        for cluster_id in sorted(best_clusters.keys()):
-            cluster = best_clusters[cluster_id]
+    final_eval_jobs = [
+        {
+            "selection_protocol": "oracle_full",
+            "selected_by": "full",
+            "eval_mask_mode": "full",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_visible",
+            "selected_by": "visible",
+            "eval_mask_mode": "visible",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_selection_oracle",
+            "selected_by": "visible",
+            "eval_mask_mode": "full",
+            "splits": ["test"],
+        },
+    ]
 
-            cluster_model = make_model(
-                cfg,
-                ctx["x_dim"],
-                ctx["out_dim"],
-                ctx["deg_fwd_hist"],
-                ctx["deg_rev_hist"],
-                ctx["ego_dim"],
-                ctx["in_vocab"],
-                ctx["out_vocab"],
-            ).to(device)
-            cluster_model.load_state_dict(cluster.state_dict, strict=True)
+    for job in final_eval_jobs:
+        selection_protocol = job["selection_protocol"]
+        selected_by = job["selected_by"]
+        eval_mask_mode = job["eval_mask_mode"]
 
-            for idx in cluster.member_indices:
-                runtime = runtime_clients[idx]
-                split_loader = {
-                    "train": runtime.train_loader,
-                    "val": runtime.val_loader,
-                    "test": runtime.test_loader,
-                }[split_name]
+        selected_round = best_by_eval_mode[selected_by]["round"]
+        selected_clusters = restore_clusters(
+            best_by_eval_mode[selected_by]["clusters_snapshot"]
+        )
 
-                metrics = evaluate_loader(
-                    cluster_model,
-                    split_loader,
-                    runtime.criterion,
-                    device,
-                    use_ego_ids=ctx["use_ego_ids"],
-                    ego_dim=ctx["ego_dim"],
-                    threshold=0.5,
-                )
-                append_eval_rows(
-                    rows,
-                    run_type="gcfl_plus",
-                    algorithm="gcfl_plus",
-                    subset_id=subset_id,
-                    subset_clients=subset_clients_str,
-                    seed=seed,
-                    phase=f"best_cluster_{split_name}",
-                    split=split_name,
-                    graph_id=str(runtime.client.graph_id),
-                    dataset_id=str(runtime.client.dataset_id),
-                    metrics=metrics,
-                    round_idx=best_round,
-                )
+        for split_name in job["splits"]:
+            for cluster_id in sorted(selected_clusters.keys()):
+                cluster = selected_clusters[cluster_id]
+
+                cluster_model = make_model(
+                    cfg,
+                    ctx["x_dim"],
+                    ctx["out_dim"],
+                    ctx["deg_fwd_hist"],
+                    ctx["deg_rev_hist"],
+                    ctx["ego_dim"],
+                    ctx["in_vocab"],
+                    ctx["out_vocab"],
+                ).to(device)
+                cluster_model.load_state_dict(cluster.state_dict, strict=True)
+
+                for idx in cluster.member_indices:
+                    runtime = runtime_clients[idx]
+
+                    split_loader = {
+                        "train": runtime.train_loader,
+                        "val": runtime.val_loader,
+                        "test": runtime.test_loader,
+                    }[split_name]
+
+                    metrics = evaluate_loader(
+                        cluster_model,
+                        split_loader,
+                        runtime.criterion,
+                        device,
+                        use_ego_ids=ctx["use_ego_ids"],
+                        ego_dim=ctx["ego_dim"],
+                        threshold=0.5,
+                        eval_mask_mode=eval_mask_mode,
+                    )
+
+                    append_eval_rows(
+                        rows,
+                        run_type="gcfl_plus",
+                        algorithm="gcfl_plus",
+                        subset_id=subset_id,
+                        subset_clients=subset_clients_str,
+                        seed=seed,
+                        phase=f"best_{selection_protocol}_{split_name}",
+                        split=split_name,
+                        graph_id=str(runtime.client.graph_id),
+                        dataset_id=str(runtime.client.dataset_id),
+                        metrics=metrics,
+                        round_idx=selected_round,
+                        eval_mask_mode=eval_mask_mode,
+                        selection_protocol=selection_protocol,
+                        selected_by=selected_by,
+                    )
 
     pd.DataFrame(rows).to_csv(run_paths.csv_path, index=False)
     pd.DataFrame(cluster_rows).to_csv(run_paths.clusters_csv_path, index=False)

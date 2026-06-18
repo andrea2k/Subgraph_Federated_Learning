@@ -59,8 +59,6 @@ MIN_CLUSTER_SIZE = 2
 MIN_CHILD_SIZE = 1
 
 GRAD_SEQ_LEN = 5
-# EPS1_QUANTILE = 0.35
-# EPS2_QUANTILE = 0.6
 EPS1_QUANTILE = 0.25
 EPS2_QUANTILE = 0.7
 # -----------------------------------------------------------------------------
@@ -75,6 +73,8 @@ DROPOUTS = [0.1]
 HIDDEN_DIMS = [64]
 USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
+
+MASK_SPLITS = ("train", "val", "test")
 
 
 def load_cfg(config_path: str, key: str) -> Dict:
@@ -139,9 +139,19 @@ def add_subset_metadata(log_row: Dict, row: pd.Series) -> None:
 def main():
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
-    id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
+    id_to_client = load_clients(
+        chosen_df,
+        csv_path=ALL_DATA_LOGS,
+        verbose=True,
+        mask_splits=MASK_SPLITS,
+    )
 
-    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True)
+    audit_loaded_q_label_masks(
+        chosen_df,
+        id_to_client,
+        strict=True,
+        mask_splits=MASK_SPLITS,
+    )
 
     if os.environ.get("MASK_AUDIT_ONLY") == "1":
         print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
@@ -308,6 +318,12 @@ def main():
             )
 
             add_subset_metadata(gcfl_row, row)
+
+            gcfl_row["mask_splits"] = "|".join(MASK_SPLITS)
+            gcfl_row["selection_modes"] = "full|visible"
+            gcfl_row["eval_protocols"] = (
+                "oracle_full|realistic_visible|realistic_selection_oracle"
+            )
 
             upsert_experiment_rows(EXPERIMENT_LOG_CSV, [gcfl_row])
 

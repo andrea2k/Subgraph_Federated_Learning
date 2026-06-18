@@ -67,6 +67,8 @@ HIDDEN_DIMS = [64]
 USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
 
+MASK_SPLITS = ("train", "val", "test")
+
 
 def load_cfg(config_path: str, key: str) -> Dict:
     with open(config_path, "r") as f:
@@ -129,15 +131,22 @@ def add_subset_metadata(log_row: Dict, row: pd.Series) -> None:
 
 
 def main():
+
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
-    id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
+    id_to_client = load_clients(
+        chosen_df,
+        csv_path=ALL_DATA_LOGS,
+        verbose=True,
+        mask_splits=MASK_SPLITS,
+    )
 
-    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True)
-
-    if os.environ.get("MASK_AUDIT_ONLY") == "1":
-        print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
-        return
+    audit_loaded_q_label_masks(
+        chosen_df,
+        id_to_client,
+        strict=True,
+        mask_splits=MASK_SPLITS,
+    )
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
 
@@ -261,6 +270,13 @@ def main():
             )
 
             add_subset_metadata(fed_row, row)
+
+            # New evaluation/masking metadata.
+            fed_row["mask_splits"] = "|".join(MASK_SPLITS)
+            fed_row["selection_modes"] = "full|visible"
+            fed_row["eval_protocols"] = (
+                "oracle_full|realistic_visible|realistic_selection_oracle"
+            )
 
             upsert_experiment_rows(EXPERIMENT_LOG_CSV, [fed_row])
 

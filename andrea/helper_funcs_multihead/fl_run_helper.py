@@ -13,14 +13,6 @@ import torch
 from andrea.helper_funcs_multihead.load_client_helper import ClientData, format_seconds
 from andrea.multigraph_generation import TASKS
 
-# from andrea.helper_funcs_multihead.train_eval_helper import (
-#     build_criterion_for_client,
-#     build_hetero_neighbor_loader,
-#     build_model_tag,
-#     evaluate_loader,
-#     train_epoch_neighbor,
-#     train_epoch_neighbor_fedprox,
-# )
 from andrea.helper_funcs_multihead.train_eval_helper import (
     build_criterion_for_client,
     build_hetero_neighbor_loader,
@@ -540,6 +532,9 @@ def append_eval_rows(
     metrics: Dict,
     round_idx: Optional[int] = None,
     local_epoch: Optional[int] = None,
+    eval_mask_mode: str = "full",
+    selection_protocol: Optional[str] = None,
+    selected_by: Optional[str] = None,
 ) -> None:
     rows.append(
         {
@@ -575,6 +570,12 @@ def append_eval_rows(
             "minority_f1": None,
             "pos_cnt": None,
             "pos_rate": None,
+            "eval_mask_mode": eval_mask_mode,
+            "selection_protocol": selection_protocol,
+            "selected_by": selected_by,
+            "visible_pairs": metrics["counts"].get("visible_pairs"),
+            "total_pairs": metrics["counts"].get("total_pairs"),
+            "visible_pair_rate": metrics["counts"].get("visible_pair_rate"),
         }
     )
 
@@ -617,6 +618,12 @@ def append_eval_rows(
                 )[task_idx],
                 "pos_cnt": metrics["counts"]["pos_cnt"][task_idx],
                 "pos_rate": metrics["counts"]["pos_rate"][task_idx],
+                "eval_mask_mode": eval_mask_mode,
+                "selection_protocol": selection_protocol,
+                "selected_by": selected_by,
+                "visible_pairs": metrics["counts"].get("visible_pairs"),
+                "total_pairs": metrics["counts"].get("total_pairs"),
+                "visible_pair_rate": metrics["counts"].get("visible_pair_rate"),
             }
         )
 
@@ -644,6 +651,73 @@ def weighted_scalar_summary(eval_infos: List[Dict]) -> Dict[str, float]:
 
     total_weight = max(total_weight, 1.0)
     return {key: sums[key] / total_weight for key in keys}
+
+
+def append_mean_eval_row(
+    rows: List[Dict],
+    *,
+    run_type: str,
+    algorithm: str,
+    subset_id: Optional[str],
+    subset_clients: Optional[str],
+    seed: int,
+    phase: str,
+    split: str,
+    round_idx: Optional[int],
+    eval_infos: List[Dict],
+    eval_mask_mode: str = "full",
+    selection_protocol: Optional[str] = None,
+    selected_by: Optional[str] = None,
+) -> None:
+    mean_scalar = weighted_scalar_summary(eval_infos)
+
+    num_nodes = sum(int(m["counts"]["num_nodes"]) for m in eval_infos)
+    visible_pairs = sum(int(m["counts"].get("visible_pairs", 0)) for m in eval_infos)
+    total_pairs = sum(int(m["counts"].get("total_pairs", 0)) for m in eval_infos)
+    visible_pair_rate = visible_pairs / max(total_pairs, 1)
+
+    rows.append(
+        {
+            "run_type": run_type,
+            "algorithm": algorithm,
+            "subset_id": subset_id,
+            "subset_clients": subset_clients,
+            "seed": seed,
+            "graph_id": "all",
+            "dataset_id": "all",
+            "phase": phase,
+            "split": split,
+            "task": None,
+            "round": round_idx,
+            "local_epoch": None,
+            "eval_mask_mode": eval_mask_mode,
+            "selection_protocol": selection_protocol,
+            "selected_by": selected_by,
+            "train_loss": None,
+            "eval_loss": mean_scalar["loss"],
+            "pair_acc": mean_scalar["pair_acc"],
+            "subset_acc": mean_scalar["subset_acc"],
+            "micro_f1": mean_scalar["micro_f1"],
+            "macro_f1": mean_scalar["macro_f1"],
+            "macro_pos_f1": mean_scalar["macro_pos_f1"],
+            "macro_minority_f1": mean_scalar["macro_minority_f1"],
+            "num_nodes": num_nodes,
+            "tp": None,
+            "fp": None,
+            "tn": None,
+            "fn": None,
+            "precision": None,
+            "recall": None,
+            "f1": None,
+            "positive_f1": None,
+            "minority_f1": None,
+            "pos_cnt": None,
+            "pos_rate": None,
+            "visible_pairs": visible_pairs,
+            "total_pairs": total_pairs,
+            "visible_pair_rate": visible_pair_rate,
+        }
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -690,9 +764,23 @@ def run_local_experiment(
         )
 
     rows: List[Dict] = []
-    best_loss = float("inf")
-    best_epoch = -1
-    best_state = None
+
+    initial_state = {
+        key: value.detach().cpu().clone() for key, value in model.state_dict().items()
+    }
+
+    best_by_eval_mode = {
+        "full": {
+            "value": float("inf"),
+            "epoch": -1,
+            "state": initial_state,
+        },
+        "visible": {
+            "value": float("inf"),
+            "epoch": -1,
+            "state": initial_state,
+        },
+    }
 
     total_epochs = int(rounds * local_epochs)
 
@@ -725,61 +813,107 @@ def run_local_experiment(
             local_epoch=local_epoch,
         )
 
-        val_metrics = evaluate_loader(
-            model,
-            val_loader,
-            criterion,
-            device,
-            use_ego_ids=ctx["use_ego_ids"],
-            ego_dim=ctx["ego_dim"],
-            threshold=0.5,
-        )
-        append_eval_rows(
-            rows,
-            run_type="local",
-            algorithm="local",
-            subset_id=None,
-            subset_clients=None,
-            seed=seed,
-            phase="val_epoch",
-            split="val",
-            graph_id=str(client.graph_id),
-            dataset_id=str(client.dataset_id),
-            metrics=val_metrics,
-            local_epoch=local_epoch,
-        )
-
         print("local_epoch:", local_epoch, "train_loss:", train_loss)
-        print("local_epoch:", local_epoch, "val_loss:", val_metrics["scalar"]["loss"])
-        print("val_macro_minority_f1:", val_metrics["scalar"]["macro_minority_f1"])
-        print("val_minority_f1:", val_metrics["per_task"]["minority_f1"])
-        print("val_positive_f1:", val_metrics["per_task"]["positive_f1"])
 
-        current_value = val_metrics["scalar"][selection_metric]
-        print("current vs best:", current_value, best_loss)
+        for eval_mask_mode in ("full", "visible"):
+            val_metrics = evaluate_loader(
+                model,
+                val_loader,
+                criterion,
+                device,
+                use_ego_ids=ctx["use_ego_ids"],
+                ego_dim=ctx["ego_dim"],
+                threshold=0.5,
+                eval_mask_mode=eval_mask_mode,
+            )
 
-        if current_value < best_loss:
-            best_loss = current_value
-            best_epoch = local_epoch
-            best_state = {
-                key: value.detach().cpu().clone()
-                for key, value in model.state_dict().items()
-            }
+            append_eval_rows(
+                rows,
+                run_type="local",
+                algorithm="local",
+                subset_id=None,
+                subset_clients=None,
+                seed=seed,
+                phase=f"val_epoch_{eval_mask_mode}",
+                split="val",
+                graph_id=str(client.graph_id),
+                dataset_id=str(client.dataset_id),
+                metrics=val_metrics,
+                local_epoch=local_epoch,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
+            )
+
+            current_value = val_metrics["scalar"][selection_metric]
+
+            print(
+                "local_epoch:",
+                local_epoch,
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "val_loss:",
+                val_metrics["scalar"]["loss"],
+            )
+            print("val_macro_minority_f1:", val_metrics["scalar"]["macro_minority_f1"])
+            print("val_minority_f1:", val_metrics["per_task"]["minority_f1"])
+            print("val_positive_f1:", val_metrics["per_task"]["positive_f1"])
+            print(
+                "current vs best:",
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "current:",
+                current_value,
+                "best:",
+                best_by_eval_mode[eval_mask_mode]["value"],
+            )
+
+            if current_value < best_by_eval_mode[eval_mask_mode]["value"]:
+                best_by_eval_mode[eval_mask_mode]["value"] = current_value
+                best_by_eval_mode[eval_mask_mode]["epoch"] = local_epoch
+                best_by_eval_mode[eval_mask_mode]["state"] = {
+                    key: value.detach().cpu().clone()
+                    for key, value in model.state_dict().items()
+                }
 
     run_elapsed = time.perf_counter() - run_start_time
     print(f"run time: {format_seconds(run_elapsed)}")
     print("=======================================================")
     print("=======================================================")
 
+    # Legacy-compatible default: use the full-validation selected model.
+    best_state = best_by_eval_mode["full"]["state"]
+    best_epoch = best_by_eval_mode["full"]["epoch"]
+    best_loss = best_by_eval_mode["full"]["value"]
+
     model.load_state_dict(best_state, strict=True)
 
     checkpoint = {
+        # Legacy-compatible fields.
         "state_dict": best_state,
         "cfg": cfg,
         "seed": seed,
         "best_epoch": best_epoch,
         "best_loss": best_loss,
         "selection_metric": selection_metric,
+        # New dual-selection fields.
+        "state_dict_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["state"],
+            "visible": best_by_eval_mode["visible"]["state"],
+        },
+        "best_epoch_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["epoch"],
+            "visible": best_by_eval_mode["visible"]["epoch"],
+        },
+        "best_value_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["value"],
+            "visible": best_by_eval_mode["visible"]["value"],
+        },
+        "eval_protocols": [
+            "oracle_full",
+            "realistic_visible",
+            "realistic_selection_oracle",
+        ],
         "dataset_id": str(client.dataset_id),
         "graph_id": str(client.graph_id),
         "x_dim": ctx["x_dim"],
@@ -793,36 +927,124 @@ def run_local_experiment(
     torch.save(checkpoint, run_paths.ckpt_path)
     print(f"saved best checkpoint -> {run_paths.ckpt_path}")
 
-    for split_name, split_loader in [
-        ("train", train_loader),
-        ("val", val_loader),
-        ("test", test_loader),
-    ]:
-        metrics = evaluate_loader(
-            model,
-            split_loader,
-            criterion,
-            device,
-            use_ego_ids=ctx["use_ego_ids"],
-            ego_dim=ctx["ego_dim"],
-            threshold=0.5,
-        )
-        append_eval_rows(
-            rows,
-            run_type="local",
-            algorithm="local",
-            subset_id=None,
-            subset_clients=None,
-            seed=seed,
-            phase=f"best_local_{split_name}",
-            split=split_name,
-            graph_id=str(client.graph_id),
-            dataset_id=str(client.dataset_id),
-            metrics=metrics,
-            local_epoch=best_epoch,
-        )
+    final_eval_jobs = [
+        {
+            "selection_protocol": "oracle_full",
+            "selected_by": "full",
+            "eval_mask_mode": "full",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_visible",
+            "selected_by": "visible",
+            "eval_mask_mode": "visible",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_selection_oracle",
+            "selected_by": "visible",
+            "eval_mask_mode": "full",
+            "splits": ["test"],
+        },
+    ]
 
-    pd.DataFrame(rows).to_csv(run_paths.csv_path, index=False)
+    split_loaders = {
+        "train": train_loader,
+        "val": val_loader,
+        "test": test_loader,
+    }
+
+    for job in final_eval_jobs:
+        selection_protocol = job["selection_protocol"]
+        selected_by = job["selected_by"]
+        eval_mask_mode = job["eval_mask_mode"]
+
+        selected_state = best_by_eval_mode[selected_by]["state"]
+        selected_epoch = best_by_eval_mode[selected_by]["epoch"]
+
+        model.load_state_dict(selected_state, strict=True)
+
+        for split_name in job["splits"]:
+            metrics = evaluate_loader(
+                model,
+                split_loaders[split_name],
+                criterion,
+                device,
+                use_ego_ids=ctx["use_ego_ids"],
+                ego_dim=ctx["ego_dim"],
+                threshold=0.5,
+                eval_mask_mode=eval_mask_mode,
+            )
+
+            append_eval_rows(
+                rows,
+                run_type="local",
+                algorithm="local",
+                subset_id=None,
+                subset_clients=None,
+                seed=seed,
+                phase=f"best_{selection_protocol}_{split_name}",
+                split=split_name,
+                graph_id=str(client.graph_id),
+                dataset_id=str(client.dataset_id),
+                metrics=metrics,
+                local_epoch=selected_epoch,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=selection_protocol,
+                selected_by=selected_by,
+            )
+
+    out_df = pd.DataFrame(rows)
+
+    print("\n" + "=" * 100)
+    print("LOCAL DUAL-EVALUATION SMOKE CHECK")
+    print("=" * 100)
+    print("csv path:", run_paths.csv_path)
+    print("checkpoint path:", run_paths.ckpt_path)
+    print(
+        "best epochs by eval mode:",
+        {mode: best_by_eval_mode[mode]["epoch"] for mode in ["full", "visible"]},
+    )
+    print(
+        "best values by eval mode:",
+        {mode: best_by_eval_mode[mode]["value"] for mode in ["full", "visible"]},
+    )
+
+    final_rows = out_df[
+        (out_df["task"].isna())
+        & (out_df["split"] == "test")
+        & (
+            out_df["selection_protocol"].isin(
+                [
+                    "oracle_full",
+                    "realistic_visible",
+                    "realistic_selection_oracle",
+                ]
+            )
+        )
+    ]
+
+    print("final test protocol rows:")
+    print(
+        final_rows[
+            [
+                "phase",
+                "eval_mask_mode",
+                "selection_protocol",
+                "selected_by",
+                "graph_id",
+                "eval_loss",
+                "micro_f1",
+                "macro_pos_f1",
+                "macro_minority_f1",
+                "visible_pair_rate",
+            ]
+        ].to_string(index=False)
+    )
+
+    print("=" * 100)
+
+    out_df.to_csv(run_paths.csv_path, index=False)
     print(f"saved csv -> {run_paths.csv_path}")
 
 
@@ -919,11 +1141,23 @@ def run_fedavg_experiment(
     ).to(device)
 
     rows: List[Dict] = []
-    best_loss = float("inf")
-    best_round = -1
-    best_state = {
+
+    initial_state = {
         key: value.detach().cpu().clone()
         for key, value in global_model.state_dict().items()
+    }
+
+    best_by_eval_mode = {
+        "full": {
+            "value": float("inf"),
+            "round": -1,
+            "state": initial_state,
+        },
+        "visible": {
+            "value": float("inf"),
+            "round": -1,
+            "state": initial_state,
+        },
     }
 
     num_clients = len(runtime_clients)
@@ -987,29 +1221,35 @@ def run_fedavg_experiment(
                     local_epoch=local_epoch_idx,
                 )
 
-            post_metrics = evaluate_loader(
-                local_model,
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            append_eval_rows(
-                rows,
-                run_type="fedavg",
-                algorithm="fedavg",
-                subset_id=subset_id,
-                subset_clients=subset_clients_str,
-                seed=seed,
-                phase="val_epoch",
-                split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=post_metrics,
-                round_idx=round_idx,
-            )
+            for eval_mask_mode in ("full", "visible"):
+
+                post_metrics = evaluate_loader(
+                    local_model,
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+                append_eval_rows(
+                    rows,
+                    run_type="fedavg",
+                    algorithm="fedavg",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"val_epoch_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=post_metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
 
             local_states.append(
                 {
@@ -1022,89 +1262,89 @@ def run_fedavg_experiment(
         aggregated_state = fedavg_state_dict(local_states, local_weights)
         global_model.load_state_dict(aggregated_state, strict=True)
 
-        round_eval_infos = []
-        for runtime in runtime_clients:
-            metrics = evaluate_loader(
-                global_model,
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            round_eval_infos.append(metrics)
+        for eval_mask_mode in ("full", "visible"):
+            round_eval_infos = []
 
-            print("fed eval on client:", runtime.client.graph_id)
-            print("fedavg round:", round_idx, "val_loss:", metrics["scalar"]["loss"])
-            print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
-            print("val_minority_f1:", metrics["per_task"]["minority_f1"])
-            print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+            for runtime in runtime_clients:
+                metrics = evaluate_loader(
+                    global_model,
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+                round_eval_infos.append(metrics)
 
-            append_eval_rows(
+                print("fed eval on client:", runtime.client.graph_id)
+                print(
+                    "fedavg round:",
+                    round_idx,
+                    "eval_mask_mode:",
+                    eval_mask_mode,
+                    "val_loss:",
+                    metrics["scalar"]["loss"],
+                )
+                print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
+                print("val_minority_f1:", metrics["per_task"]["minority_f1"])
+                print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+
+                append_eval_rows(
+                    rows,
+                    run_type="fedavg",
+                    algorithm="fedavg",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"global_val_client_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
+
+            append_mean_eval_row(
                 rows,
                 run_type="fedavg",
                 algorithm="fedavg",
                 subset_id=subset_id,
                 subset_clients=subset_clients_str,
                 seed=seed,
-                phase="global_val_client",
+                phase=f"global_val_mean_{eval_mask_mode}",
                 split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
                 round_idx=round_idx,
+                eval_infos=round_eval_infos,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
             )
 
-        mean_scalar = weighted_scalar_summary(round_eval_infos)
-        rows.append(
-            {
-                "run_type": "fedavg",
-                "algorithm": "fedavg",
-                "subset_id": subset_id,
-                "subset_clients": subset_clients_str,
-                "seed": seed,
-                "graph_id": "all",
-                "dataset_id": "all",
-                "phase": "global_val_mean",
-                "split": "val",
-                "task": None,
-                "round": round_idx,
-                "local_epoch": None,
-                "train_loss": None,
-                "eval_loss": mean_scalar["loss"],
-                "pair_acc": mean_scalar["pair_acc"],
-                "subset_acc": mean_scalar["subset_acc"],
-                "micro_f1": mean_scalar["micro_f1"],
-                "macro_f1": mean_scalar["macro_f1"],
-                "macro_pos_f1": mean_scalar["macro_pos_f1"],
-                "macro_minority_f1": mean_scalar["macro_minority_f1"],
-                "num_nodes": sum(
-                    int(metrics["counts"]["num_nodes"]) for metrics in round_eval_infos
-                ),
-                "tp": None,
-                "fp": None,
-                "tn": None,
-                "fn": None,
-                "precision": None,
-                "recall": None,
-                "f1": None,
-                "positive_f1": None,
-                "minority_f1": None,
-                "pos_cnt": None,
-                "pos_rate": None,
-            }
-        )
+            mean_scalar = weighted_scalar_summary(round_eval_infos)
+            current_value = mean_scalar[selection_metric]
 
-        current_value = mean_scalar[selection_metric]
-        print("current vs best:", current_value, best_loss)
-        if current_value < best_loss:
-            best_loss = current_value
-            best_round = round_idx
-            best_state = {
-                key: value.detach().cpu().clone()
-                for key, value in global_model.state_dict().items()
-            }
+            print(
+                "current vs best:",
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "current:",
+                current_value,
+                "best:",
+                best_by_eval_mode[eval_mask_mode]["value"],
+            )
+
+            if current_value < best_by_eval_mode[eval_mask_mode]["value"]:
+                best_by_eval_mode[eval_mask_mode]["value"] = current_value
+                best_by_eval_mode[eval_mask_mode]["round"] = round_idx
+                best_by_eval_mode[eval_mask_mode]["state"] = {
+                    key: value.detach().cpu().clone()
+                    for key, value in global_model.state_dict().items()
+                }
 
         run_elapsed = time.perf_counter() - run_start_time
         print(f"run time: {format_seconds(run_elapsed)}")
@@ -1112,15 +1352,39 @@ def run_fedavg_experiment(
         print(f"==================== round {round_idx} / {rounds} ====================")
         print("=======================================================")
 
+    # Keep legacy behavior: default checkpoint state_dict is the full-validation selection.
+    best_state = best_by_eval_mode["full"]["state"]
+    best_round = best_by_eval_mode["full"]["round"]
+    best_loss = best_by_eval_mode["full"]["value"]
+
     global_model.load_state_dict(best_state, strict=True)
 
     checkpoint = {
+        # Legacy-compatible fields.
         "state_dict": best_state,
         "cfg": cfg,
         "seed": seed,
         "best_round": best_round,
         "best_loss": best_loss,
         "selection_metric": selection_metric,
+        # New dual-selection fields.
+        "state_dict_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["state"],
+            "visible": best_by_eval_mode["visible"]["state"],
+        },
+        "best_round_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["round"],
+            "visible": best_by_eval_mode["visible"]["round"],
+        },
+        "best_value_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["value"],
+            "visible": best_by_eval_mode["visible"]["value"],
+        },
+        "eval_protocols": [
+            "oracle_full",
+            "realistic_visible",
+            "realistic_selection_oracle",
+        ],
         "subset_id": subset_id,
         "subset_clients": subset_clients_str,
         "x_dim": ctx["x_dim"],
@@ -1131,42 +1395,129 @@ def run_fedavg_experiment(
         "deg_fwd_hist": ctx["deg_fwd_hist"].cpu(),
         "deg_rev_hist": ctx["deg_rev_hist"].cpu(),
     }
+
     torch.save(checkpoint, run_paths.ckpt_path)
     print(f"saved best checkpoint -> {run_paths.ckpt_path}")
 
-    for split_name in ["train", "val", "test"]:
-        for runtime in runtime_clients:
-            split_loader = {
-                "train": runtime.train_loader,
-                "val": runtime.val_loader,
-                "test": runtime.test_loader,
-            }[split_name]
+    final_eval_jobs = [
+        {
+            "selection_protocol": "oracle_full",
+            "selected_by": "full",
+            "eval_mask_mode": "full",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_visible",
+            "selected_by": "visible",
+            "eval_mask_mode": "visible",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_selection_oracle",
+            "selected_by": "visible",
+            "eval_mask_mode": "full",
+            "splits": ["test"],
+        },
+    ]
 
-            metrics = evaluate_loader(
-                global_model,
-                split_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            append_eval_rows(
-                rows,
-                run_type="fedavg",
-                algorithm="fedavg",
-                subset_id=subset_id,
-                subset_clients=subset_clients_str,
-                seed=seed,
-                phase=f"best_global_{split_name}",
-                split=split_name,
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
-                round_idx=best_round,
-            )
+    for job in final_eval_jobs:
+        selection_protocol = job["selection_protocol"]
+        selected_by = job["selected_by"]
+        eval_mask_mode = job["eval_mask_mode"]
 
-    pd.DataFrame(rows).to_csv(run_paths.csv_path, index=False)
+        selected_state = best_by_eval_mode[selected_by]["state"]
+        selected_round = best_by_eval_mode[selected_by]["round"]
+
+        global_model.load_state_dict(selected_state, strict=True)
+
+        for split_name in job["splits"]:
+            for runtime in runtime_clients:
+                split_loader = {
+                    "train": runtime.train_loader,
+                    "val": runtime.val_loader,
+                    "test": runtime.test_loader,
+                }[split_name]
+
+                metrics = evaluate_loader(
+                    global_model,
+                    split_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+
+                append_eval_rows(
+                    rows,
+                    run_type="fedavg",
+                    algorithm="fedavg",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"best_{selection_protocol}_{split_name}",
+                    split=split_name,
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=selected_round,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=selection_protocol,
+                    selected_by=selected_by,
+                )
+
+    out_df = pd.DataFrame(rows)
+
+    print("\n" + "=" * 100)
+    print("FEDAVG DUAL-EVALUATION SMOKE CHECK")
+    print("=" * 100)
+    print("csv path:", run_paths.csv_path)
+    print("checkpoint path:", run_paths.ckpt_path)
+    print(
+        "best rounds by eval mode:",
+        {mode: best_by_eval_mode[mode]["round"] for mode in ["full", "visible"]},
+    )
+    print(
+        "best values by eval mode:",
+        {mode: best_by_eval_mode[mode]["value"] for mode in ["full", "visible"]},
+    )
+
+    final_rows = out_df[
+        (out_df["task"].isna())
+        & (out_df["split"] == "test")
+        & (
+            out_df["selection_protocol"].isin(
+                [
+                    "oracle_full",
+                    "realistic_visible",
+                    "realistic_selection_oracle",
+                ]
+            )
+        )
+    ]
+
+    print("final test protocol rows:")
+    print(
+        final_rows[
+            [
+                "phase",
+                "eval_mask_mode",
+                "selection_protocol",
+                "selected_by",
+                "graph_id",
+                "eval_loss",
+                "micro_f1",
+                "macro_pos_f1",
+                "macro_minority_f1",
+                "visible_pair_rate",
+            ]
+        ].to_string(index=False)
+    )
+
+    print("=" * 100)
+
+    out_df.to_csv(run_paths.csv_path, index=False)
     print(f"saved csv -> {run_paths.csv_path}")
 
 
@@ -1252,11 +1603,23 @@ def run_fedprox_experiment(
     ).to(device)
 
     rows: List[Dict] = []
-    best_loss = float("inf")
-    best_round = -1
-    best_state = {
+
+    initial_state = {
         key: value.detach().cpu().clone()
         for key, value in global_model.state_dict().items()
+    }
+
+    best_by_eval_mode = {
+        "full": {
+            "value": float("inf"),
+            "round": -1,
+            "state": initial_state,
+        },
+        "visible": {
+            "value": float("inf"),
+            "round": -1,
+            "state": initial_state,
+        },
     }
 
     num_clients = len(runtime_clients)
@@ -1331,29 +1694,35 @@ def run_fedprox_experiment(
                     local_epoch=local_epoch_idx,
                 )
 
-            post_metrics = evaluate_loader(
-                local_model,
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            append_eval_rows(
-                rows,
-                run_type="fedprox",
-                algorithm="fedprox",
-                subset_id=subset_id,
-                subset_clients=subset_clients_str,
-                seed=seed,
-                phase="val_epoch",
-                split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=post_metrics,
-                round_idx=round_idx,
-            )
+            for eval_mask_mode in ("full", "visible"):
+                post_metrics = evaluate_loader(
+                    local_model,
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+
+                append_eval_rows(
+                    rows,
+                    run_type="fedprox",
+                    algorithm="fedprox",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"val_epoch_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=post_metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
 
             local_states.append(
                 {
@@ -1367,89 +1736,90 @@ def run_fedprox_experiment(
         aggregated_state = fedavg_state_dict(local_states, local_weights)
         global_model.load_state_dict(aggregated_state, strict=True)
         aggregated = True
-        round_eval_infos = []
-        for runtime in runtime_clients:
-            metrics = evaluate_loader(
-                global_model,
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            round_eval_infos.append(metrics)
 
-            print("fed eval on client:", runtime.client.graph_id)
-            print("fedprox round:", round_idx, "val_loss:", metrics["scalar"]["loss"])
-            print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
-            print("val_minority_f1:", metrics["per_task"]["minority_f1"])
-            print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+        for eval_mask_mode in ("full", "visible"):
+            round_eval_infos = []
 
-            append_eval_rows(
+            for runtime in runtime_clients:
+                metrics = evaluate_loader(
+                    global_model,
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+                round_eval_infos.append(metrics)
+
+                print("fed eval on client:", runtime.client.graph_id)
+                print(
+                    "fedprox round:",
+                    round_idx,
+                    "eval_mask_mode:",
+                    eval_mask_mode,
+                    "val_loss:",
+                    metrics["scalar"]["loss"],
+                )
+                print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
+                print("val_minority_f1:", metrics["per_task"]["minority_f1"])
+                print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+
+                append_eval_rows(
+                    rows,
+                    run_type="fedprox",
+                    algorithm="fedprox",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"global_val_client_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
+
+            append_mean_eval_row(
                 rows,
                 run_type="fedprox",
                 algorithm="fedprox",
                 subset_id=subset_id,
                 subset_clients=subset_clients_str,
                 seed=seed,
-                phase="global_val_client",
+                phase=f"global_val_mean_{eval_mask_mode}",
                 split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
                 round_idx=round_idx,
+                eval_infos=round_eval_infos,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
             )
 
-        mean_scalar = weighted_scalar_summary(round_eval_infos)
-        rows.append(
-            {
-                "run_type": "fedprox",
-                "algorithm": "fedprox",
-                "subset_id": subset_id,
-                "subset_clients": subset_clients_str,
-                "seed": seed,
-                "graph_id": "all",
-                "dataset_id": "all",
-                "phase": "global_val_mean",
-                "split": "val",
-                "task": None,
-                "round": round_idx,
-                "local_epoch": None,
-                "train_loss": None,
-                "eval_loss": mean_scalar["loss"],
-                "pair_acc": mean_scalar["pair_acc"],
-                "subset_acc": mean_scalar["subset_acc"],
-                "micro_f1": mean_scalar["micro_f1"],
-                "macro_f1": mean_scalar["macro_f1"],
-                "macro_pos_f1": mean_scalar["macro_pos_f1"],
-                "macro_minority_f1": mean_scalar["macro_minority_f1"],
-                "num_nodes": sum(
-                    int(metrics["counts"]["num_nodes"]) for metrics in round_eval_infos
-                ),
-                "tp": None,
-                "fp": None,
-                "tn": None,
-                "fn": None,
-                "precision": None,
-                "recall": None,
-                "f1": None,
-                "positive_f1": None,
-                "minority_f1": None,
-                "pos_cnt": None,
-                "pos_rate": None,
-            }
-        )
+            mean_scalar = weighted_scalar_summary(round_eval_infos)
+            current_value = mean_scalar[selection_metric]
 
-        current_value = mean_scalar[selection_metric]
-        print("current vs best:", current_value, best_loss)
-        if current_value < best_loss:
-            best_loss = current_value
-            best_round = round_idx
-            best_state = {
-                key: value.detach().cpu().clone()
-                for key, value in global_model.state_dict().items()
-            }
+            print(
+                "current vs best:",
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "current:",
+                current_value,
+                "best:",
+                best_by_eval_mode[eval_mask_mode]["value"],
+            )
+
+            if current_value < best_by_eval_mode[eval_mask_mode]["value"]:
+                best_by_eval_mode[eval_mask_mode]["value"] = current_value
+                best_by_eval_mode[eval_mask_mode]["round"] = round_idx
+                best_by_eval_mode[eval_mask_mode]["state"] = {
+                    key: value.detach().cpu().clone()
+                    for key, value in global_model.state_dict().items()
+                }
 
         run_elapsed = time.perf_counter() - run_start_time
         print(f"run time: {format_seconds(run_elapsed)}")
@@ -1457,15 +1827,39 @@ def run_fedprox_experiment(
         print(f"==================== round {round_idx} / {rounds} ====================")
         print("=======================================================")
 
+    # Keep legacy behavior: default checkpoint state_dict is the full-validation selection.
+    best_state = best_by_eval_mode["full"]["state"]
+    best_round = best_by_eval_mode["full"]["round"]
+    best_loss = best_by_eval_mode["full"]["value"]
+
     global_model.load_state_dict(best_state, strict=True)
 
     checkpoint = {
+        # Legacy-compatible fields.
         "state_dict": best_state,
         "cfg": cfg,
         "seed": seed,
         "best_round": best_round,
         "best_loss": best_loss,
         "selection_metric": selection_metric,
+        # New dual-selection fields.
+        "state_dict_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["state"],
+            "visible": best_by_eval_mode["visible"]["state"],
+        },
+        "best_round_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["round"],
+            "visible": best_by_eval_mode["visible"]["round"],
+        },
+        "best_value_by_eval_mode": {
+            "full": best_by_eval_mode["full"]["value"],
+            "visible": best_by_eval_mode["visible"]["value"],
+        },
+        "eval_protocols": [
+            "oracle_full",
+            "realistic_visible",
+            "realistic_selection_oracle",
+        ],
         "subset_id": subset_id,
         "subset_clients": subset_clients_str,
         "fedprox_mu": fedprox_mu,
@@ -1477,40 +1871,77 @@ def run_fedprox_experiment(
         "deg_fwd_hist": ctx["deg_fwd_hist"].cpu(),
         "deg_rev_hist": ctx["deg_rev_hist"].cpu(),
     }
+
     torch.save(checkpoint, run_paths.ckpt_path)
     print(f"saved best checkpoint -> {run_paths.ckpt_path}")
 
-    for split_name in ["train", "val", "test"]:
-        for runtime in runtime_clients:
-            split_loader = {
-                "train": runtime.train_loader,
-                "val": runtime.val_loader,
-                "test": runtime.test_loader,
-            }[split_name]
+    final_eval_jobs = [
+        {
+            "selection_protocol": "oracle_full",
+            "selected_by": "full",
+            "eval_mask_mode": "full",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_visible",
+            "selected_by": "visible",
+            "eval_mask_mode": "visible",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_selection_oracle",
+            "selected_by": "visible",
+            "eval_mask_mode": "full",
+            "splits": ["test"],
+        },
+    ]
 
-            metrics = evaluate_loader(
-                global_model,
-                split_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            append_eval_rows(
-                rows,
-                run_type="fedprox",
-                algorithm="fedprox",
-                subset_id=subset_id,
-                subset_clients=subset_clients_str,
-                seed=seed,
-                phase=f"best_global_{split_name}",
-                split=split_name,
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
-                round_idx=best_round,
-            )
+    for job in final_eval_jobs:
+        selection_protocol = job["selection_protocol"]
+        selected_by = job["selected_by"]
+        eval_mask_mode = job["eval_mask_mode"]
+
+        selected_state = best_by_eval_mode[selected_by]["state"]
+        selected_round = best_by_eval_mode[selected_by]["round"]
+
+        global_model.load_state_dict(selected_state, strict=True)
+
+        for split_name in job["splits"]:
+            for runtime in runtime_clients:
+                split_loader = {
+                    "train": runtime.train_loader,
+                    "val": runtime.val_loader,
+                    "test": runtime.test_loader,
+                }[split_name]
+
+                metrics = evaluate_loader(
+                    global_model,
+                    split_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+
+                append_eval_rows(
+                    rows,
+                    run_type="fedprox",
+                    algorithm="fedprox",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"best_{selection_protocol}_{split_name}",
+                    split=split_name,
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=selected_round,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=selection_protocol,
+                    selected_by=selected_by,
+                )
 
     pd.DataFrame(rows).to_csv(run_paths.csv_path, index=False)
     print(f"saved csv -> {run_paths.csv_path}")

@@ -69,6 +69,8 @@ HIDDEN_DIMS = [64]
 USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
 
+MASK_SPLITS = ("train", "val", "test")
+
 
 def load_cfg(config_path: str, key: str) -> Dict:
     with open(config_path, "r") as f:
@@ -151,9 +153,20 @@ def relabel_result_csv(
 
 def main():
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
-    id_to_client = load_clients(chosen_df, ALL_DATA_LOGS)
 
-    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True)
+    id_to_client = load_clients(
+        chosen_df,
+        csv_path=ALL_DATA_LOGS,
+        verbose=True,
+        mask_splits=MASK_SPLITS,
+    )
+
+    audit_loaded_q_label_masks(
+        chosen_df,
+        id_to_client,
+        strict=True,
+        mask_splits=MASK_SPLITS,
+    )
 
     if os.environ.get("MASK_AUDIT_ONLY") == "1":
         print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
@@ -263,6 +276,12 @@ def main():
                         "training_scope": "masked_virtual_client_graph",
                         "communication": "none",
                         "baseline_role": "no_communication_masked_clients",
+                        "mask_splits": "|".join(MASK_SPLITS),
+                        "selection_modes": "full|visible",
+                        "eval_protocols": (
+                            "oracle_full|realistic_visible|"
+                            "realistic_selection_oracle"
+                        ),
                     },
                 )
                 local_log_row = build_local_log_row(
@@ -280,6 +299,11 @@ def main():
                 local_log_row["communication"] = "none"
                 local_log_row["baseline_role"] = "no_communication_masked_clients"
                 local_log_row["display_name"] = "Fully local"
+                local_log_row["mask_splits"] = "|".join(MASK_SPLITS)
+                local_log_row["selection_modes"] = "full|visible"
+                local_log_row["eval_protocols"] = (
+                    "oracle_full|realistic_visible|realistic_selection_oracle"
+                )
                 add_subset_metadata(local_log_row, row)
                 local_log_row["family"] = str(family)
 

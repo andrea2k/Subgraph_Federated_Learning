@@ -583,16 +583,33 @@ def evaluate_loader_apple(
     use_ego_ids: bool,
     ego_dim: int,
     threshold: float = 0.5,
+    eval_mask_mode: str = "full",
 ) -> Dict:
+    """
+    APPLE evaluation with two modes.
+
+    eval_mask_mode="full":
+        Oracle/full-label evaluation.
+        Ignores label_mask and evaluates all labels.
+
+    eval_mask_mode="visible":
+        Realistic client-visible evaluation.
+        Uses label_mask and evaluates only visible label entries.
+    """
+    if eval_mask_mode not in {"full", "visible"}:
+        raise ValueError(
+            f"eval_mask_mode must be 'full' or 'visible', got {eval_mask_mode}"
+        )
+
     receiver_model = core_models[client_idx]
     receiver_model.eval()
 
     total_loss = 0.0
-    total_count = 0
-    total_pairs = 0
-    correct_pairs = 0
+    total_weight = 0.0
+
     all_logits = []
     all_labels = []
+    all_masks = []
 
     for batch_idx, batch in enumerate(loader, start=1):
         if batch_idx % 50 == 0:
@@ -611,71 +628,158 @@ def evaluate_loader_apple(
             edge_attr_dict=edge_attr_dict,
             device=device,
         )
+
         out_used = out[:B]
-        y_used = y_seed
+        y_used = y_seed.float()
+
+        label_mask_seed = get_seed_label_mask(batch, B)
+
+        if eval_mask_mode == "full":
+            eval_label_mask = None
+            metric_mask = torch.ones_like(y_used, dtype=torch.float32)
+        else:
+            if label_mask_seed is None:
+                eval_label_mask = None
+                metric_mask = torch.ones_like(y_used, dtype=torch.float32)
+            else:
+                eval_label_mask = label_mask_seed.float()
+                metric_mask = label_mask_seed.float()
 
         loss = masked_loss_from_logits(
             criterion,
             out_used,
-            y_used.float(),
-            label_mask=None,
+            y_used,
+            label_mask=eval_label_mask,
         )
 
-        total_loss += float(loss.item()) * B
-        total_count += B
+        if eval_label_mask is None:
+            batch_weight = float(y_used.numel())
+        else:
+            batch_weight = float(eval_label_mask.sum().item())
 
-        preds = torch.sigmoid(out_used) > threshold
-        correct_pairs += int((preds == y_used.bool()).sum().item())
-        total_pairs += int(y_used.numel())
+        total_loss += float(loss.item()) * max(batch_weight, 1.0)
+        total_weight += max(batch_weight, 1.0)
 
         all_logits.append(out_used.detach().cpu())
         all_labels.append(y_used.detach().cpu())
-
-    avg_loss = total_loss / max(total_count, 1)
-    pair_acc = correct_pairs / max(total_pairs, 1)
+        all_masks.append(metric_mask.detach().cpu())
 
     logits = torch.cat(all_logits, dim=0) if len(all_logits) else torch.empty((0,))
     labels = torch.cat(all_labels, dim=0) if len(all_labels) else torch.empty((0,))
+    masks = torch.cat(all_masks, dim=0) if len(all_masks) else torch.empty((0,))
 
-    minority_f1_per_task = (
-        compute_minority_f1_score_per_task(logits, labels, threshold=threshold)
-        .detach()
-        .cpu()
-        .float()
-    )
-    positive_f1_per_task = (
-        compute_positive_f1_score_per_task(logits, labels, threshold=threshold)
-        .detach()
-        .cpu()
-        .float()
-    )
+    if labels.numel() == 0:
+        return {
+            "scalar": {
+                "loss": float("nan"),
+                "pair_acc": float("nan"),
+                "subset_acc": float("nan"),
+                "micro_f1": float("nan"),
+                "macro_f1": float("nan"),
+                "macro_pos_f1": float("nan"),
+                "macro_minority_f1": float("nan"),
+            },
+            "per_task": {
+                "tp": [],
+                "fp": [],
+                "tn": [],
+                "fn": [],
+                "precision": [],
+                "recall": [],
+                "f1": [],
+                "positive_f1": [],
+                "minority_f1": [],
+            },
+            "counts": {
+                "num_nodes": 0,
+                "pos_cnt": [],
+                "pos_rate": [],
+                "visible_pairs": 0,
+                "total_pairs": 0,
+                "visible_pair_rate": 0.0,
+                "eval_mask_mode": eval_mask_mode,
+            },
+        }
 
-    macro_minority_f1 = float(minority_f1_per_task.mean().item())
-    macro_pos_f1 = float(positive_f1_per_task.mean().item())
-
-    pos_cnt = labels.sum(dim=0).to(torch.long).tolist()
-    pos_rate = labels.float().mean(dim=0).tolist()
+    avg_loss = total_loss / max(total_weight, 1.0)
 
     probs = torch.sigmoid(logits)
     preds = probs > threshold
     y_bool = labels.bool()
+    valid = masks > 0.5
 
-    tp_task, fp_task, tn_task, fn_task = [], [], [], []
-    prec_task, rec_task = [], []
     eps = 1e-12
     C = labels.size(1)
 
+    correct_pairs = ((preds == y_bool) & valid).sum().item()
+    total_pairs = valid.sum().item()
+    pair_acc = correct_pairs / max(total_pairs, 1)
+
+    visible_per_node = valid.sum(dim=1)
+    node_has_visible = visible_per_node > 0
+    node_correct_visible = (
+        ((preds == y_bool) | (~valid)).all(dim=1)
+    ) & node_has_visible
+
+    if node_has_visible.sum().item() > 0:
+        subset_acc = (
+            node_correct_visible.float().sum().item() / node_has_visible.sum().item()
+        )
+    else:
+        subset_acc = float("nan")
+
+    tp_task, fp_task, tn_task, fn_task = [], [], [], []
+    prec_task, rec_task = [], []
+    positive_f1_task = []
+    minority_f1_task = []
+    pos_cnt = []
+    pos_rate = []
+
     for c in range(C):
-        pred_c = preds[:, c]
-        y_c = y_bool[:, c]
+        vc = valid[:, c]
+        p = preds[vc, c]
+        y = y_bool[vc, c]
 
-        tp = int((pred_c & y_c).sum().item())
-        fp = int((pred_c & (~y_c)).sum().item())
-        tn = int(((~pred_c) & (~y_c)).sum().item())
-        fn = int(((~pred_c) & y_c).sum().item())
+        if y.numel() == 0:
+            tp = fp = tn = fn = 0
+            precision = recall = f1_pos = f1_min = float("nan")
+            pc = 0
+            pr = float("nan")
+        else:
+            tp = int((p & y).sum().item())
+            fp = int((p & (~y)).sum().item())
+            tn = int(((~p) & (~y)).sum().item())
+            fn = int(((~p) & y).sum().item())
 
-        precision = tp / max(tp + fp, eps)
-        recall = tp / max(tp + fn, eps)
+            precision = tp / max(tp + fp, eps)
+            recall = tp / max(tp + fn, eps)
+            f1_pos = 2 * precision * recall / max(precision + recall, eps)
+
+            positives = int(y.sum().item())
+            negatives = int((~y).sum().item())
+            pc = positives
+            pr = positives / max(positives + negatives, 1)
+
+            if positives <= negatives:
+                min_tp = tp
+                min_fp = fp
+                min_fn = fn
+            else:
+                min_tp = tn
+                min_fp = fn
+                min_fn = fp
+
+            min_precision = min_tp / max(min_tp + min_fp, eps)
+            min_recall = min_tp / max(min_tp + min_fn, eps)
+            f1_min = (
+                2
+                * min_precision
+                * min_recall
+                / max(
+                    min_precision + min_recall,
+                    eps,
+                )
+            )
 
         tp_task.append(tp)
         fp_task.append(fp)
@@ -683,16 +787,24 @@ def evaluate_loader_apple(
         fn_task.append(fn)
         prec_task.append(float(precision))
         rec_task.append(float(recall))
+        positive_f1_task.append(float(f1_pos))
+        minority_f1_task.append(float(f1_min))
+        pos_cnt.append(int(pc))
+        pos_rate.append(float(pr))
 
-    tp_micro = (preds & y_bool).sum().item()
-    fp_micro = (preds & (~y_bool)).sum().item()
-    fn_micro = ((~preds) & y_bool).sum().item()
+    positive_f1_tensor = torch.tensor(positive_f1_task, dtype=torch.float32)
+    minority_f1_tensor = torch.tensor(minority_f1_task, dtype=torch.float32)
+
+    macro_pos_f1 = float(torch.nanmean(positive_f1_tensor).item())
+    macro_minority_f1 = float(torch.nanmean(minority_f1_tensor).item())
+
+    tp_micro = int((preds & y_bool & valid).sum().item())
+    fp_micro = int((preds & (~y_bool) & valid).sum().item())
+    fn_micro = int(((~preds) & y_bool & valid).sum().item())
 
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
-
-    subset_acc = (preds == y_bool).all(dim=1).float().mean().item()
 
     return {
         "scalar": {
@@ -711,14 +823,18 @@ def evaluate_loader_apple(
             "fn": fn_task,
             "precision": prec_task,
             "recall": rec_task,
-            "f1": positive_f1_per_task.tolist(),
-            "positive_f1": positive_f1_per_task.tolist(),
-            "minority_f1": minority_f1_per_task.tolist(),
+            "f1": positive_f1_task,
+            "positive_f1": positive_f1_task,
+            "minority_f1": minority_f1_task,
         },
         "counts": {
             "num_nodes": int(labels.size(0)),
             "pos_cnt": [int(x) for x in pos_cnt],
             "pos_rate": [float(x) for x in pos_rate],
+            "visible_pairs": int(valid.sum().item()),
+            "total_pairs": int(valid.numel()),
+            "visible_pair_rate": float(valid.float().mean().item()),
+            "eval_mask_mode": eval_mask_mode,
         },
     }
 
@@ -825,8 +941,18 @@ def append_apple_mean_row(
     eval_infos: List[Dict],
     lambda_r: Optional[float] = None,
     num_clients: Optional[int] = None,
+    eval_mask_mode: str = "full",
+    selection_protocol: Optional[str] = None,
+    selected_by: Optional[str] = None,
 ) -> None:
     mean_scalar = weighted_scalar_summary(eval_infos)
+
+    visible_pairs = int(
+        sum(int(m["counts"].get("visible_pairs", 0)) for m in eval_infos)
+    )
+    total_pairs = int(sum(int(m["counts"].get("total_pairs", 0)) for m in eval_infos))
+    visible_pair_rate = float(visible_pairs / max(total_pairs, 1))
+
     rows.append(
         {
             "run_type": "apple_taskhead",
@@ -850,6 +976,12 @@ def append_apple_mean_row(
             "macro_pos_f1": mean_scalar["macro_pos_f1"],
             "macro_minority_f1": mean_scalar["macro_minority_f1"],
             "num_nodes": sum(int(m["counts"]["num_nodes"]) for m in eval_infos),
+            "visible_pairs": visible_pairs,
+            "total_pairs": total_pairs,
+            "visible_pair_rate": visible_pair_rate,
+            "eval_mask_mode": eval_mask_mode,
+            "selection_protocol": selection_protocol,
+            "selected_by": selected_by,
             "tp": None,
             "fp": None,
             "tn": None,
@@ -1096,16 +1228,32 @@ def run_apple_experiment(
     rows: List[Dict] = []
     dr_rows: List[Dict] = []
 
-    best_loss = float("inf")
-    best_round = -1
-    best_server_core_states = core_state_dicts(core_models)
-
-    best_local_eval_states_by_client = {
+    initial_core_states = core_state_dicts(core_models)
+    initial_local_eval_states_by_client = {
         i: core_state_dicts(core_models) for i in range(num_clients)
     }
+    initial_dr_matrix = dr_matrix_cpu(dr_vectors)
 
-    best_dr_matrix = dr_matrix_cpu(dr_vectors)
-
+    best_by_eval_mode = {
+        "full": {
+            "value": float("inf"),
+            "round": -1,
+            "server_core_states": copy.deepcopy(initial_core_states),
+            "local_eval_states_by_client": copy.deepcopy(
+                initial_local_eval_states_by_client
+            ),
+            "dr_matrix": initial_dr_matrix.clone(),
+        },
+        "visible": {
+            "value": float("inf"),
+            "round": -1,
+            "server_core_states": copy.deepcopy(initial_core_states),
+            "local_eval_states_by_client": copy.deepcopy(
+                initial_local_eval_states_by_client
+            ),
+            "dr_matrix": initial_dr_matrix.clone(),
+        },
+    }
     generator = torch.Generator().manual_seed(seed)
 
     for round_idx in range(1, rounds + 1):
@@ -1135,8 +1283,13 @@ def run_apple_experiment(
 
         updated_models: Dict[int, torch.nn.Module] = {}
 
-        round_local_eval_infos: List[Dict] = []
-        round_local_eval_states_by_client: Dict[int, List[Dict[str, torch.Tensor]]] = {}
+        round_local_eval_infos_by_mode: Dict[str, List[Dict]] = {
+            "full": [],
+            "visible": [],
+        }
+        round_local_eval_states_by_client: Dict[int, List[Dict[str, torch.Tensor]]] = {
+            i: core_state_dicts(downloaded_core_models) for i in range(num_clients)
+        }
 
         for idx in selected_indices:
             runtime = runtime_clients[idx]
@@ -1195,102 +1348,131 @@ def run_apple_experiment(
                     p0=p0,
                 )
 
-            post_metrics = evaluate_loader_apple(
-                models_for_mix,
-                idx,
-                dr_vectors[idx],
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-
-            round_local_eval_infos.append(post_metrics)
             round_local_eval_states_by_client[idx] = core_state_dicts(models_for_mix)
 
-            append_eval_rows(
-                rows,
-                run_type="apple_taskhead",
-                algorithm="apple_taskhead",
-                subset_id=subset_id,
-                subset_clients=subset_clients_str,
-                seed=seed,
-                phase="val_epoch",
-                split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=post_metrics,
-                round_idx=round_idx,
-            )
+            for eval_mask_mode in ("full", "visible"):
+                post_metrics = evaluate_loader_apple(
+                    models_for_mix,
+                    idx,
+                    dr_vectors[idx],
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+
+                round_local_eval_infos_by_mode[eval_mask_mode].append(post_metrics)
+
+                append_eval_rows(
+                    rows,
+                    run_type="apple_taskhead",
+                    algorithm="apple_taskhead",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"val_epoch_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=post_metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
 
             updated_models[idx] = local_model
 
-        append_apple_mean_row(
-            rows,
-            phase="apple_local_val_mean",
-            split="val",
-            subset_id=subset_id,
-            subset_clients=subset_clients_str,
-            seed=seed,
-            round_idx=round_idx,
-            eval_infos=round_local_eval_infos,
-            lambda_r=lambda_r,
-            num_clients=num_clients,
-        )
+        for eval_mask_mode in ("full", "visible"):
+            append_apple_mean_row(
+                rows,
+                phase=f"apple_local_val_mean_{eval_mask_mode}",
+                split="val",
+                subset_id=subset_id,
+                subset_clients=subset_clients_str,
+                seed=seed,
+                round_idx=round_idx,
+                eval_infos=round_local_eval_infos_by_mode[eval_mask_mode],
+                lambda_r=lambda_r,
+                num_clients=num_clients,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
+            )
 
         for idx, updated_model in updated_models.items():
             core_models[idx] = updated_model
 
-        round_eval_infos = []
-        for idx, runtime in enumerate(runtime_clients):
-            metrics = evaluate_loader_apple(
-                core_models,
-                idx,
-                dr_vectors[idx],
-                runtime.val_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            round_eval_infos.append(metrics)
+        round_eval_infos_by_mode: Dict[str, List[Dict]] = {
+            "full": [],
+            "visible": [],
+        }
 
-            print("apple eval on client:", runtime.client.graph_id)
-            print("apple round:", round_idx, "val_loss:", metrics["scalar"]["loss"])
-            print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
-            print("val_minority_f1:", metrics["per_task"]["minority_f1"])
-            print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+        for eval_mask_mode in ("full", "visible"):
+            for idx, runtime in enumerate(runtime_clients):
+                metrics = evaluate_loader_apple(
+                    core_models,
+                    idx,
+                    dr_vectors[idx],
+                    runtime.val_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+                round_eval_infos_by_mode[eval_mask_mode].append(metrics)
 
-            append_eval_rows(
+                print("apple eval on client:", runtime.client.graph_id)
+                print(
+                    "apple round:",
+                    round_idx,
+                    "eval_mask_mode:",
+                    eval_mask_mode,
+                    "val_loss:",
+                    metrics["scalar"]["loss"],
+                )
+                print("val_macro_minority_f1:", metrics["scalar"]["macro_minority_f1"])
+                print("val_minority_f1:", metrics["per_task"]["minority_f1"])
+                print("val_positive_f1:", metrics["per_task"]["positive_f1"])
+
+                append_eval_rows(
+                    rows,
+                    run_type="apple_taskhead",
+                    algorithm="apple_taskhead",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"apple_val_client_{eval_mask_mode}",
+                    split="val",
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=round_idx,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=None,
+                    selected_by=None,
+                )
+
+            append_apple_mean_row(
                 rows,
-                run_type="apple_taskhead",
-                algorithm="apple_taskhead",
+                phase=f"apple_val_mean_{eval_mask_mode}",
+                split="val",
                 subset_id=subset_id,
                 subset_clients=subset_clients_str,
                 seed=seed,
-                phase="apple_val_client",
-                split="val",
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
                 round_idx=round_idx,
+                eval_infos=round_eval_infos_by_mode[eval_mask_mode],
+                lambda_r=lambda_r,
+                num_clients=num_clients,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=None,
+                selected_by=None,
             )
-
-        append_apple_mean_row(
-            rows,
-            phase="apple_val_mean",
-            split="val",
-            subset_id=subset_id,
-            subset_clients=subset_clients_str,
-            seed=seed,
-            round_idx=round_idx,
-            eval_infos=round_eval_infos,
-            lambda_r=lambda_r,
-            num_clients=num_clients,
-        )
 
         append_apple_dr_rows(
             dr_rows,
@@ -1306,22 +1488,37 @@ def run_apple_experiment(
             client_metadata=client_metadata,
         )
 
-        local_mean_scalar = weighted_scalar_summary(round_local_eval_infos)
-        current_value = local_mean_scalar[selection_metric]
+        for eval_mask_mode in ("full", "visible"):
+            local_mean_scalar = weighted_scalar_summary(
+                round_local_eval_infos_by_mode[eval_mask_mode]
+            )
+            current_value = local_mean_scalar[selection_metric]
 
-        print("current local-update APPLE vs best:", current_value, best_loss)
-
-        if current_value < best_loss:
-            best_loss = current_value
-            best_round = round_idx
-
-            best_local_eval_states_by_client = copy.deepcopy(
-                round_local_eval_states_by_client
+            print(
+                "current local-update APPLE vs best:",
+                "eval_mask_mode:",
+                eval_mask_mode,
+                "current:",
+                current_value,
+                "best:",
+                best_by_eval_mode[eval_mask_mode]["value"],
             )
 
-            best_server_core_states = core_state_dicts(core_models)
+            if current_value < best_by_eval_mode[eval_mask_mode]["value"]:
+                best_by_eval_mode[eval_mask_mode]["value"] = current_value
+                best_by_eval_mode[eval_mask_mode]["round"] = round_idx
 
-            best_dr_matrix = dr_matrix_cpu(dr_vectors)
+                best_by_eval_mode[eval_mask_mode]["local_eval_states_by_client"] = (
+                    copy.deepcopy(round_local_eval_states_by_client)
+                )
+
+                best_by_eval_mode[eval_mask_mode]["server_core_states"] = (
+                    core_state_dicts(core_models)
+                )
+
+                best_by_eval_mode[eval_mask_mode]["dr_matrix"] = dr_matrix_cpu(
+                    dr_vectors
+                )
 
         run_elapsed = time.perf_counter() - run_start_time
         print(f"run time: {format_seconds(run_elapsed)}")
@@ -1332,31 +1529,65 @@ def run_apple_experiment(
         # Keep GPU memory usage predictable across rounds.
         del downloaded_core_models
 
+    default_mode = "full"
+    default_state = best_by_eval_mode[default_mode]
+    default_dr_matrix = default_state["dr_matrix"]
+
     best_dr_vectors = [
-        torch.nn.Parameter(best_dr_matrix[i].to(device).clone())
-        for i in range(best_dr_matrix.size(0))
+        torch.nn.Parameter(default_dr_matrix[i].to(device).clone())
+        for i in range(default_dr_matrix.size(0))
     ]
 
+    state_by_eval_mode = {
+        mode: {
+            "core_state_dicts": best_by_eval_mode[mode]["server_core_states"],
+            "server_core_state_dicts_after_upload": best_by_eval_mode[mode][
+                "server_core_states"
+            ],
+            "local_eval_state_dicts_by_client": best_by_eval_mode[mode][
+                "local_eval_states_by_client"
+            ],
+            "dr_matrix": best_by_eval_mode[mode]["dr_matrix"].clone(),
+            "dr_tensor": best_by_eval_mode[mode]["dr_matrix"].clone(),
+        }
+        for mode in ("full", "visible")
+    }
+
     checkpoint = {
-        "core_state_dicts": best_server_core_states,
-        "server_core_state_dicts_after_upload": best_server_core_states,
-        "local_eval_state_dicts_by_client": best_local_eval_states_by_client,
+        # Legacy-compatible default fields: full-validation selected state.
+        "core_state_dicts": default_state["server_core_states"],
+        "server_core_state_dicts_after_upload": default_state["server_core_states"],
+        "local_eval_state_dicts_by_client": default_state[
+            "local_eval_states_by_client"
+        ],
         "selection_protocol": "after_local_personalized_model",
         "apple_mixing_mode": "task_head",
         "output_head": cfg.get("output_head", "multi"),
         "num_tasks": num_tasks,
         "dr_vectors": [
-            best_dr_matrix[i].clone() for i in range(best_dr_matrix.size(0))
+            default_dr_matrix[i].clone() for i in range(default_dr_matrix.size(0))
         ],
-        # Shape [num_clients, num_tasks, num_clients].
-        "dr_matrix": best_dr_matrix.clone(),
-        "dr_tensor": best_dr_matrix.clone(),
+        "dr_matrix": default_dr_matrix.clone(),
+        "dr_tensor": default_dr_matrix.clone(),
         "p0": p0.detach().cpu().clone(),
         "cfg": cfg,
         "seed": seed,
-        "best_round": best_round,
-        "best_loss": best_loss,
+        "best_round": default_state["round"],
+        "best_loss": default_state["value"],
         "selection_metric": selection_metric,
+        # New dual-selection fields.
+        "state_by_eval_mode": state_by_eval_mode,
+        "best_round_by_eval_mode": {
+            mode: best_by_eval_mode[mode]["round"] for mode in ("full", "visible")
+        },
+        "best_value_by_eval_mode": {
+            mode: best_by_eval_mode[mode]["value"] for mode in ("full", "visible")
+        },
+        "eval_protocols": [
+            "oracle_full",
+            "realistic_visible",
+            "realistic_selection_oracle",
+        ],
         "subset_id": subset_id,
         "subset_clients": subset_clients_str,
         "apple_dr_lr": dr_lr,
@@ -1377,61 +1608,154 @@ def run_apple_experiment(
     torch.save(checkpoint, run_paths.ckpt_path)
     print(f"saved best checkpoint -> {run_paths.ckpt_path}")
 
-    for split_name in ["train", "val", "test"]:
-        split_eval_infos = []
-        for idx, runtime in enumerate(runtime_clients):
-            split_loader = {
-                "train": runtime.train_loader,
-                "val": runtime.val_loader,
-                "test": runtime.test_loader,
-            }[split_name]
+    final_eval_jobs = [
+        {
+            "selection_protocol": "oracle_full",
+            "selected_by": "full",
+            "eval_mask_mode": "full",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_visible",
+            "selected_by": "visible",
+            "eval_mask_mode": "visible",
+            "splits": ["train", "val", "test"],
+        },
+        {
+            "selection_protocol": "realistic_selection_oracle",
+            "selected_by": "visible",
+            "eval_mask_mode": "full",
+            "splits": ["test"],
+        },
+    ]
 
-            best_models_for_mix = [
-                clone_model_from_state(state, cfg, ctx, device)
-                for state in best_local_eval_states_by_client[idx]
-            ]
-            metrics = evaluate_loader_apple(
-                best_models_for_mix,
-                idx,
-                best_dr_vectors[idx],
-                split_loader,
-                runtime.criterion,
-                device,
-                use_ego_ids=ctx["use_ego_ids"],
-                ego_dim=ctx["ego_dim"],
-                threshold=0.5,
-            )
-            split_eval_infos.append(metrics)
+    for job in final_eval_jobs:
+        selection_protocol = job["selection_protocol"]
+        selected_by = job["selected_by"]
+        eval_mask_mode = job["eval_mask_mode"]
 
-            append_eval_rows(
+        selected_state = best_by_eval_mode[selected_by]
+        selected_round = selected_state["round"]
+        selected_dr_matrix = selected_state["dr_matrix"]
+
+        selected_dr_vectors = [
+            torch.nn.Parameter(selected_dr_matrix[i].to(device).clone())
+            for i in range(selected_dr_matrix.size(0))
+        ]
+
+        for split_name in job["splits"]:
+            split_eval_infos = []
+
+            for idx, runtime in enumerate(runtime_clients):
+                split_loader = {
+                    "train": runtime.train_loader,
+                    "val": runtime.val_loader,
+                    "test": runtime.test_loader,
+                }[split_name]
+
+                best_models_for_mix = [
+                    clone_model_from_state(state, cfg, ctx, device)
+                    for state in selected_state["local_eval_states_by_client"][idx]
+                ]
+
+                metrics = evaluate_loader_apple(
+                    best_models_for_mix,
+                    idx,
+                    selected_dr_vectors[idx],
+                    split_loader,
+                    runtime.criterion,
+                    device,
+                    use_ego_ids=ctx["use_ego_ids"],
+                    ego_dim=ctx["ego_dim"],
+                    threshold=0.5,
+                    eval_mask_mode=eval_mask_mode,
+                )
+                split_eval_infos.append(metrics)
+
+                append_eval_rows(
+                    rows,
+                    run_type="apple_taskhead",
+                    algorithm="apple_taskhead",
+                    subset_id=subset_id,
+                    subset_clients=subset_clients_str,
+                    seed=seed,
+                    phase=f"best_{selection_protocol}_{split_name}",
+                    split=split_name,
+                    graph_id=str(runtime.client.graph_id),
+                    dataset_id=str(runtime.client.dataset_id),
+                    metrics=metrics,
+                    round_idx=selected_round,
+                    eval_mask_mode=eval_mask_mode,
+                    selection_protocol=selection_protocol,
+                    selected_by=selected_by,
+                )
+
+            append_apple_mean_row(
                 rows,
-                run_type="apple_taskhead",
-                algorithm="apple_taskhead",
+                phase=f"best_{selection_protocol}_{split_name}_mean",
+                split=split_name,
                 subset_id=subset_id,
                 subset_clients=subset_clients_str,
                 seed=seed,
-                phase=f"best_apple_{split_name}",
-                split=split_name,
-                graph_id=str(runtime.client.graph_id),
-                dataset_id=str(runtime.client.dataset_id),
-                metrics=metrics,
-                round_idx=best_round,
+                round_idx=selected_round,
+                eval_infos=split_eval_infos,
+                lambda_r=None,
+                num_clients=num_clients,
+                eval_mask_mode=eval_mask_mode,
+                selection_protocol=selection_protocol,
+                selected_by=selected_by,
             )
 
-        append_apple_mean_row(
-            rows,
-            phase=f"best_apple_{split_name}_mean",
-            split=split_name,
-            subset_id=subset_id,
-            subset_clients=subset_clients_str,
-            seed=seed,
-            round_idx=best_round,
-            eval_infos=split_eval_infos,
-            lambda_r=None,
-            num_clients=num_clients,
-        )
+    out_df = pd.DataFrame(rows)
 
-    pd.DataFrame(rows).to_csv(run_paths.csv_path, index=False)
+    print("\n" + "=" * 100)
+    print("APPLE TASK-HEAD DUAL-EVALUATION SMOKE CHECK")
+    print("=" * 100)
+    print("csv path:", run_paths.csv_path)
+    print("checkpoint path:", run_paths.ckpt_path)
+    print(
+        "best rounds by eval mode:",
+        {mode: best_by_eval_mode[mode]["round"] for mode in ("full", "visible")},
+    )
+    print(
+        "best values by eval mode:",
+        {mode: best_by_eval_mode[mode]["value"] for mode in ("full", "visible")},
+    )
+
+    final_rows = out_df[
+        (out_df["task"].isna())
+        & (out_df["split"] == "test")
+        & (
+            out_df["selection_protocol"].isin(
+                [
+                    "oracle_full",
+                    "realistic_visible",
+                    "realistic_selection_oracle",
+                ]
+            )
+        )
+    ]
+
+    print("final test protocol rows:")
+    print(
+        final_rows[
+            [
+                "phase",
+                "eval_mask_mode",
+                "selection_protocol",
+                "selected_by",
+                "graph_id",
+                "eval_loss",
+                "micro_f1",
+                "macro_pos_f1",
+                "macro_minority_f1",
+                "visible_pair_rate",
+            ]
+        ].to_string(index=False)
+    )
+    print("=" * 100)
+
+    out_df.to_csv(run_paths.csv_path, index=False)
     pd.DataFrame(dr_rows).to_csv(run_paths.dr_csv_path, index=False)
     print(f"saved csv -> {run_paths.csv_path}")
     print(f"saved DR csv -> {run_paths.dr_csv_path}")

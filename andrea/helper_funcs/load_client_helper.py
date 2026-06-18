@@ -482,65 +482,6 @@ def _mask_debug_counts(g) -> Dict[str, List[int]]:
     }
 
 
-def print_client_debug_summary(
-    client: ClientData,
-    *,
-    name: str = "",
-) -> None:
-    """
-    Debug one loaded ClientData object.
-
-    This checks:
-      - graph/dataset identity
-      - whether this is masked or unmasked
-      - x/y shapes
-      - visible/hidden labels per split
-      - whether val/test masks are full visibility
-    """
-    title = f"CLIENT DEBUG SUMMARY | {name}" if name else "CLIENT DEBUG SUMMARY"
-
-    print("\n" + "=" * 100)
-    print(title)
-    print("=" * 100)
-
-    print("graph_id     :", client.graph_id)
-    print("dataset_id   :", client.dataset_id)
-    print("data_dir     :", client.data_dir)
-    print("mask_meta    :", client.mask_meta)
-
-    if client.mask_meta is None:
-        print("mask type    : UNMASKED / LOCAL-CENTRALIZED CANDIDATE")
-    else:
-        print("mask type    : MASKED / FULLY-LOCAL CLIENT")
-        print("mask_mode    :", client.mask_meta.get("mask_mode"))
-        print("assigned_task:", client.mask_meta.get("assigned_task"))
-        print("q_value      :", client.mask_meta.get("q_value"))
-        print("base_graph_id:", client.mask_meta.get("base_graph_id"))
-
-    for split_name, g in [
-        ("train", client.train_g),
-        ("val", client.val_g),
-        ("test", client.test_g),
-    ]:
-        counts = _mask_debug_counts(g)
-
-        print("\n" + "-" * 80)
-        print(f"{split_name.upper()} GRAPH")
-        print("-" * 80)
-        print("num_nodes          :", getattr(g, "num_nodes", None))
-        print("x shape            :", tuple(g.x.shape))
-        print("y shape            :", tuple(g.y.shape))
-        print("label_mask shape   :", tuple(g.label_mask.shape))
-        print("label_mask all ones:", _mask_is_all_ones(g))
-
-        print("total_pos  :", dict(zip(TASKS, counts["total_pos"])))
-        print("visible_pos:", dict(zip(TASKS, counts["visible_pos"])))
-        print("hidden_pos :", dict(zip(TASKS, counts["hidden_pos"])))
-        print("hidden_neg :", dict(zip(TASKS, counts["hidden_neg"])))
-
-    print("=" * 100)
-
-
 def audit_loaded_q_label_masks(
     chosen_df: pd.DataFrame,
     id_to_client: Dict[int, ClientData],

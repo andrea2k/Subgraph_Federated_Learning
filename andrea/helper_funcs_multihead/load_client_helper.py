@@ -385,7 +385,75 @@ def apply_q_task_label_allocation_mask(
     return g
 
 
-def apply_mask_to_splits(train_g, val_g, test_g, mask_meta):
+def apply_mask_to_one_graph(g, mask_meta):
+    """
+    Apply the same label-mask rule to one split graph.
+
+    Important:
+    - The graph labels y are NOT deleted.
+    - We only change g.label_mask.
+    - Full/oracle evaluation can still ignore label_mask and use all y.
+    - Realistic/visible evaluation can use label_mask.
+    """
+    g = attach_full_label_mask(g)
+
+    if mask_meta is None:
+        return g
+
+    mode = mask_meta["mask_mode"]
+
+    if mode == "drop_positive_labels":
+        return apply_positive_label_mask(
+            g,
+            task=mask_meta["mask_task"],
+            fraction=mask_meta["mask_fraction"],
+            seed=mask_meta["mask_seed"],
+        )
+
+    if mode == "keep_assigned_task_mask_other_labels":
+        return apply_keep_assigned_task_mask_other_labels(
+            g,
+            assigned_task=mask_meta["assigned_task"],
+            fraction=mask_meta["mask_fraction"],
+            seed=mask_meta["mask_seed"],
+        )
+
+    if mode == "q_task_label_allocation":
+        return apply_q_task_label_allocation_mask(
+            g,
+            assigned_task=mask_meta["assigned_task"],
+            q_value=mask_meta["q_value"],
+            base_graph_id=mask_meta["base_graph_id"],
+        )
+
+    raise ValueError(f"Unknown mask_mode: {mode}")
+
+
+def apply_mask_to_splits(
+    train_g,
+    val_g,
+    test_g,
+    mask_meta,
+    *,
+    mask_splits=("train",),
+):
+    """
+    Attach label masks to train/val/test.
+
+    mask_splits=("train",)
+        Old setting:
+        - train is masked
+        - val/test remain full-visible
+
+    mask_splits=("train", "val", "test")
+        Realistic setting:
+        - train is masked
+        - val is masked
+        - test is masked
+
+    Full/oracle evaluation is still possible because labels are not removed;
+    only label_mask changes.
+    """
     train_g = attach_full_label_mask(train_g)
     val_g = attach_full_label_mask(val_g)
     test_g = attach_full_label_mask(test_g)
@@ -393,37 +461,14 @@ def apply_mask_to_splits(train_g, val_g, test_g, mask_meta):
     if mask_meta is None:
         return train_g, val_g, test_g
 
-    if mask_meta["mask_apply_split"] != "train":
-        raise ValueError("Expected mask_apply_split='train'.")
+    if "train" in mask_splits:
+        train_g = apply_mask_to_one_graph(train_g, mask_meta)
 
-    mode = mask_meta["mask_mode"]
+    if "val" in mask_splits:
+        val_g = apply_mask_to_one_graph(val_g, mask_meta)
 
-    if mode == "drop_positive_labels":
-        train_g = apply_positive_label_mask(
-            train_g,
-            task=mask_meta["mask_task"],
-            fraction=mask_meta["mask_fraction"],
-            seed=mask_meta["mask_seed"],
-        )
-
-    elif mode == "keep_assigned_task_mask_other_labels":
-        train_g = apply_keep_assigned_task_mask_other_labels(
-            train_g,
-            assigned_task=mask_meta["assigned_task"],
-            fraction=mask_meta["mask_fraction"],
-            seed=mask_meta["mask_seed"],
-        )
-
-    elif mode == "q_task_label_allocation":
-        train_g = apply_q_task_label_allocation_mask(
-            train_g,
-            assigned_task=mask_meta["assigned_task"],
-            q_value=mask_meta["q_value"],
-            base_graph_id=mask_meta["base_graph_id"],
-        )
-
-    else:
-        raise ValueError(f"Unknown mask_mode: {mode}")
+    if "test" in mask_splits:
+        test_g = apply_mask_to_one_graph(test_g, mask_meta)
 
     return train_g, val_g, test_g
 
@@ -730,6 +775,7 @@ def audit_loaded_q_label_masks(
     *,
     strict: bool = True,
     max_groups: Optional[int] = None,
+    mask_splits=("train",),
 ) -> None:
     """
     Debug correctness of loaded q-controlled label masks.
@@ -822,16 +868,46 @@ def audit_loaded_q_label_masks(
                 strict=strict,
             )
 
-            _assert_or_warn(
-                _mask_is_all_ones(client.val_g),
-                f"client {client.graph_id} val label_mask is not all ones",
-                strict=strict,
-            )
-            _assert_or_warn(
-                _mask_is_all_ones(client.test_g),
-                f"client {client.graph_id} test label_mask is not all ones",
-                strict=strict,
-            )
+            for split_name, split_g in [
+                ("val", client.val_g),
+                ("test", client.test_g),
+            ]:
+                if split_name in mask_splits:
+                    # New realistic setting:
+                    # val/test are allowed, and expected, to have partial masks.
+                    counts_split = _mask_debug_counts(split_g)
+                    hidden_neg_total_split = int(sum(counts_split["hidden_neg"]))
+
+                    _assert_or_warn(
+                        hidden_neg_total_split == 0,
+                        (
+                            f"client {client.graph_id} {split_name} hides negatives, "
+                            f"but q masking should only hide positives. "
+                            f"hidden_neg={counts_split['hidden_neg']}"
+                        ),
+                        strict=strict,
+                    )
+
+                    print(
+                        f"{split_name} mask check:",
+                        "client:",
+                        client.graph_id,
+                        "visible_pos:",
+                        dict(zip(TASKS, counts_split["visible_pos"])),
+                        "hidden_pos:",
+                        dict(zip(TASKS, counts_split["hidden_pos"])),
+                        "hidden_neg_total:",
+                        hidden_neg_total_split,
+                    )
+
+                else:
+                    # Old oracle-val/test setting:
+                    # val/test should remain full-visible.
+                    _assert_or_warn(
+                        _mask_is_all_ones(split_g),
+                        f"client {client.graph_id} {split_name} label_mask is not all ones",
+                        strict=strict,
+                    )
 
             print(
                 "client:",
@@ -936,6 +1012,8 @@ def load_clients(
     chosen_df: pd.DataFrame,
     csv_path: Optional[str] = None,
     verbose: bool = True,
+    *,
+    mask_splits=("train",),
 ) -> Dict[int, ClientData]:
     if csv_path is None:
         df_needed = chosen_df
@@ -958,7 +1036,13 @@ def load_clients(
 
         train_g, val_g, test_g = load_client_from_dir(data_dir)
 
-        train_g, val_g, test_g = apply_mask_to_splits(train_g, val_g, test_g, mask_meta)
+        train_g, val_g, test_g = apply_mask_to_splits(
+            train_g,
+            val_g,
+            test_g,
+            mask_meta,
+            mask_splits=mask_splits,
+        )
 
         train_h = make_bidirected_hetero(train_g)
         val_h = make_bidirected_hetero(val_g)

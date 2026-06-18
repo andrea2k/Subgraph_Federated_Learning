@@ -318,28 +318,43 @@ def evaluate_loader(
     use_ego_ids: bool,
     ego_dim: int,
     threshold: float = 0.5,
+    eval_mask_mode: str = "full",
 ):
     """
-    Single-pass evaluation:
-    - fixed threshold=0.5
-    - no threshold tuning
-    - no separate logits evaluation pipeline
+    Evaluation with two modes.
+
+    eval_mask_mode="full":
+        Oracle/full-label evaluation.
+        Ignores label_mask and evaluates all labels.
+
+    eval_mask_mode="visible":
+        Realistic client-visible evaluation.
+        Uses label_mask and evaluates only visible label entries.
+
+    Important:
+    - Labels are not removed from the graph.
+    - The difference is only whether label_mask is used.
     """
+    if eval_mask_mode not in {"full", "visible"}:
+        raise ValueError(
+            f"eval_mask_mode must be 'full' or 'visible', got {eval_mask_mode}"
+        )
+
     model.eval()
 
     total_loss = 0.0
-    total_count = 0
-    total_pairs = 0
-    correct_pairs = 0
+    total_weight = 0.0
 
     all_logits = []
     all_labels = []
+    all_masks = []
 
     i = 0
     for batch in loader:
         i += 1
         if i % 10 == 0:
             print("eval-batch:", i)
+
         batch = batch.to(device)
 
         x_in, y_seed, B = augment_batch_x_with_ego(batch, use_ego_ids, ego_dim)
@@ -353,72 +368,162 @@ def evaluate_loader(
         )
 
         out_used = out[:B]
-        y_used = y_seed
+        y_used = y_seed.float()
+
+        label_mask_seed = get_seed_label_mask(batch, B)
+
+        if eval_mask_mode == "full":
+            eval_label_mask = None
+            metric_mask = torch.ones_like(y_used, dtype=torch.float32)
+        else:
+            if label_mask_seed is None:
+                eval_label_mask = None
+                metric_mask = torch.ones_like(y_used, dtype=torch.float32)
+            else:
+                eval_label_mask = label_mask_seed.float()
+                metric_mask = label_mask_seed.float()
 
         loss = masked_loss_from_logits(
             criterion,
             out_used,
-            y_used.float(),
-            label_mask=None,
+            y_used,
+            label_mask=eval_label_mask,
         )
 
-        total_loss += loss.item() * B
-        total_count += B
+        # Weight loss by number of visible label entries, not number of nodes.
+        if eval_label_mask is None:
+            batch_weight = float(y_used.numel())
+        else:
+            batch_weight = float(eval_label_mask.sum().item())
 
-        preds = torch.sigmoid(out_used) > threshold
-        correct_pairs += (preds == y_used.bool()).sum().item()
-        total_pairs += y_used.numel()
+        total_loss += float(loss.item()) * max(batch_weight, 1.0)
+        total_weight += max(batch_weight, 1.0)
 
         all_logits.append(out_used.detach().cpu())
         all_labels.append(y_used.detach().cpu())
-
-    avg_loss = total_loss / max(total_count, 1)
-    pair_acc = correct_pairs / max(total_pairs, 1)
+        all_masks.append(metric_mask.detach().cpu())
 
     logits = torch.cat(all_logits, dim=0) if len(all_logits) else torch.empty((0,))
     labels = torch.cat(all_labels, dim=0) if len(all_labels) else torch.empty((0,))
+    masks = torch.cat(all_masks, dim=0) if len(all_masks) else torch.empty((0,))
 
-    minority_f1_per_task = (
-        compute_minority_f1_score_per_task(logits, labels, threshold=threshold)
-        .detach()
-        .cpu()
-        .float()
-    )
+    if labels.numel() == 0:
+        return {
+            "scalar": {
+                "loss": float("nan"),
+                "pair_acc": float("nan"),
+                "subset_acc": float("nan"),
+                "micro_f1": float("nan"),
+                "macro_f1": float("nan"),
+                "macro_pos_f1": float("nan"),
+                "macro_minority_f1": float("nan"),
+            },
+            "per_task": {
+                "tp": [],
+                "fp": [],
+                "tn": [],
+                "fn": [],
+                "precision": [],
+                "recall": [],
+                "f1": [],
+                "positive_f1": [],
+                "minority_f1": [],
+            },
+            "counts": {
+                "num_nodes": 0,
+                "pos_cnt": [],
+                "pos_rate": [],
+                "visible_pairs": 0,
+                "total_pairs": 0,
+                "visible_pair_rate": 0.0,
+                "eval_mask_mode": eval_mask_mode,
+            },
+        }
 
-    positive_f1_per_task = (
-        compute_positive_f1_score_per_task(logits, labels, threshold=threshold)
-        .detach()
-        .cpu()
-        .float()
-    )
+    avg_loss = total_loss / max(total_weight, 1.0)
 
-    macro_minority_f1 = float(minority_f1_per_task.mean().item())
-    macro_pos_f1 = float(positive_f1_per_task.mean().item())
-
-    pos_cnt = labels.sum(dim=0).to(torch.long).tolist()
-    pos_rate = labels.float().mean(dim=0).tolist()
-
-    # keep tp/fp/tn/fn if you still want detailed logging
     probs = torch.sigmoid(logits)
     preds = probs > threshold
     y_bool = labels.bool()
-
-    tp_task, fp_task, tn_task, fn_task = [], [], [], []
-    prec_task, rec_task = [], []
+    valid = masks > 0.5
 
     eps = 1e-12
     C = labels.size(1)
+
+    # Pair accuracy over valid label entries only.
+    correct_pairs = ((preds == y_bool) & valid).sum().item()
+    total_pairs = valid.sum().item()
+    pair_acc = correct_pairs / max(total_pairs, 1)
+
+    # Subset accuracy over visible entries.
+    # A node is correct if all its visible label entries are correct.
+    visible_per_node = valid.sum(dim=1)
+    node_has_visible = visible_per_node > 0
+    node_correct_visible = (
+        ((preds == y_bool) | (~valid)).all(dim=1)
+    ) & node_has_visible
+
+    if node_has_visible.sum().item() > 0:
+        subset_acc = (
+            node_correct_visible.float().sum().item() / node_has_visible.sum().item()
+        )
+    else:
+        subset_acc = float("nan")
+
+    tp_task, fp_task, tn_task, fn_task = [], [], [], []
+    prec_task, rec_task = [], []
+    positive_f1_task = []
+    minority_f1_task = []
+    pos_cnt = []
+    pos_rate = []
+
     for c in range(C):
-        p = preds[:, c]
-        y = y_bool[:, c]
+        vc = valid[:, c]
+        p = preds[vc, c]
+        y = y_bool[vc, c]
 
-        tp = int((p & y).sum().item())
-        fp = int((p & (~y)).sum().item())
-        tn = int(((~p) & (~y)).sum().item())
-        fn = int(((~p) & y).sum().item())
+        if y.numel() == 0:
+            tp = fp = tn = fn = 0
+            precision = recall = f1_pos = f1_min = float("nan")
+            pc = 0
+            pr = float("nan")
+        else:
+            tp = int((p & y).sum().item())
+            fp = int((p & (~y)).sum().item())
+            tn = int(((~p) & (~y)).sum().item())
+            fn = int(((~p) & y).sum().item())
 
-        precision = tp / max(tp + fp, eps)
-        recall = tp / max(tp + fn, eps)
+            precision = tp / max(tp + fp, eps)
+            recall = tp / max(tp + fn, eps)
+            f1_pos = 2 * precision * recall / max(precision + recall, eps)
+
+            positives = int(y.sum().item())
+            negatives = int((~y).sum().item())
+            pc = positives
+            pr = positives / max(positives + negatives, 1)
+
+            # Minority F1: compute F1 for whichever class is minority
+            if positives <= negatives:
+                min_tp = tp
+                min_fp = fp
+                min_fn = fn
+            else:
+                # Treat negative class as the positive class.
+                min_tp = tn
+                min_fp = fn
+                min_fn = fp
+
+            min_precision = min_tp / max(min_tp + min_fp, eps)
+            min_recall = min_tp / max(min_tp + min_fn, eps)
+            f1_min = (
+                2
+                * min_precision
+                * min_recall
+                / max(
+                    min_precision + min_recall,
+                    eps,
+                )
+            )
 
         tp_task.append(tp)
         fp_task.append(fp)
@@ -426,17 +531,26 @@ def evaluate_loader(
         fn_task.append(fn)
         prec_task.append(float(precision))
         rec_task.append(float(recall))
+        positive_f1_task.append(float(f1_pos))
+        minority_f1_task.append(float(f1_min))
+        pos_cnt.append(int(pc))
+        pos_rate.append(float(pr))
 
-    # micro-F1 over positive class
-    tp_micro = (preds & y_bool).sum().item()
-    fp_micro = (preds & (~y_bool)).sum().item()
-    fn_micro = ((~preds) & y_bool).sum().item()
+    # Macro values: ignore NaN tasks if any task has no visible support.
+    positive_f1_tensor = torch.tensor(positive_f1_task, dtype=torch.float32)
+    minority_f1_tensor = torch.tensor(minority_f1_task, dtype=torch.float32)
+
+    macro_pos_f1 = float(torch.nanmean(positive_f1_tensor).item())
+    macro_minority_f1 = float(torch.nanmean(minority_f1_tensor).item())
+
+    # Micro positive F1 over all valid entries.
+    tp_micro = int((preds & y_bool & valid).sum().item())
+    fp_micro = int((preds & (~y_bool) & valid).sum().item())
+    fn_micro = int(((~preds) & y_bool & valid).sum().item())
 
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
-
-    subset_acc = (preds == y_bool).all(dim=1).float().mean().item()
 
     return {
         "scalar": {
@@ -444,7 +558,7 @@ def evaluate_loader(
             "pair_acc": float(pair_acc),
             "subset_acc": float(subset_acc),
             "micro_f1": float(micro_f1),
-            "macro_f1": float(macro_pos_f1),  # for backward compatibility
+            "macro_f1": float(macro_pos_f1),  # backward compatibility
             "macro_pos_f1": float(macro_pos_f1),
             "macro_minority_f1": float(macro_minority_f1),
         },
@@ -455,13 +569,17 @@ def evaluate_loader(
             "fn": fn_task,
             "precision": prec_task,
             "recall": rec_task,
-            "f1": positive_f1_per_task.tolist(),  # backward compatibility
-            "positive_f1": positive_f1_per_task.tolist(),
-            "minority_f1": minority_f1_per_task.tolist(),
+            "f1": positive_f1_task,  # backward compatibility
+            "positive_f1": positive_f1_task,
+            "minority_f1": minority_f1_task,
         },
         "counts": {
             "num_nodes": int(labels.size(0)),
             "pos_cnt": [int(x) for x in pos_cnt],
             "pos_rate": [float(x) for x in pos_rate],
+            "visible_pairs": int(valid.sum().item()),
+            "total_pairs": int(valid.numel()),
+            "visible_pair_rate": float(valid.float().mean().item()),
+            "eval_mask_mode": eval_mask_mode,
         },
     }
