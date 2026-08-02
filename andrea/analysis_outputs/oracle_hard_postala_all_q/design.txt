@@ -1,0 +1,30 @@
+Experiment: Oracle hard-cluster APPLE-PostALA
+
+Independent variables:
+- q: 0.2, 0.5, 0.8
+- training seed: 0, 1, 2
+- physical community: 0, 1, 2, 3
+
+Communication scope:
+- Each physical community forms one independent five-client federation.
+- Backbone aggregation occurs only among the five clients in the community.
+- APPLE task-head donors are restricted to those same five clients.
+- No model parameters or donor information cross physical communities.
+
+Fixed configuration:
+- Method: APPLE-PostALA
+- Communication rounds: 80
+- Local epochs: 1
+- Client fraction: 1.0
+- Multi-head model
+- Same q masks, model-selection protocol, architecture, and hyperparameters
+  as the global 20-client APPLE-PostALA experiment.
+
+Primary metric:
+- realistic-visible macro PR-AUC selected by realistic-visible validation
+  macro PR-AUC.
+
+Total runs:
+- 3 q values x 3 seeds x 4 communities = 36 runs.
+- q=0.8, seed=0, communities 0-3 were previously completed.
+- 32 additional jobs are submitted.

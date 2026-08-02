@@ -25,11 +25,11 @@ from utils.witness_funcs import (
 
 BASE_SEED = 0
 
-# DATA_ROOT = "./andrea/cluster_data"
-# GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
+DATA_ROOT = "./andrea/cluster_data"
+GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
 
-DATA_ROOT = "./andrea/cluster_data_benchmarkA"
-GRAPH_PARAM_CSV = "./andrea/clustering_benchmarkA/cluster_generation_parameters.csv"
+# DATA_ROOT = "./andrea/cluster_data_benchmarkA"
+# GRAPH_PARAM_CSV = "./andrea/clustering_benchmarkA/cluster_generation_parameters.csv"
 
 N_POOL = [3800, 3900, 4000, 4100, 4200]
 D_POOL = [

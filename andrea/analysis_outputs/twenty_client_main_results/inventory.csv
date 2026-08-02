@@ -1,0 +1,25 @@
+method,q,main_csv_files,selected_client_rows,schemas
+Fully Local,0.2,60,60,phase_selector
+Fully Local,0.5,60,60,phase_selector
+Fully Local,0.8,60,60,phase_selector
+FedAvg,0.2,3,60,phase_selector
+FedAvg,0.5,3,60,phase_selector
+FedAvg,0.8,3,60,phase_selector
+FedProx,0.2,3,60,phase_selector
+FedProx,0.5,3,60,phase_selector
+FedProx,0.8,3,60,phase_selector
+GCFL+,0.2,6,60,phase_selector
+GCFL+,0.5,6,60,phase_selector
+GCFL+,0.8,6,60,phase_selector
+FedALA,0.2,6,60,phase_selector
+FedALA,0.5,6,60,phase_selector
+FedALA,0.8,6,60,phase_selector
+APPLE,0.2,3,60,legacy_target
+APPLE,0.5,3,60,legacy_target
+APPLE,0.8,3,60,legacy_target
+APPLE-ALA,0.2,3,60,legacy_target
+APPLE-ALA,0.5,3,60,legacy_target
+APPLE-ALA,0.8,3,60,legacy_target
+APPLE-PostALA,0.2,3,60,legacy_target
+APPLE-PostALA,0.5,3,60,legacy_target
+APPLE-PostALA,0.8,3,60,legacy_target

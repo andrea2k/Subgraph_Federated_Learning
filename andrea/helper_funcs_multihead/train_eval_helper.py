@@ -202,6 +202,51 @@ def compute_positive_f1_score_per_task(logits, labels, threshold=0.5):
     return f1_scores
 
 
+def average_precision_binary(scores: torch.Tensor, labels: torch.Tensor) -> float:
+    """Compute binary Average Precision (area under precision-recall curve).
+
+    This is the metric commonly reported as PR-AUC / AP for binary labels.
+    It is threshold-free: it uses the ranking induced by sigmoid probabilities,
+    not the fixed 0.5 decision threshold used by F1.
+
+    Returns NaN when no positive label is present, because AP is undefined in
+    that case. In the q-label benchmark, every task/split we use has positive
+    support, so this should normally be finite.
+    """
+    scores = scores.detach().flatten().float().cpu()
+    labels = labels.detach().flatten().float().cpu()
+
+    if scores.numel() == 0:
+        return float("nan")
+
+    positives = labels > 0.5
+    num_pos = int(positives.sum().item())
+    if num_pos == 0:
+        return float("nan")
+
+    order = torch.argsort(scores, descending=True)
+    y_sorted = positives[order].float()
+
+    tp_cum = torch.cumsum(y_sorted, dim=0)
+    ranks = torch.arange(
+        1,
+        y_sorted.numel() + 1,
+        dtype=torch.float32,
+        device=y_sorted.device,
+    )
+    precision_at_k = tp_cum / ranks
+
+    ap = (precision_at_k * y_sorted).sum() / float(num_pos)
+    return float(ap.item())
+
+
+def nanmean_float(values) -> float:
+    tensor = torch.tensor([float(v) for v in values], dtype=torch.float32)
+    if tensor.numel() == 0 or bool(torch.isnan(tensor).all().item()):
+        return float("nan")
+    return float(torch.nanmean(tensor).item())
+
+
 def train_epoch_neighbor(
     model, loader, optimizer, criterion, device, use_ego_ids: bool, ego_dim: int
 ):
@@ -319,6 +364,7 @@ def evaluate_loader(
     ego_dim: int,
     threshold: float = 0.5,
     eval_mask_mode: str = "full",
+    eval_seed: int = 0,
 ):
     """
     Evaluation with two modes.
@@ -349,59 +395,69 @@ def evaluate_loader(
     all_labels = []
     all_masks = []
 
-    i = 0
-    for batch in loader:
-        i += 1
-        if i % 10 == 0:
-            print("eval-batch:", i)
+    # NeighborLoader performs stochastic neighbor sampling even when seed-node
+    # order is not shuffled. Reset the CPU RNG for every evaluation pass while
+    # restoring the caller's RNG state afterwards. This makes checkpoint
+    # selection reproducible and ensures full/visible evaluation is identical
+    # when the visible mask contains every label pair (Global-Centralized).
+    with torch.random.fork_rng(devices=[]):
+        eval_generator = torch.Generator(device="cpu")
+        eval_generator.manual_seed(int(eval_seed))
+        torch.set_rng_state(eval_generator.get_state())
 
-        batch = batch.to(device)
+        i = 0
+        for batch in loader:
+            i += 1
+            if i % 10 == 0:
+                print("eval-batch:", i)
 
-        x_in, y_seed, B = augment_batch_x_with_ego(batch, use_ego_ids, ego_dim)
-        edge_in, edge_attr_dict = unpack_batch_edges(batch)
+            batch = batch.to(device)
 
-        out = model(
-            x_in,
-            edge_in,
-            edge_attr_dict=edge_attr_dict,
-            device=device,
-        )
+            x_in, y_seed, B = augment_batch_x_with_ego(batch, use_ego_ids, ego_dim)
+            edge_in, edge_attr_dict = unpack_batch_edges(batch)
 
-        out_used = out[:B]
-        y_used = y_seed.float()
+            out = model(
+                x_in,
+                edge_in,
+                edge_attr_dict=edge_attr_dict,
+                device=device,
+            )
 
-        label_mask_seed = get_seed_label_mask(batch, B)
+            out_used = out[:B]
+            y_used = y_seed.float()
 
-        if eval_mask_mode == "full":
-            eval_label_mask = None
-            metric_mask = torch.ones_like(y_used, dtype=torch.float32)
-        else:
-            if label_mask_seed is None:
+            label_mask_seed = get_seed_label_mask(batch, B)
+
+            if eval_mask_mode == "full":
                 eval_label_mask = None
                 metric_mask = torch.ones_like(y_used, dtype=torch.float32)
             else:
-                eval_label_mask = label_mask_seed.float()
-                metric_mask = label_mask_seed.float()
+                if label_mask_seed is None:
+                    eval_label_mask = None
+                    metric_mask = torch.ones_like(y_used, dtype=torch.float32)
+                else:
+                    eval_label_mask = label_mask_seed.float()
+                    metric_mask = label_mask_seed.float()
 
-        loss = masked_loss_from_logits(
-            criterion,
-            out_used,
-            y_used,
-            label_mask=eval_label_mask,
-        )
+            loss = masked_loss_from_logits(
+                criterion,
+                out_used,
+                y_used,
+                label_mask=eval_label_mask,
+            )
 
-        # Weight loss by number of visible label entries, not number of nodes.
-        if eval_label_mask is None:
-            batch_weight = float(y_used.numel())
-        else:
-            batch_weight = float(eval_label_mask.sum().item())
+            # Weight loss by number of visible label entries, not number of nodes.
+            if eval_label_mask is None:
+                batch_weight = float(y_used.numel())
+            else:
+                batch_weight = float(eval_label_mask.sum().item())
 
-        total_loss += float(loss.item()) * max(batch_weight, 1.0)
-        total_weight += max(batch_weight, 1.0)
+            total_loss += float(loss.item()) * max(batch_weight, 1.0)
+            total_weight += max(batch_weight, 1.0)
 
-        all_logits.append(out_used.detach().cpu())
-        all_labels.append(y_used.detach().cpu())
-        all_masks.append(metric_mask.detach().cpu())
+            all_logits.append(out_used.detach().cpu())
+            all_labels.append(y_used.detach().cpu())
+            all_masks.append(metric_mask.detach().cpu())
 
     logits = torch.cat(all_logits, dim=0) if len(all_logits) else torch.empty((0,))
     labels = torch.cat(all_labels, dim=0) if len(all_labels) else torch.empty((0,))
@@ -417,6 +473,8 @@ def evaluate_loader(
                 "macro_f1": float("nan"),
                 "macro_pos_f1": float("nan"),
                 "macro_minority_f1": float("nan"),
+                "micro_pr_auc": float("nan"),
+                "macro_pr_auc": float("nan"),
             },
             "per_task": {
                 "tp": [],
@@ -428,6 +486,7 @@ def evaluate_loader(
                 "f1": [],
                 "positive_f1": [],
                 "minority_f1": [],
+                "pr_auc": [],
             },
             "counts": {
                 "num_nodes": 0,
@@ -474,6 +533,7 @@ def evaluate_loader(
     prec_task, rec_task = [], []
     positive_f1_task = []
     minority_f1_task = []
+    pr_auc_task = []
     pos_cnt = []
     pos_rate = []
 
@@ -485,6 +545,7 @@ def evaluate_loader(
         if y.numel() == 0:
             tp = fp = tn = fn = 0
             precision = recall = f1_pos = f1_min = float("nan")
+            ap = float("nan")
             pc = 0
             pr = float("nan")
         else:
@@ -501,6 +562,7 @@ def evaluate_loader(
             negatives = int((~y).sum().item())
             pc = positives
             pr = positives / max(positives + negatives, 1)
+            ap = average_precision_binary(probs[vc, c], y.float())
 
             # Minority F1: compute F1 for whichever class is minority
             if positives <= negatives:
@@ -533,15 +595,14 @@ def evaluate_loader(
         rec_task.append(float(recall))
         positive_f1_task.append(float(f1_pos))
         minority_f1_task.append(float(f1_min))
+        pr_auc_task.append(float(ap))
         pos_cnt.append(int(pc))
         pos_rate.append(float(pr))
 
     # Macro values: ignore NaN tasks if any task has no visible support.
-    positive_f1_tensor = torch.tensor(positive_f1_task, dtype=torch.float32)
-    minority_f1_tensor = torch.tensor(minority_f1_task, dtype=torch.float32)
-
-    macro_pos_f1 = float(torch.nanmean(positive_f1_tensor).item())
-    macro_minority_f1 = float(torch.nanmean(minority_f1_tensor).item())
+    macro_pos_f1 = nanmean_float(positive_f1_task)
+    macro_minority_f1 = nanmean_float(minority_f1_task)
+    macro_pr_auc = nanmean_float(pr_auc_task)
 
     # Micro positive F1 over all valid entries.
     tp_micro = int((preds & y_bool & valid).sum().item())
@@ -551,6 +612,7 @@ def evaluate_loader(
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
+    micro_pr_auc = average_precision_binary(probs[valid], labels[valid])
 
     return {
         "scalar": {
@@ -561,6 +623,8 @@ def evaluate_loader(
             "macro_f1": float(macro_pos_f1),  # backward compatibility
             "macro_pos_f1": float(macro_pos_f1),
             "macro_minority_f1": float(macro_minority_f1),
+            "micro_pr_auc": float(micro_pr_auc),
+            "macro_pr_auc": float(macro_pr_auc),
         },
         "per_task": {
             "tp": tp_task,
@@ -572,6 +636,7 @@ def evaluate_loader(
             "f1": positive_f1_task,  # backward compatibility
             "positive_f1": positive_f1_task,
             "minority_f1": minority_f1_task,
+            "pr_auc": pr_auc_task,
         },
         "counts": {
             "num_nodes": int(labels.size(0)),

@@ -2,12 +2,67 @@ __pycache__/
 .DS_Store
 gcn_utils.py
 simulator.py
-andrea/test_data/
-andrea/cluster_data/
-andrea/cluster_data_rep/
+
+# BEGIN thesis generated artifacts
+
+# ------------------------------------------------------------
+# Raw experiment outputs
+# ------------------------------------------------------------
+
+# Legacy/default runs directory
 andrea/runs/
+
+# Five-client and twenty-client top-level run directories:
+# runs_multiselect*, runs_twenty_client_*, runs_oracle_*, etc.
+andrea/runs_*/
+
+# Nested organized run directories, for example:
+# andrea/oracle_hard_postala_all_q/runs/
+andrea/**/runs/
+
+# Old run/checkpoint storage
 andrea/runs_old/
 andrea/checkpoints/
 andrea/checkpoints_old/
-/thesis/
+
+# ------------------------------------------------------------
+# Generated graph datasets
+# ------------------------------------------------------------
+
+# Five-client generated graph tensors
+andrea/test_data/
+andrea/cluster_data/
+andrea/cluster_data_rep/
+
+# Twenty-client planted-community graph tensors
+andrea/planted_community_data/
+andrea/planted_community_clients/
+
+# ------------------------------------------------------------
+# Copied raw analysis inputs
+# ------------------------------------------------------------
+
+# Copies of large twenty-client result and diagnostic CSV files.
+# Analysis scripts and compact summaries remain tracked.
+andrea/analysis_inputs/twenty_client/
+
+# Old copied oracle result files
+andrea/oracle_results_q08_s0/
+
+# ------------------------------------------------------------
+# Other generated large artifacts
+# ------------------------------------------------------------
+
 andrea/heterogeneity/heterogeneity_all_pairs.csv
+
+# Keep the repository thesis source, but ignore this legacy build folder.
+# This preserves your existing rule.
+/thesis/
+
+# END thesis generated artifacts
+
+# Regenerable analysis input copies
+andrea/analysis_inputs/
+
+# Runtime and Slurm logs
+logs/

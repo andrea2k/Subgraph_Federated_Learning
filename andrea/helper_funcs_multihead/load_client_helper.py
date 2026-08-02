@@ -4,6 +4,7 @@ import torch
 import time
 import math
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -531,82 +532,190 @@ def _base_ids_from_selected_subset_row(row: pd.Series) -> List[int]:
     )
 
 
-def load_local_centralized_client_from_subset_row(
+def _nonempty_row_value(row: pd.Series, key: str):
+    if key not in row.index:
+        return None
+    value = row.get(key)
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    text = str(value).strip()
+    return text if text and text.lower() not in {"nan", "none"} else None
+
+
+def _graph_dir_is_complete(path: str | Path) -> bool:
+    p = Path(path)
+    return all((p / f"{split}.pt").exists() for split in ("train", "val", "test"))
+
+
+def _strip_community_suffix(dataset_id: str) -> str:
+    return re.sub(r"_community\d+$", "", str(dataset_id))
+
+
+def _infer_planted_global_dir(data_dir: str, global_dataset_id: str) -> Path:
+    """Infer the planted global folder from a community client path.
+
+    Expected pair:
+      andrea/planted_community_clients/<dataset>/community_k
+      andrea/planted_community_data/<dataset>
+    """
+    p = Path(str(data_dir))
+    parts = list(p.parts)
+    if "planted_community_clients" in parts:
+        idx = parts.index("planted_community_clients")
+        prefix = Path(*parts[:idx]) if idx > 0 else Path(".")
+        return prefix / "planted_community_data" / str(global_dataset_id)
+    return Path("./andrea/planted_community_data") / str(global_dataset_id)
+
+
+def resolve_global_centralized_source(
+    subset_row: pd.Series,
+    csv_path: str,
+) -> tuple[str, str]:
+    """Resolve the unsplit, unmasked graph used by Global-Centralized.
+
+    Resolution order:
+      1. Explicit global_data_dir/global_dataset_id from selected_subset.csv.
+      2. Explicit global_data_dir/global_dataset_id copied into registry rows.
+      3. Five-client fallback: the one original base graph is already global.
+      4. Legacy planted-community fallback inferred from community data paths.
+    """
+    df_data = pd.read_csv(csv_path).copy()
+
+    explicit_dir = _nonempty_row_value(subset_row, "global_data_dir")
+    explicit_id = _nonempty_row_value(subset_row, "global_dataset_id")
+    if explicit_dir is not None:
+        global_id = explicit_id or Path(explicit_dir).name
+        return str(explicit_dir), str(global_id)
+
+    needed_ids = parse_subset_clients(str(subset_row["subset_clients"]))
+    client_rows = df_data[
+        pd.to_numeric(df_data["graph_id"], errors="coerce").isin(needed_ids)
+    ].copy()
+
+    if not client_rows.empty and "global_data_dir" in client_rows.columns:
+        dirs = [
+            str(v).strip()
+            for v in client_rows["global_data_dir"].dropna().tolist()
+            if str(v).strip()
+        ]
+        unique_dirs = sorted(set(dirs))
+        if len(unique_dirs) == 1:
+            if "global_dataset_id" in client_rows.columns:
+                ids = [
+                    str(v).strip()
+                    for v in client_rows["global_dataset_id"].dropna().tolist()
+                    if str(v).strip()
+                ]
+                unique_ids = sorted(set(ids))
+                global_id = unique_ids[0] if len(unique_ids) == 1 else Path(unique_dirs[0]).name
+            else:
+                global_id = Path(unique_dirs[0]).name
+            return unique_dirs[0], global_id
+
+    base_ids = _base_ids_from_selected_subset_row(subset_row)
+
+    # Five-client setup: one physical base graph is the unsplit global graph.
+    if len(base_ids) == 1:
+        base_graph_id = int(base_ids[0])
+        candidates = pd.DataFrame()
+        if "base_graph_id" in df_data.columns:
+            base_col = pd.to_numeric(df_data["base_graph_id"], errors="coerce")
+            candidates = df_data[base_col.eq(base_graph_id)].copy()
+        if candidates.empty:
+            graph_col = pd.to_numeric(df_data["graph_id"], errors="coerce")
+            candidates = df_data[graph_col.eq(base_graph_id)].copy()
+        if candidates.empty:
+            raise ValueError(
+                f"Could not find base graph {base_graph_id} in registry {csv_path}."
+            )
+        source_row = candidates.iloc[0]
+        data_dir = str(source_row["data_dir"])
+        base_dataset_id = _nonempty_row_value(source_row, "base_dataset_id")
+        if base_dataset_id is None:
+            base_dataset_id = str(source_row["dataset_id"])
+        return data_dir, str(base_dataset_id)
+
+    # Legacy 20-client manifest fallback. New generation writes explicit fields,
+    # but this allows old manifests to be audited and migrated.
+    global_ids = []
+    if "membership_json" in subset_row.index and pd.notna(subset_row["membership_json"]):
+        membership = json.loads(str(subset_row["membership_json"]))
+        for member in membership:
+            base_id = member.get("base_dataset_id")
+            if base_id is not None:
+                global_ids.append(_strip_community_suffix(str(base_id)))
+
+    if not global_ids and not client_rows.empty:
+        id_col = "base_dataset_id" if "base_dataset_id" in client_rows.columns else "dataset_id"
+        global_ids.extend(
+            _strip_community_suffix(str(v)) for v in client_rows[id_col].dropna().tolist()
+        )
+
+    unique_global_ids = sorted(set(global_ids))
+    if len(unique_global_ids) != 1:
+        raise ValueError(
+            "Could not resolve one global dataset ID for Global-Centralized. "
+            f"Candidates={unique_global_ids}. Regenerate the manifest with global_data_dir."
+        )
+
+    global_dataset_id = unique_global_ids[0]
+    if client_rows.empty:
+        raise ValueError("Could not inspect client data paths for global-path inference.")
+    inferred = _infer_planted_global_dir(
+        str(client_rows.iloc[0]["data_dir"]),
+        global_dataset_id,
+    )
+    return str(inferred), str(global_dataset_id)
+
+
+def load_global_centralized_client_from_subset_row(
     subset_row: pd.Series,
     csv_path: str,
     *,
     verbose: bool = True,
 ) -> ClientData:
+    """Load one unsplit global graph with complete labels for either benchmark.
+
+    Five-client setup:
+      the original selected base graph is the global graph.
+
+    Twenty-client setup:
+      the connected planted graph is loaded from global_data_dir; community
+      graphs and virtual-client masks are never used for this baseline.
     """
-    Load the original unmasked base graph for one selected subset row.
+    data_dir, global_dataset_id = resolve_global_centralized_source(
+        subset_row,
+        csv_path,
+    )
 
-    This is the local-centralized upper bound:
-      - no communication,
-      - one model,
-      - original base graph,
-      - full train labels visible,
-      - no q-task label masking.
-
-    The selected_subset row is q-specific, so we create a q-specific pseudo
-    dataset_id to prevent output CSV collisions between q=0.2, q=0.5, q=0.8.
-    """
-    df_data = pd.read_csv(csv_path).copy()
-
-    base_ids = _base_ids_from_selected_subset_row(subset_row)
-    if len(base_ids) != 1:
-        raise ValueError(
-            f"Expected exactly one base graph for local-centralized baseline, got {base_ids}"
+    if not _graph_dir_is_complete(data_dir):
+        raise FileNotFoundError(
+            f"Global graph directory is incomplete: {data_dir}. "
+            "Expected train.pt, val.pt, and test.pt."
         )
-
-    base_graph_id = int(base_ids[0])
-
-    candidates = pd.DataFrame()
-
-    if "base_graph_id" in df_data.columns:
-        base_col = pd.to_numeric(df_data["base_graph_id"], errors="coerce")
-        candidates = df_data[base_col.eq(base_graph_id)].copy()
-
-    if candidates.empty and "graph_id" in df_data.columns:
-        graph_col = pd.to_numeric(df_data["graph_id"], errors="coerce")
-        candidates = df_data[graph_col.eq(base_graph_id)].copy()
-
-    if candidates.empty:
-        raise ValueError(
-            f"Could not find base graph {base_graph_id} in registry {csv_path}."
-        )
-
-    source_row = candidates.iloc[0].copy()
-
-    data_dir = str(source_row["data_dir"])
-
-    if "base_dataset_id" in source_row.index and pd.notna(
-        source_row["base_dataset_id"]
-    ):
-        base_dataset_id = str(source_row["base_dataset_id"])
-    else:
-        base_dataset_id = str(source_row["dataset_id"])
 
     q_tag = _q_tag_from_row(subset_row)
-
-    pseudo_graph_id = f"base{base_graph_id}_q{q_tag}"
-    pseudo_dataset_id = f"{base_dataset_id}_local_centralized_q{q_tag}"
+    pseudo_graph_id = f"global_{global_dataset_id}_q{q_tag}"
+    pseudo_dataset_id = f"{global_dataset_id}_global_centralized_q{q_tag}"
 
     if verbose:
         print("\n" + "=" * 100)
-        print("LOAD LOCAL-CENTRALIZED BASE GRAPH")
+        print("LOAD GLOBAL-CENTRALIZED GRAPH")
         print("=" * 100)
-        print("base_graph_id:", base_graph_id)
-        print("base_dataset_id:", base_dataset_id)
+        print("global_dataset_id:", global_dataset_id)
         print("pseudo_graph_id:", pseudo_graph_id)
         print("pseudo_dataset_id:", pseudo_dataset_id)
-        print("data_dir:", data_dir)
+        print("global_data_dir:", data_dir)
         print("q_tag:", q_tag)
-        print("IMPORTANT: mask_meta=None, so train labels are fully visible.")
+        print("IMPORTANT: one unsplit graph, mask_meta=None, full labels on all splits.")
         print("=" * 100)
 
     train_g, val_g, test_g = load_client_from_dir(data_dir)
-
-    # Critical line: no mask. This keeps the base graph fully supervised.
     train_g, val_g, test_g = apply_mask_to_splits(
         train_g,
         val_g,
@@ -624,8 +733,8 @@ def load_local_centralized_client_from_subset_row(
 
     return ClientData(
         graph_id=str(pseudo_graph_id),
-        data_dir=data_dir,
-        dataset_id=pseudo_dataset_id,
+        data_dir=str(data_dir),
+        dataset_id=str(pseudo_dataset_id),
         train_g=train_g,
         val_g=val_g,
         test_g=test_g,
@@ -636,13 +745,14 @@ def load_local_centralized_client_from_subset_row(
     )
 
 
-def audit_local_centralized_client(client: ClientData, *, strict: bool = True) -> None:
-    """
-    Sanity check for the local-centralized upper bound.
-    All train/val/test label masks must be full ones.
-    """
+def audit_global_centralized_client(
+    client: ClientData,
+    *,
+    strict: bool = True,
+) -> None:
+    """Assert that Global-Centralized is one fully supervised graph."""
     print("\n" + "=" * 100)
-    print("AUDIT LOCAL-CENTRALIZED CLIENT")
+    print("AUDIT GLOBAL-CENTRALIZED CLIENT")
     print("=" * 100)
     print("graph_id:", client.graph_id)
     print("dataset_id:", client.dataset_id)
@@ -651,30 +761,53 @@ def audit_local_centralized_client(client: ClientData, *, strict: bool = True) -
 
     _assert_or_warn(
         client.mask_meta is None,
-        "local-centralized client should have mask_meta=None",
+        "global-centralized client should have mask_meta=None",
         strict=strict,
     )
-    _assert_or_warn(
-        _mask_is_all_ones(client.train_g),
-        "local-centralized train label_mask is not all ones",
-        strict=strict,
-    )
-    _assert_or_warn(
-        _mask_is_all_ones(client.val_g),
-        "local-centralized val label_mask is not all ones",
-        strict=strict,
-    )
-    _assert_or_warn(
-        _mask_is_all_ones(client.test_g),
-        "local-centralized test label_mask is not all ones",
-        strict=strict,
-    )
+    for split_name, graph in (
+        ("train", client.train_g),
+        ("val", client.val_g),
+        ("test", client.test_g),
+    ):
+        _assert_or_warn(
+            _mask_is_all_ones(graph),
+            f"global-centralized {split_name} label_mask is not all ones",
+            strict=strict,
+        )
+        _assert_or_warn(
+            int(graph.y.size(1)) == len(TASKS),
+            f"global-centralized {split_name} has {graph.y.size(1)} tasks, expected {len(TASKS)}",
+            strict=strict,
+        )
+        print(
+            f"{split_name}: nodes={int(graph.num_nodes)} "
+            f"edges={int(graph.edge_index.size(1))} y={tuple(graph.y.shape)}"
+        )
 
     counts = _mask_debug_counts(client.train_g)
     print("train visible_pos:", dict(zip(TASKS, counts["visible_pos"])))
     print("train hidden_pos :", dict(zip(TASKS, counts["hidden_pos"])))
     print("train hidden_neg :", dict(zip(TASKS, counts["hidden_neg"])))
-    print("PASS local-centralized audit")
+    print("PASS global-centralized audit")
+
+
+# Backward-compatible aliases. Existing imports continue to work, but semantics
+# are now explicitly Global-Centralized rather than community-centralized.
+def load_local_centralized_client_from_subset_row(
+    subset_row: pd.Series,
+    csv_path: str,
+    *,
+    verbose: bool = True,
+) -> ClientData:
+    return load_global_centralized_client_from_subset_row(
+        subset_row,
+        csv_path,
+        verbose=verbose,
+    )
+
+
+def audit_local_centralized_client(client: ClientData, *, strict: bool = True) -> None:
+    audit_global_centralized_client(client, strict=strict)
 
 
 def _assert_or_warn(condition: bool, message: str, *, strict: bool) -> None:
@@ -708,6 +841,184 @@ def _mask_debug_counts(g) -> Dict[str, List[int]]:
         "visible_neg": (neg & visible).sum(dim=0).to(torch.long).tolist(),
         "hidden_neg": (neg & hidden).sum(dim=0).to(torch.long).tolist(),
     }
+
+
+def audit_q_positive_disjointness_for_split(
+    subset_clients: List[ClientData],
+    *,
+    split_name: str,
+    q_value: float,
+    strict: bool = True,
+    max_bad_examples: int = 20,
+) -> None:
+    """
+    Check that for each task and each positive node-label event:
+
+        sum_client label_mask[node, task] == 1
+
+    This means:
+      - no positive node-label event is duplicated across clients;
+      - no positive node-label event is lost;
+      - the q allocation exactly partitions the positive indices.
+
+    Example:
+      For cycle2, if node 123 is positive for cycle2, then exactly one
+      virtual client should have label_mask[123, cycle2] = 1.
+    """
+    split_graphs = [getattr(client, f"{split_name}_g") for client in subset_clients]
+
+    reference_y = split_graphs[0].y.float()
+    n_nodes = int(reference_y.size(0))
+
+    print("\n" + "=" * 100)
+    print(f"Q POSITIVE DISJOINTNESS AUDIT | split={split_name}")
+    print("=" * 100)
+    print("q_value:", q_value)
+    print("clients:", "|".join(str(c.graph_id) for c in subset_clients))
+
+    # Check all virtual clients have same split graph size and same y.
+    for client, g in zip(subset_clients, split_graphs):
+        _assert_or_warn(
+            int(g.y.size(0)) == n_nodes,
+            (
+                f"{split_name}: client {client.graph_id} has different num nodes: "
+                f"{int(g.y.size(0))} vs reference {n_nodes}"
+            ),
+            strict=strict,
+        )
+
+        same_y = bool(torch.equal(g.y.float(), reference_y))
+        _assert_or_warn(
+            same_y,
+            (
+                f"{split_name}: client {client.graph_id} has different y tensor "
+                "from reference client. Disjointness check assumes same base graph."
+            ),
+            strict=strict,
+        )
+
+    for task_idx, label_task in enumerate(TASKS):
+        positives = torch.where(reference_y[:, task_idx] > 0.5)[0]
+        n_pos = int(positives.numel())
+
+        masks_for_task = []
+        actual_by_assigned: Dict[str, int] = {}
+
+        for client, g in zip(subset_clients, split_graphs):
+            assigned_task = str((client.mask_meta or {}).get("assigned_task"))
+            mask = g.label_mask.float()
+
+            # This is the vector over positive nodes only.
+            # Shape: [num_positive_nodes_for_this_task]
+            mask_pos = mask[positives, task_idx] > 0.5
+
+            masks_for_task.append(mask_pos)
+            actual_by_assigned[assigned_task] = int(mask_pos.sum().item())
+
+        if n_pos == 0:
+            print(f"task={label_task}: no positives in split={split_name}")
+            continue
+
+        # Shape: [num_clients, num_positive_nodes]
+        stacked = torch.stack(masks_for_task, dim=0)
+
+        # For every positive node-label event, how many clients can see it?
+        # Correct answer should be exactly 1 for every positive.
+        per_positive_visible_count = stacked.sum(dim=0)
+
+        lost_mask = per_positive_visible_count == 0
+        duplicated_mask = per_positive_visible_count > 1
+        ok_mask = per_positive_visible_count == 1
+
+        lost_count = int(lost_mask.sum().item())
+        duplicated_count = int(duplicated_mask.sum().item())
+        ok_count = int(ok_mask.sum().item())
+
+        min_seen = int(per_positive_visible_count.min().item())
+        max_seen = int(per_positive_visible_count.max().item())
+        visible_sum = int(stacked.sum().item())
+
+        expected_counts = _q_counts_for_label_task(
+            n_pos,
+            label_task=label_task,
+            q_value=q_value,
+        )
+        expected_by_assigned = {
+            task: int(expected_counts[TASKS.index(task)]) for task in TASKS
+        }
+
+        print("\n" + "-" * 80)
+        print(f"split={split_name} | task={label_task}")
+        print("-" * 80)
+        print("total positive node-label events :", n_pos)
+        print("visible_sum across all clients    :", visible_sum)
+        print("ok_count exactly once             :", ok_count)
+        print("lost_count visible zero times     :", lost_count)
+        print("duplicated_count visible >1 times :", duplicated_count)
+        print("per_positive_min_seen             :", min_seen)
+        print("per_positive_max_seen             :", max_seen)
+        print("actual_by_assigned                :", actual_by_assigned)
+        print("expected_by_assigned              :", expected_by_assigned)
+
+        if lost_count > 0:
+            lost_indices = positives[lost_mask][:max_bad_examples].tolist()
+            print("EXAMPLE LOST POSITIVE NODE INDICES:", lost_indices)
+
+        if duplicated_count > 0:
+            duplicated_indices = positives[duplicated_mask][:max_bad_examples].tolist()
+            print("EXAMPLE DUPLICATED POSITIVE NODE INDICES:", duplicated_indices)
+
+            # Print which clients see the first duplicated examples.
+            for node_idx in duplicated_indices:
+                visible_clients = []
+                for client, g in zip(subset_clients, split_graphs):
+                    if bool(g.label_mask[int(node_idx), task_idx].float().item() > 0.5):
+                        visible_clients.append(
+                            f"{client.graph_id}/assigned={client.mask_meta.get('assigned_task')}"
+                        )
+                print(
+                    f"duplicated node={node_idx}, task={label_task}, "
+                    f"visible_clients={visible_clients}"
+                )
+
+        _assert_or_warn(
+            lost_count == 0,
+            (
+                f"{split_name} task={label_task}: {lost_count} positive events "
+                "are lost, i.e. visible in zero clients."
+            ),
+            strict=strict,
+        )
+
+        _assert_or_warn(
+            duplicated_count == 0,
+            (
+                f"{split_name} task={label_task}: {duplicated_count} positive events "
+                "are duplicated, i.e. visible in more than one client."
+            ),
+            strict=strict,
+        )
+
+        _assert_or_warn(
+            visible_sum == n_pos,
+            (
+                f"{split_name} task={label_task}: visible_sum={visible_sum}, "
+                f"but n_pos={n_pos}. Expected exact partition."
+            ),
+            strict=strict,
+        )
+
+        _assert_or_warn(
+            actual_by_assigned == expected_by_assigned,
+            (
+                f"{split_name} task={label_task}: actual_by_assigned="
+                f"{actual_by_assigned}, expected_by_assigned={expected_by_assigned}"
+            ),
+            strict=strict,
+        )
+
+    print("\nPASS Q POSITIVE DISJOINTNESS AUDIT | split=", split_name)
+    print("=" * 100)
 
 
 def print_client_debug_summary(
@@ -777,30 +1088,29 @@ def audit_loaded_q_label_masks(
     max_groups: Optional[int] = None,
     mask_splits=("train",),
 ) -> None:
-    """
-    Debug correctness of loaded q-controlled label masks.
+    """Audit real q masks for both the 5-client and 20-client benchmarks.
 
-    Checks:
-      1. only q_task_label_allocation subsets are audited;
-      2. val/test masks are all ones;
-      3. train masks hide positives only, never negatives;
-      4. each positive label event is visible in exactly one virtual client;
-      5. actual visible positive counts match the deterministic q allocation.
+    The selected subset may contain either:
+      - one physical graph with five task-specialist virtual clients; or
+      - several physical community graphs, each with its own five virtual clients.
 
-    This checks the real tensors, not just the CSV metadata.
+    Exact q disjointness is therefore checked independently inside every
+    ``base_graph_id`` group. Positive labels from different physical graphs must
+    never be compared as though they belonged to one shared node set.
     """
     print("\n" + "=" * 100)
     print("AUDIT LOADED Q LABEL MASKS")
     print("=" * 100)
 
-    audited = 0
+    audited_subsets = 0
+    audited_physical_groups = 0
+    stop = False
 
     for row_idx, row in chosen_df.iterrows():
         subset_ids = parse_subset_clients(row["subset_clients"])
         subset_clients = [id_to_client[int(gid)] for gid in subset_ids]
 
         modes = {(client.mask_meta or {}).get("mask_mode") for client in subset_clients}
-
         if "q_task_label_allocation" not in modes:
             print(
                 f"skip row={row_idx}: no q_task_label_allocation mode "
@@ -808,13 +1118,9 @@ def audit_loaded_q_label_masks(
             )
             continue
 
-        if max_groups is not None and audited >= int(max_groups):
-            break
-
-        audited += 1
-
         q_values = {
-            float((client.mask_meta or {}).get("q_value")) for client in subset_clients
+            float((client.mask_meta or {}).get("q_value"))
+            for client in subset_clients
         }
         _assert_or_warn(
             len(q_values) == 1,
@@ -823,188 +1129,136 @@ def audit_loaded_q_label_masks(
         )
         q_value = sorted(q_values)[0]
 
-        assigned_tasks = [
-            str((client.mask_meta or {}).get("assigned_task"))
-            for client in subset_clients
-        ]
-
-        print("\n" + "-" * 100)
-        print(
-            f"subset row={row_idx} | q={q_value} | "
-            f"clients={'|'.join(str(c.graph_id) for c in subset_clients)}"
-        )
-        print("assigned_tasks:", assigned_tasks)
-        print("-" * 100)
-
-        _assert_or_warn(
-            set(assigned_tasks) == set(TASKS),
-            f"assigned tasks should be exactly {TASKS}, got {assigned_tasks}",
-            strict=strict,
-        )
-
-        base_graph_ids = {
-            int((client.mask_meta or {}).get("base_graph_id"))
-            for client in subset_clients
-        }
-        _assert_or_warn(
-            len(base_graph_ids) == 1,
-            f"expected one base graph id, got {base_graph_ids}",
-            strict=strict,
-        )
-        base_graph_id = sorted(base_graph_ids)[0]
-
-        # Per-client checks.
+        clients_by_base: Dict[int, List[ClientData]] = {}
         for client in subset_clients:
             meta = client.mask_meta or {}
-            counts = _mask_debug_counts(client.train_g)
-
-            hidden_neg_total = int(sum(counts["hidden_neg"]))
+            base_graph_id = meta.get("base_graph_id")
             _assert_or_warn(
-                hidden_neg_total == 0,
-                (
-                    f"client {client.graph_id} hides negatives, but q masking "
-                    f"should only hide positives. hidden_neg={counts['hidden_neg']}"
-                ),
+                base_graph_id is not None,
+                f"client {client.graph_id} has no base_graph_id in mask metadata",
                 strict=strict,
             )
+            if base_graph_id is None:
+                continue
+            clients_by_base.setdefault(int(base_graph_id), []).append(client)
 
-            for split_name, split_g in [
-                ("val", client.val_g),
-                ("test", client.test_g),
-            ]:
-                if split_name in mask_splits:
-                    # New realistic setting:
-                    # val/test are allowed, and expected, to have partial masks.
-                    counts_split = _mask_debug_counts(split_g)
-                    hidden_neg_total_split = int(sum(counts_split["hidden_neg"]))
+        _assert_or_warn(
+            bool(clients_by_base),
+            f"subset row={row_idx} produced no physical base-graph groups",
+            strict=strict,
+        )
 
-                    _assert_or_warn(
-                        hidden_neg_total_split == 0,
-                        (
-                            f"client {client.graph_id} {split_name} hides negatives, "
-                            f"but q masking should only hide positives. "
-                            f"hidden_neg={counts_split['hidden_neg']}"
-                        ),
-                        strict=strict,
-                    )
+        audited_subsets += 1
+        print("\n" + "#" * 100)
+        print(
+            f"subset row={row_idx} | q={q_value} | virtual_clients={len(subset_clients)} | "
+            f"physical_groups={len(clients_by_base)}"
+        )
+        print("#" * 100)
 
-                    print(
-                        f"{split_name} mask check:",
-                        "client:",
-                        client.graph_id,
-                        "visible_pos:",
-                        dict(zip(TASKS, counts_split["visible_pos"])),
-                        "hidden_pos:",
-                        dict(zip(TASKS, counts_split["hidden_pos"])),
-                        "hidden_neg_total:",
-                        hidden_neg_total_split,
-                    )
+        for base_graph_id, group_clients in sorted(clients_by_base.items()):
+            if max_groups is not None and audited_physical_groups >= int(max_groups):
+                stop = True
+                break
 
-                else:
-                    # Old oracle-val/test setting:
-                    # val/test should remain full-visible.
-                    _assert_or_warn(
-                        _mask_is_all_ones(split_g),
-                        f"client {client.graph_id} {split_name} label_mask is not all ones",
-                        strict=strict,
-                    )
+            audited_physical_groups += 1
+            assigned_tasks = [
+                str((client.mask_meta or {}).get("assigned_task"))
+                for client in group_clients
+            ]
 
+            print("\n" + "-" * 100)
             print(
-                "client:",
-                client.graph_id,
-                "assigned_task:",
-                meta.get("assigned_task"),
-                "visible_pos:",
-                dict(zip(TASKS, counts["visible_pos"])),
-                "hidden_pos:",
-                dict(zip(TASKS, counts["hidden_pos"])),
-                "hidden_neg_total:",
-                hidden_neg_total,
+                f"physical base_graph_id={base_graph_id} | q={q_value} | "
+                f"clients={'|'.join(str(c.graph_id) for c in group_clients)}"
             )
+            print("assigned_tasks:", assigned_tasks)
+            print("data_dirs:", sorted({str(c.data_dir) for c in group_clients}))
+            print("-" * 100)
 
-        # Group-level exact-disjointness checks.
-        reference_y = subset_clients[0].train_g.y.float()
-        n_nodes = int(reference_y.size(0))
-
-        for client in subset_clients[1:]:
             _assert_or_warn(
-                int(client.train_g.y.size(0)) == n_nodes,
-                "all virtual clients should have the same number of train nodes",
+                len(group_clients) == len(TASKS),
+                (
+                    f"base_graph_id={base_graph_id}: expected {len(TASKS)} virtual "
+                    f"clients, got {len(group_clients)}"
+                ),
                 strict=strict,
             )
-
-        for task_idx, label_task in enumerate(TASKS):
-            positives = torch.where(reference_y[:, task_idx] > 0.5)[0]
-            n_pos = int(positives.numel())
-
-            masks_for_task = []
-            actual_by_assigned: Dict[str, int] = {}
-
-            for client in subset_clients:
-                assigned_task = str((client.mask_meta or {}).get("assigned_task"))
-                mask_pos = client.train_g.label_mask[positives, task_idx].float() > 0.5
-                masks_for_task.append(mask_pos)
-                actual_by_assigned[assigned_task] = int(mask_pos.sum().item())
-
-            stacked = torch.stack(masks_for_task, dim=0)
-            per_positive_visible_count = stacked.sum(dim=0)
-
-            min_seen = int(per_positive_visible_count.min().item()) if n_pos > 0 else 0
-            max_seen = int(per_positive_visible_count.max().item()) if n_pos > 0 else 0
-            visible_sum = int(stacked.sum().item())
-
             _assert_or_warn(
-                visible_sum == n_pos,
+                sorted(assigned_tasks) == sorted(TASKS),
                 (
-                    f"task={label_task}: visible_sum={visible_sum}, "
-                    f"n_pos={n_pos}. Positive labels are lost or duplicated."
+                    f"base_graph_id={base_graph_id}: assigned tasks should contain "
+                    f"each task exactly once; got {assigned_tasks}"
+                ),
+                strict=strict,
+            )
+            _assert_or_warn(
+                len({str(c.data_dir) for c in group_clients}) == 1,
+                (
+                    f"base_graph_id={base_graph_id}: its virtual clients point to "
+                    "different physical data directories"
                 ),
                 strict=strict,
             )
 
-            if n_pos > 0:
-                _assert_or_warn(
-                    min_seen == 1 and max_seen == 1,
-                    (
-                        f"task={label_task}: each positive should be visible in "
-                        f"exactly one client, but min_seen={min_seen}, max_seen={max_seen}"
-                    ),
+            for client in group_clients:
+                meta = client.mask_meta or {}
+                for split_name in ("train", "val", "test"):
+                    split_g = getattr(client, f"{split_name}_g")
+                    if split_name in mask_splits:
+                        counts = _mask_debug_counts(split_g)
+                        hidden_neg_total = int(sum(counts["hidden_neg"]))
+                        _assert_or_warn(
+                            hidden_neg_total == 0,
+                            (
+                                f"client {client.graph_id} {split_name} hides negatives, "
+                                "but q masking should hide positive labels only. "
+                                f"hidden_neg={counts['hidden_neg']}"
+                            ),
+                            strict=strict,
+                        )
+                        print(
+                            f"{split_name} mask check:",
+                            "client:", client.graph_id,
+                            "assigned_task:", meta.get("assigned_task"),
+                            "visible_pos:", dict(zip(TASKS, counts["visible_pos"])),
+                            "hidden_pos:", dict(zip(TASKS, counts["hidden_pos"])),
+                            "hidden_neg_total:", hidden_neg_total,
+                        )
+                    else:
+                        _assert_or_warn(
+                            _mask_is_all_ones(split_g),
+                            f"client {client.graph_id} {split_name} label_mask is not all ones",
+                            strict=strict,
+                        )
+
+            for split_name in ("train", "val", "test"):
+                if split_name not in mask_splits:
+                    continue
+                audit_q_positive_disjointness_for_split(
+                    group_clients,
+                    split_name=split_name,
+                    q_value=q_value,
                     strict=strict,
                 )
 
-            expected_counts = _q_counts_for_label_task(
-                n_pos,
-                label_task=label_task,
-                q_value=q_value,
-            )
-            expected_by_assigned = {
-                task: int(expected_counts[TASKS.index(task)]) for task in TASKS
-            }
-
-            _assert_or_warn(
-                actual_by_assigned == expected_by_assigned,
-                (
-                    f"task={label_task}: actual_by_assigned={actual_by_assigned}, "
-                    f"expected_by_assigned={expected_by_assigned}"
-                ),
-                strict=strict,
-            )
-
             print(
-                f"task={label_task} | total_pos={n_pos} | "
-                f"visible_sum={visible_sum} | per_positive_min={min_seen} | "
-                f"per_positive_max={max_seen}"
+                f"PASS q-mask group: base_graph_id={base_graph_id}, "
+                f"clients={len(group_clients)}, q={q_value}"
             )
-            print("  actual_by_assigned  :", actual_by_assigned)
-            print("  expected_by_assigned:", expected_by_assigned)
 
-        print(f"PASS loaded tensor mask audit for q={q_value}")
+        if stop:
+            break
 
-    if audited == 0:
-        print("No q_task_label_allocation subsets were audited.")
+    if audited_physical_groups == 0:
+        print("No q_task_label_allocation physical groups were audited.")
     else:
         print("\n" + "=" * 100)
-        print(f"ALL LOADED Q LABEL MASK AUDITS PASSED | audited_groups={audited}")
+        print(
+            "ALL LOADED Q LABEL MASK AUDITS PASSED | "
+            f"audited_subsets={audited_subsets} | "
+            f"audited_physical_groups={audited_physical_groups}"
+        )
         print("=" * 100)
 
 
