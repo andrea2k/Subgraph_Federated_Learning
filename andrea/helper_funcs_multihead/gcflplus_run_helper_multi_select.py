@@ -159,6 +159,7 @@ def create_gcfl_run_paths(
         f"_{model_tag}"
         f"_s{seed}"
     )
+    stem = safe_stem_for_suffixes(stem, (".csv", ".pt", "_clusters.csv"))
     return GcflRunPaths(
         csv_path=root / f"{stem}.csv",
         ckpt_path=ckpt_root / f"{stem}.pt",
@@ -227,6 +228,59 @@ def build_gcfl_log_row(
     }
 
 
+def safe_stem_for_suffixes(
+    stem: str,
+    suffixes: Sequence[str],
+    *,
+    max_filename_bytes: int = 255,
+) -> str:
+    """Return a deterministic filename stem safe for every requested suffix.
+
+    Linux/macOS filesystems commonly cap a single filename component at 255
+    bytes.  We preserve the original stem whenever it is already safe.  Only
+    overlong stems are shortened, and a SHA-1 digest keeps the shortened name
+    deterministic and collision-resistant.
+    """
+    stem = str(stem)
+    suffixes = tuple(str(s) for s in suffixes)
+    if not suffixes:
+        raise ValueError("suffixes must not be empty")
+
+    def _nbytes(value: str) -> int:
+        return len(value.encode("utf-8"))
+
+    if max(_nbytes(stem + suffix) for suffix in suffixes) <= int(max_filename_bytes):
+        return stem
+
+    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()[:12]
+    longest_suffix_bytes = max(_nbytes(suffix) for suffix in suffixes)
+    digest_reserve = _nbytes("_" + digest)
+    prefix_budget = int(max_filename_bytes) - longest_suffix_bytes - digest_reserve
+    if prefix_budget < 1:
+        raise RuntimeError(
+            "Suffix leaves no room for a safe filename stem: "
+            f"suffixes={suffixes!r}"
+        )
+
+    prefix = stem
+    while prefix and _nbytes(prefix) > prefix_budget:
+        prefix = prefix[:-1]
+    prefix = prefix.rstrip("._-") or "run"
+
+    safe_stem = f"{prefix}_{digest}"
+    too_long = [
+        safe_stem + suffix
+        for suffix in suffixes
+        if _nbytes(safe_stem + suffix) > int(max_filename_bytes)
+    ]
+    if too_long:
+        raise RuntimeError(
+            "Could not construct a safe filename component: "
+            f"{too_long[0]!r}"
+        )
+    return safe_stem
+
+
 # -----------------------------------------------------------------------------
 # state-dict helpers
 # -----------------------------------------------------------------------------
@@ -262,15 +316,27 @@ def l2_norm_of_vector(vec: torch.Tensor) -> float:
     return float(torch.norm(vec, p=2).item())
 
 
-def mean_update_norm(delta_vecs: List[torch.Tensor]) -> float:
+def mean_update_norm(
+    delta_vecs: List[torch.Tensor],
+    weights: Sequence[float],
+) -> float:
     """
-    GCFL-style mean update norm:
-    norm(mean(delta_i))
+    GCFL-style sample-size-weighted mean update norm:
+    norm(sum_i (n_i / sum_j n_j) * delta_i)
     """
     if not delta_vecs:
         return 0.0
-    stacked = torch.stack(delta_vecs, dim=0)
-    mean_vec = stacked.mean(dim=0)
+    if len(delta_vecs) != len(weights):
+        raise ValueError("delta_vecs and weights must have the same length.")
+
+    total_weight = float(sum(weights))
+    if total_weight <= 0:
+        raise ValueError("GCFL+ update weights sum to zero.")
+
+    mean_vec = torch.zeros_like(delta_vecs[0], dtype=torch.float32)
+    for vec, weight in zip(delta_vecs, weights):
+        mean_vec = mean_vec + vec.float() * (float(weight) / total_weight)
+
     return l2_norm_of_vector(mean_vec)
 
 
@@ -986,8 +1052,12 @@ def run_gcfl_experiment(
 
             ordered_selected = list(selected_members)
             ordered_delta_vecs = [delta_vec_by_member[idx] for idx in ordered_selected]
+            ordered_weights = [weight_by_member[idx] for idx in ordered_selected]
 
-            current_mean_norm = mean_update_norm(ordered_delta_vecs)
+            current_mean_norm = mean_update_norm(
+                ordered_delta_vecs,
+                ordered_weights,
+            )
             current_max_norm = max_update_norm(ordered_delta_vecs)
 
             cluster.mean_norm_history.append(current_mean_norm)

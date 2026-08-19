@@ -269,6 +269,7 @@ def create_local_run_paths(
         f"_{model_tag}"
         f"_seed{seed}"
     )
+    stem = safe_stem_for_suffixes(stem, (".csv", ".pt"))
     return RunPaths(
         csv_path=root / f"{stem}.csv",
         ckpt_path=checkpoint_root_from_runs_root(local_root) / f"{stem}.pt",
@@ -292,6 +293,7 @@ def create_fedavg_run_paths(
         f"_{model_tag}"
         f"_seed{seed}"
     )
+    stem = safe_stem_for_suffixes(stem, (".csv", ".pt"))
     return RunPaths(
         csv_path=root / f"{stem}.csv",
         ckpt_path=checkpoint_root_from_runs_root(fedavg_root) / f"{stem}.pt",
@@ -317,6 +319,7 @@ def create_fedprox_run_paths(
         f"_{model_tag}"
         f"_seed{seed}"
     )
+    stem = safe_stem_for_suffixes(stem, (".csv", ".pt"))
     return RunPaths(
         csv_path=root / f"{stem}.csv",
         ckpt_path=checkpoint_root_from_runs_root(fedprox_root) / f"{stem}.pt",
@@ -341,6 +344,59 @@ def upsert_experiment_rows(log_csv: str | Path, rows: List[Dict]) -> int:
     subset = ["out_csv"]
     full = full.drop_duplicates(subset=subset, keep="last")
     full.to_csv(log_csv, index=False)
+
+
+def safe_stem_for_suffixes(
+    stem: str,
+    suffixes: Sequence[str],
+    *,
+    max_filename_bytes: int = 255,
+) -> str:
+    """Return a deterministic filename stem safe for every requested suffix.
+
+    Linux/macOS filesystems commonly cap a single filename component at 255
+    bytes.  We preserve the original stem whenever it is already safe.  Only
+    overlong stems are shortened, and a SHA-1 digest keeps the shortened name
+    deterministic and collision-resistant.
+    """
+    stem = str(stem)
+    suffixes = tuple(str(s) for s in suffixes)
+    if not suffixes:
+        raise ValueError("suffixes must not be empty")
+
+    def _nbytes(value: str) -> int:
+        return len(value.encode("utf-8"))
+
+    if max(_nbytes(stem + suffix) for suffix in suffixes) <= int(max_filename_bytes):
+        return stem
+
+    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()[:12]
+    longest_suffix_bytes = max(_nbytes(suffix) for suffix in suffixes)
+    digest_reserve = _nbytes("_" + digest)
+    prefix_budget = int(max_filename_bytes) - longest_suffix_bytes - digest_reserve
+    if prefix_budget < 1:
+        raise RuntimeError(
+            "Suffix leaves no room for a safe filename stem: "
+            f"suffixes={suffixes!r}"
+        )
+
+    prefix = stem
+    while prefix and _nbytes(prefix) > prefix_budget:
+        prefix = prefix[:-1]
+    prefix = prefix.rstrip("._-") or "run"
+
+    safe_stem = f"{prefix}_{digest}"
+    too_long = [
+        safe_stem + suffix
+        for suffix in suffixes
+        if _nbytes(safe_stem + suffix) > int(max_filename_bytes)
+    ]
+    if too_long:
+        raise RuntimeError(
+            "Could not construct a safe filename component: "
+            f"{too_long[0]!r}"
+        )
+    return safe_stem
 
 
 # -----------------------------------------------------------------------------
@@ -1777,7 +1833,9 @@ def run_fedprox_experiment(
 
     num_clients = len(runtime_clients)
     generator = torch.Generator().manual_seed(seed)
-    aggregated = False
+    # FedProx applies its proximal objective from the first communication round.
+    # In round 1, global_model is the initialized global iterate w^0.
+    aggregated = True
 
     for round_idx in range(1, rounds + 1):
         run_start_time = time.perf_counter()
@@ -2210,6 +2268,7 @@ def build_local_log_row(
         "local_epochs": local_epochs,
         "selection_metric": selection_metric,
         "mcw": cfg.get("minority_class_weight", None),
+        "auto_pos_weight_cap": cfg.get("auto_pos_weight_cap", 100.0),
         "num_layers": cfg["num_layers"],
         "lr": cfg["lr"],
         "weight_decay": cfg["weight_decay"],
@@ -2254,6 +2313,7 @@ def build_fedavg_log_row(
         "local_epochs": local_epochs,
         "selection_metric": selection_metric,
         "mcw": cfg.get("minority_class_weight", None),
+        "auto_pos_weight_cap": cfg.get("auto_pos_weight_cap", 100.0),
         "num_layers": cfg["num_layers"],
         "lr": cfg["lr"],
         "weight_decay": cfg["weight_decay"],
@@ -2300,6 +2360,7 @@ def build_fedprox_log_row(
         "local_epochs": local_epochs,
         "selection_metric": selection_metric,
         "mcw": cfg.get("minority_class_weight", None),
+        "auto_pos_weight_cap": cfg.get("auto_pos_weight_cap", 100.0),
         "num_layers": cfg["num_layers"],
         "lr": cfg["lr"],
         "weight_decay": cfg["weight_decay"],
@@ -2353,6 +2414,7 @@ def iter_sweep_cfgs(
     ):
         cfg = dict(base_cfg)
         cfg["minority_class_weight"] = minority_class_weight
+        cfg["auto_pos_weight_cap"] = 100.0
         cfg["num_layers"] = n_layers
         cfg["lr"] = lr
         cfg["weight_decay"] = weight_decay
@@ -2367,6 +2429,7 @@ def iter_sweep_cfgs(
         meta = {
             "seed": seed,
             "minority_class_weight": minority_class_weight,
+            "auto_pos_weight_cap": 100.0,
             "num_layers": n_layers,
             "lr": lr,
             "weight_decay": weight_decay,

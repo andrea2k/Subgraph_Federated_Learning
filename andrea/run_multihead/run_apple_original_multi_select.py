@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 
 from andrea.helper_funcs_multihead.benchmark_config import resolve_benchmark_paths
-from andrea.helper_funcs_multihead.apple_post_ala_run_helper_multi_select import (
+from andrea.helper_funcs_multihead.apple_original_run_helper_multi_select import (
     build_apple_log_row,
     run_apple,
 )
@@ -29,9 +29,9 @@ BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
-RUN_TAG = os.environ.get("RUN_TAG", "support_simplex_v2")
+RUN_TAG = os.environ.get("RUN_TAG", "multiselect_apple_original")
 BASE_EXPERIMENT_LOG_FOLDER = (
-    "apple_post_ala_fedavg_backbone_taskhead_clustering_experiment_multi_select"
+    "apple_original_clustering_experiment_multi_select"
 )
 EXPERIMENT_LOG_FOLDER = (
     f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
@@ -43,7 +43,7 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_multiselect_apple_post_ala_support_simplex")
+RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_multiselect_apple_original")
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
@@ -52,50 +52,15 @@ SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 APPLE_DR_LR = float(os.environ.get("APPLE_DR_LR", 1e-3))
-APPLE_SUPPORT_PSEUDO_COUNT = float(os.environ.get("APPLE_SUPPORT_PSEUDO_COUNT", 1.0))
-
-# PostAPPLE head-only ALA options.
-APPLE_USE_HEAD_ALA = os.environ.get("APPLE_USE_HEAD_ALA", "True") == "True"
-APPLE_ALA_LR = float(os.environ.get("APPLE_ALA_LR", 1.0))
-APPLE_ALA_RAND_PERCENT = float(os.environ.get("APPLE_ALA_RAND_PERCENT", 100.0))
-APPLE_ALA_CONVERGENCE_STD = float(os.environ.get("APPLE_ALA_CONVERGENCE_STD", 0.1))
-APPLE_ALA_CONVERGENCE_WINDOW = int(os.environ.get("APPLE_ALA_CONVERGENCE_WINDOW", 10))
-APPLE_ALA_MAX_STEPS = int(os.environ.get("APPLE_ALA_MAX_STEPS", 100))
-APPLE_ALA_DEBUG = os.environ.get("APPLE_ALA_DEBUG", "0") == "1"
+APPLE_MU = float(os.environ.get("APPLE_MU", 1e-3))
+APPLE_SCHEDULER_TYPE = os.environ.get("APPLE_SCHEDULER_TYPE", "cosine")
+APPLE_SCHEDULER_FRACTION = float(os.environ.get("APPLE_SCHEDULER_FRACTION", 0.2))
+APPLE_DR_INIT = os.environ.get("APPLE_DR_INIT", "sample_size")
+APPLE_DR_CONSTRAINT = os.environ.get("APPLE_DR_CONSTRAINT", "unconstrained")
+APPLE_DOWNLOAD_STRATEGY = os.environ.get("APPLE_DOWNLOAD_STRATEGY", "full")
 
 SEEDS = [0, 1, 2]
-
-
-def parse_mcw_values_from_env():
-    """Parse minority-class-weight settings from MCW_VALUES."""
-    raw = os.environ.get("MCW_VALUES", "auto").strip() or "auto"
-
-    values = []
-
-    for token in raw.split(","):
-        token = token.strip()
-
-        if not token:
-            continue
-
-        low = token.lower()
-
-        if low == "auto":
-            values.append("auto")
-        elif low in {"none", "null", "off", "unweighted"}:
-            values.append(None)
-        else:
-            values.append(float(token))
-
-    if not values:
-        raise ValueError(
-            f"MCW_VALUES produced no settings: {raw!r}"
-        )
-
-    return values
-
-
-MCW = parse_mcw_values_from_env()
+MCW = ["auto"]
 NUM_LAYERS = [6]
 LRS = [0.001]
 WEIGHT_DECAYS = [0.0001]
@@ -105,9 +70,9 @@ USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
 MASK_SPLITS = ("train", "val", "test")
 
-RESULT_RUN_TYPE = "apple_post_ala_support_simplex_multi_select"
-RESULT_ALGORITHM = "apple_post_ala_support_simplex_multi_select"
-DISPLAY_NAME = "APPLE-PostALA Support-Simplex (multi-selection)"
+RESULT_RUN_TYPE = "apple_original_multi_select"
+RESULT_ALGORITHM = "apple_original_multi_select"
+DISPLAY_NAME = "APPLE Original Single-DR (multi-selection)"
 
 
 def load_cfg(config_path: str, key: str) -> Dict:
@@ -192,16 +157,14 @@ def main() -> None:
     print("BENCHMARK_SETUP:", BENCHMARK.setup)
     print("SELECT_SUBSET_PATH:", SELECT_SUBSET_PATH)
     print("SELECT_SUBSET:", SELECT_SUBSET)
-    os.environ["APPLE_EXPERIMENT_ALGORITHM"] = RESULT_ALGORITHM
     print(
-        "RUN VARIANT: APPLE-PostALA Support-Simplex (multi-selection) | selection_metrics="
+        "RUN VARIANT: APPLE-Original-SingleDR (multi-selection) | selection_metrics="
         + "|".join(SELECTION_METRICS)
     )
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
     print("SAVE_CHECKPOINTS:", os.environ.get("SAVE_CHECKPOINTS", "0"))
-    print("MCW_VALUES resolved to:", MCW)
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
@@ -245,18 +208,8 @@ def main() -> None:
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     base_cfg["output_head"] = "multi"
-    base_cfg["apple_mixing_mode"] = "fedavg_backbone_support_simplex_task_head"
-    base_cfg["selection_tag"] = "ms5_apple_postala_supportsimplex_v2"
-    base_cfg["result_algorithm"] = RESULT_ALGORITHM
-    base_cfg["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
-    base_cfg["apple_ala_lr"] = APPLE_ALA_LR
-    base_cfg["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
-    base_cfg["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
-    base_cfg["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
-    base_cfg["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
-    base_cfg["apple_ala_debug"] = APPLE_ALA_DEBUG
-    base_cfg["apple_support_pseudo_count"] = APPLE_SUPPORT_PSEUDO_COUNT
-    base_cfg["apple_routing_mode"] = "adaptive_visible_support_simplex"
+    base_cfg["apple_mixing_mode"] = "whole_model_single_dr"
+    base_cfg["selection_tag"] = "ms5"
 
     cols = [
         "task_profile_jsd_mean",
@@ -312,21 +265,18 @@ def main() -> None:
 
             print()
             print(
-                f"Starting with {len(subset_clients)}-client APPLE-PostALA Support-Simplex training",
+                f"Starting with {len(subset_clients)}-client APPLE-Original-SingleDR training",
                 row["subset_clients"],
             )
             print(meta)
             print("SEED:", seed, "ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
-            print("APPLE_DR_LR:", APPLE_DR_LR)
-            print("APPLE_ROUTING: adaptive_visible_support_simplex")
-            print("APPLE_SUPPORT_PSEUDO_COUNT:", APPLE_SUPPORT_PSEUDO_COUNT)
             print(
-                "APPLE_USE_HEAD_ALA:",
-                APPLE_USE_HEAD_ALA,
-                "ALA_LR:",
-                APPLE_ALA_LR,
-                "ALA_RAND_PERCENT:",
-                APPLE_ALA_RAND_PERCENT,
+                "APPLE_DR_LR:",
+                APPLE_DR_LR,
+                "APPLE_MU:",
+                APPLE_MU,
+                "DR_INIT:",
+                APPLE_DR_INIT,
             )
 
             for client in subset_clients:
@@ -348,7 +298,12 @@ def main() -> None:
                 local_epochs=LOCAL_EPOCHS,
                 client_fraction=CLIENT_FRACTION,
                 dr_lr=APPLE_DR_LR,
-                support_pseudo_count=APPLE_SUPPORT_PSEUDO_COUNT,
+                apple_mu=APPLE_MU,
+                scheduler_type=APPLE_SCHEDULER_TYPE,
+                scheduler_fraction=APPLE_SCHEDULER_FRACTION,
+                dr_init=APPLE_DR_INIT,
+                dr_constraint=APPLE_DR_CONSTRAINT,
+                download_strategy=APPLE_DOWNLOAD_STRATEGY,
                 device=DEVICE,
                 selection_metrics=SELECTION_METRICS,
                 client_metadata=client_metadata,
@@ -363,7 +318,12 @@ def main() -> None:
                 local_epochs=LOCAL_EPOCHS,
                 client_fraction=CLIENT_FRACTION,
                 dr_lr=APPLE_DR_LR,
-                support_pseudo_count=APPLE_SUPPORT_PSEUDO_COUNT,
+                apple_mu=APPLE_MU,
+                scheduler_type=APPLE_SCHEDULER_TYPE,
+                scheduler_fraction=APPLE_SCHEDULER_FRACTION,
+                dr_init=APPLE_DR_INIT,
+                dr_constraint=APPLE_DR_CONSTRAINT,
+                download_strategy=APPLE_DOWNLOAD_STRATEGY,
                 selection_metrics=SELECTION_METRICS,
             )
             add_subset_metadata(log_row, row)
@@ -378,21 +338,10 @@ def main() -> None:
             log_row["eval_protocols"] = (
                 "oracle_full|realistic_visible|realistic_selection_oracle"
             )
-            log_row["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
-            log_row["apple_ala_lr"] = APPLE_ALA_LR
-            log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
-            log_row["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
-            log_row["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
-            log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
-            log_row["apple_support_pseudo_count"] = APPLE_SUPPORT_PSEUDO_COUNT
-            log_row["apple_routing_mode"] = "adaptive_visible_support_simplex"
-            log_row["apple_dr_proximal_regularization"] = False
-            log_row["apple_ala_training_order"] = "apple_train_then_ala_filter"
-            log_row["apple_ala_materialized_filter"] = True
             upsert_experiment_rows(experiment_log_csv, [log_row])
 
             progress.step(
-                label=f"APPLE-PostALA Support-Simplex done -> {run_paths.csv_path}",
+                label=f"APPLE-Original-SingleDR done -> {run_paths.csv_path}",
                 run_start_time=run_start,
             )
 

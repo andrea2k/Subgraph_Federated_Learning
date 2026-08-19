@@ -7,11 +7,19 @@ from typing import Dict
 from torch_geometric.loader import NeighborLoader
 
 
+AUTO_POS_WEIGHT_CAP = 100.0
+
+
 def build_model_tag(
     mcw, num_layers, lr, weight_decay, dropout, hidden_dim, use_ego_ids, batch_size
 ):
+    mcw_tag = (
+        f"auto_cap{int(AUTO_POS_WEIGHT_CAP)}"
+        if str(mcw).lower().strip() == "auto"
+        else str(mcw)
+    )
     return (
-        f"mcw{mcw}"
+        f"mcw{mcw_tag}"
         f"_layers{num_layers}"
         f"_lr{lr}"
         f"_wd{weight_decay}"
@@ -107,12 +115,14 @@ def build_criterion_for_client(graph, cfg, device):
         return nn.BCEWithLogitsLoss(reduction="none")
 
     if mcw == "auto":
-        pos_cnt, neg_cnt, pos_weight = get_label_stats_from_graph(graph)
-        pos_weight = pos_weight.to(device)
-        print("[criterion] BCEWithLogitsLoss with AUTO pos_weight")
-        print("  pos_cnt   :", pos_cnt)
-        print("  neg_cnt   :", neg_cnt)
-        print("  pos_weight:", pos_weight)
+        pos_cnt, neg_cnt, raw_pos_weight = get_label_stats_from_graph(graph)
+        cap = float(cfg.get("auto_pos_weight_cap", AUTO_POS_WEIGHT_CAP))
+        pos_weight = torch.clamp(raw_pos_weight, max=cap).to(device)
+        print(f"[criterion] BCEWithLogitsLoss with AUTO pos_weight capped at {cap:g}")
+        print("  pos_cnt       :", pos_cnt)
+        print("  neg_cnt       :", neg_cnt)
+        print("  raw_pos_weight:", raw_pos_weight)
+        print("  pos_weight    :", pos_weight)
         return nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
 
     return nn.BCEWithLogitsLoss(

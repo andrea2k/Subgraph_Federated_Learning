@@ -50,7 +50,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 FEDALA_MODE = "all"
 FEDALA_ALA_LR = float(os.environ.get("FEDALA_ALA_LR", 1.0))
-FEDALA_RAND_PERCENT = float(os.environ.get("FEDALA_RAND_PERCENT", 20.0))
+FEDALA_RAND_PERCENT = float(os.environ.get("FEDALA_RAND_PERCENT", 100.0))
 FEDALA_CONVERGENCE_STD = float(os.environ.get("FEDALA_CONVERGENCE_STD", 0.1))
 FEDALA_CONVERGENCE_WINDOW = int(os.environ.get("FEDALA_CONVERGENCE_WINDOW", 10))
 FEDALA_MAX_STEPS = int(os.environ.get("FEDALA_MAX_STEPS", 100))

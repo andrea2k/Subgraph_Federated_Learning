@@ -61,15 +61,9 @@ class AppleRunPaths:
 
 @dataclass
 class AppleDRState:
-    """Learned donor weights for one receiver client.
+    """Single APPLE directed-relationship vector p_i for one receiver client."""
 
-    backbone: one vector over donor clients for all non-output-head parameters.
-    task: one donor vector per task for the independent task heads.
-    """
-
-    backbone: torch.nn.Parameter
-    task: torch.nn.Parameter
-
+    vector: torch.nn.Parameter
 
 def compact_subset_id_for_filename(subset_id: str) -> str:
     """Return a short readable subset id safe for macOS/Linux filenames."""
@@ -185,7 +179,7 @@ def create_apple_run_paths(
     subset_id = compact_subset_id_for_filename(subset_id)
     model_tag = compact_model_tag_for_filename(model_tag)
     stem = (
-        f"apple_backbone_taskhead"
+        f"apple_original"
         f"{subset_id}"
         f"_rounds{rounds}"
         f"_epoch{local_epochs}"
@@ -230,8 +224,8 @@ def build_apple_log_row(
     model_tag = _model_tag_from_cfg(cfg)
 
     return {
-        "run_type": "apple_backbone_taskhead_multi_select",
-        "algorithm": "apple_backbone_taskhead_multi_select",
+        "run_type": "apple_original_multi_select",
+        "algorithm": "apple_original_multi_select",
         "subset_id": subset_id,
         "subset_clients": subset_id,
         "graph_id": "all",
@@ -253,7 +247,7 @@ def build_apple_log_row(
         "apple_dr_init": dr_init,
         "apple_dr_constraint": dr_constraint,
         "apple_download_strategy": download_strategy,
-        "apple_mixing_mode": cfg.get("apple_mixing_mode", "backbone_task_head"),
+        "apple_mixing_mode": cfg.get("apple_mixing_mode", "whole_model_single_dr"),
         "output_head": cfg.get("output_head", "multi"),
         "architecture": cfg.get("architecture", "multihead"),
         "mcw": cfg.get("minority_class_weight", None),
@@ -332,20 +326,10 @@ def core_state_dicts(
 def dr_matrix_cpu(
     dr_vectors: Sequence[AppleDRState],
 ) -> torch.Tensor:
-    """Return task-head DR tensor with shape [receiver, task, donor]."""
+    """Return the single APPLE DR matrix with shape [receiver, donor]."""
     return torch.stack(
-        [state.task.detach().cpu().clone() for state in dr_vectors], dim=0
+        [state.vector.detach().cpu().clone() for state in dr_vectors], dim=0
     )
-
-
-def dr_backbone_matrix_cpu(
-    dr_vectors: Sequence[AppleDRState],
-) -> torch.Tensor:
-    """Return backbone DR matrix with shape [receiver, donor]."""
-    return torch.stack(
-        [state.backbone.detach().cpu().clone() for state in dr_vectors], dim=0
-    )
-
 
 # -----------------------------------------------------------------------------
 # APPLE-specific math
@@ -397,46 +381,24 @@ def make_p0_from_train_sizes(runtime_clients, device: torch.device) -> torch.Ten
 
 def initialize_dr_vectors(
     num_clients: int,
-    num_tasks: int,
     p0: torch.Tensor,
     *,
     init: str = "sample_size",
 ) -> List[AppleDRState]:
-    """
-    Backbone+task-head APPLE DR initialization.
-
-    For each receiver client i we learn:
-
-        backbone_i[j]      = donor weight for backbone / non-head parameters
-        task_i[t, j]       = donor weight for task-head t parameters
-
-    Shapes:
-        backbone_i: [num_clients]
-        task_i:     [num_tasks, num_clients]
-    """
+    """Initialize one unconstrained donor-weight vector p_i per receiver client."""
     init = str(init).lower().strip()
     out: List[AppleDRState] = []
 
     if init in {"sample_size", "p0"}:
-        backbone_base = p0.detach().clone()
-        task_base = p0.detach().clone().unsqueeze(0).repeat(int(num_tasks), 1)
+        base = p0.detach().clone()
     elif init == "uniform":
-        backbone_base = torch.full_like(p0, 1.0 / max(num_clients, 1))
-        task_base = (
-            backbone_base.detach().clone().unsqueeze(0).repeat(int(num_tasks), 1)
-        )
+        base = torch.full_like(p0, 1.0 / max(num_clients, 1))
     else:
         raise ValueError(f"Unknown APPLE DR init={init}")
 
     for _ in range(num_clients):
-        out.append(
-            AppleDRState(
-                backbone=torch.nn.Parameter(backbone_base.clone()),
-                task=torch.nn.Parameter(task_base.clone()),
-            )
-        )
+        out.append(AppleDRState(vector=torch.nn.Parameter(base.clone())))
     return out
-
 
 def make_apple_optimizer(
     core_model: torch.nn.Module,
@@ -452,45 +414,15 @@ def make_apple_optimizer(
                 "weight_decay": float(cfg["weight_decay"]),
             },
             {
-                "params": [dr_vector.backbone, dr_vector.task],
+                "params": [dr_vector.vector],
                 "lr": float(dr_lr),
                 "weight_decay": 0.0,
             },
         ]
     )
 
-
 def _named_parameter_dict(model: torch.nn.Module) -> Dict[str, torch.Tensor]:
     return dict(model.named_parameters())
-
-
-def _task_idx_from_output_head_param_name(name: str) -> Optional[int]:
-    """
-    Parse task index from a multi-head parameter name.
-
-    Expected names for output_head="multi" look like:
-        output_head.heads.0.0.weight
-        output_head.heads.0.0.bias
-        output_head.heads.0.2.weight
-        output_head.heads.0.2.bias
-        output_head.heads.1.0.weight
-        ...
-
-    Returns:
-        task index if this parameter belongs to one task head;
-        None if this is a backbone / non-head parameter.
-    """
-    prefix = "output_head.heads."
-    if not name.startswith(prefix):
-        return None
-
-    rest = name[len(prefix) :]
-    first = rest.split(".", 1)[0]
-
-    try:
-        return int(first)
-    except ValueError:
-        return None
 
 
 def mixed_parameter_dict(
@@ -498,50 +430,26 @@ def mixed_parameter_dict(
     client_idx: int,
     dr_vector: AppleDRState,
 ) -> Dict[str, torch.Tensor]:
-    """
-    Build the personalized backbone+task-head APPLE parameter dictionary.
+    """Mix every learnable parameter with the same receiver-specific APPLE vector p_i.
 
-    New full-mix design:
+    For every model parameter name k:
+        theta_i^p[k] = sum_j p_i[j] * theta_j^c[k]
 
-    - Backbone / non-head parameters are mixed with one receiver-specific
-      backbone donor vector:
-
-          backbone_i = sum_j p_backbone[i, j] * backbone_j
-
-    - Task-head parameters are still mixed task-wise:
-
-          head_{i,t} = sum_j p_task[i, t, j] * head_{j,t}
-
-    This gives the model representation sharing again, while preserving the
-    task-specific donor choice that motivated APPLE-TaskHead.
+    This includes the PNA backbone and every task head.  There is no task-specific
+    DR vector in this baseline.
     """
     if len(models_for_mix) == 0:
         raise ValueError("models_for_mix is empty")
 
-    backbone_weights = dr_vector.backbone
-    task_weights = dr_vector.task
-
-    if backbone_weights.ndim != 1:
+    weights = dr_vector.vector
+    if weights.ndim != 1:
         raise ValueError(
-            f"Expected backbone DR shape [num_clients], got {tuple(backbone_weights.shape)}"
+            f"Expected APPLE DR shape [num_clients], got {tuple(weights.shape)}"
         )
-
-    if task_weights.ndim != 2:
+    if weights.numel() != len(models_for_mix):
         raise ValueError(
-            f"Expected task DR shape [num_tasks, num_clients], "
-            f"got shape={tuple(task_weights.shape)}"
-        )
-
-    num_tasks, num_clients_from_task = task_weights.shape
-    if backbone_weights.numel() != len(models_for_mix):
-        raise ValueError(
-            f"Backbone DR donor dimension mismatch: "
-            f"dr has {backbone_weights.numel()}, models_for_mix has {len(models_for_mix)}"
-        )
-    if num_clients_from_task != len(models_for_mix):
-        raise ValueError(
-            f"Task DR donor dimension mismatch: "
-            f"dr has {num_clients_from_task}, models_for_mix has {len(models_for_mix)}"
+            f"APPLE DR donor dimension mismatch: dr has {weights.numel()}, "
+            f"models_for_mix has {len(models_for_mix)}"
         )
 
     param_dicts = [_named_parameter_dict(model) for model in models_for_mix]
@@ -549,27 +457,12 @@ def mixed_parameter_dict(
     mixed: Dict[str, torch.Tensor] = {}
 
     for name in names:
-        task_idx = _task_idx_from_output_head_param_name(name)
-
-        if task_idx is None:
-            # Backbone / non-head parameter: mix across donors using the
-            # backbone DR vector.
-            weights = backbone_weights
-        else:
-            if task_idx < 0 or task_idx >= num_tasks:
-                raise ValueError(
-                    f"Task index {task_idx} from parameter {name} is outside "
-                    f"num_tasks={num_tasks}"
-                )
-            # Task-head parameter: mix same-task heads using task-specific row.
-            weights = task_weights[task_idx]
-
         acc = None
         for donor_idx, params in enumerate(param_dicts):
             value = params[name]
 
-            # Donor models are frozen/downloaded constants.
-            # Receiver client's own parameters remain attached to autograd.
+            # Other downloaded core models are constants for receiver i.
+            # Receiver i's own core remains attached to autograd.
             if donor_idx != client_idx:
                 value = value.detach()
 
@@ -580,7 +473,6 @@ def mixed_parameter_dict(
         mixed[name] = acc
 
     return mixed
-
 
 def self_buffer_dict(model: torch.nn.Module) -> Dict[str, torch.Tensor]:
     """
@@ -689,17 +581,10 @@ def train_epoch_neighbor_apple(
             label_mask_seed,
         )
 
-        # Regularize both learned DR objects toward p0.
-        # We average over one backbone row + all task rows, so apple_mu remains
-        # on roughly the same scale as the previous task-head-only run.
-        backbone = dr_vector.backbone
-        task = dr_vector.task
-        p0_backbone = p0.to(device=backbone.device, dtype=backbone.dtype)
-        p0_task = p0.unsqueeze(0).to(device=task.device, dtype=task.dtype)
-
-        backbone_l2 = torch.sum((backbone - p0_backbone) ** 2)
-        task_row_l2 = torch.sum((task - p0_task) ** 2, dim=1)
-        prox_body = torch.mean(torch.cat([backbone_l2.reshape(1), task_row_l2]))
+        # Original APPLE proximal regularizer for the single DR vector p_i.
+        p_i = dr_vector.vector
+        p0_i = p0.to(device=p_i.device, dtype=p_i.dtype)
+        prox_body = torch.sum((p_i - p0_i) ** 2)
         prox_loss = 0.5 * float(lambda_r) * float(apple_mu) * prox_body
         loss = base_loss + prox_loss
 
@@ -1035,30 +920,17 @@ def append_apple_train_diag_row(
     dr_vector: AppleDRState,
     p0: torch.Tensor,
 ) -> None:
-    """Training diagnostic row for backbone+task-head APPLE."""
-    backbone_cpu = dr_vector.backbone.detach().cpu()
-    task_cpu = dr_vector.task.detach().cpu()
+    """Training diagnostic row for original APPLE with one p_i vector."""
+    p_cpu = dr_vector.vector.detach().cpu()
     p0_cpu = p0.detach().cpu()
 
-    if backbone_cpu.ndim != 1:
-        raise ValueError(
-            f"Expected backbone DR vector, got shape={tuple(backbone_cpu.shape)}"
-        )
-    if task_cpu.ndim != 2:
-        raise ValueError(f"Expected task DR matrix, got shape={tuple(task_cpu.shape)}")
-
-    task_row_sums = task_cpu.sum(dim=1)
-    task_self_weights = task_cpu[:, int(client_idx)]
-    task_l2_to_p0 = torch.norm(task_cpu - p0_cpu.unsqueeze(0), p=2, dim=1)
-
-    backbone_row_sum = float(backbone_cpu.sum().item())
-    backbone_self_weight = float(backbone_cpu[int(client_idx)].item())
-    backbone_l2_to_p0 = float(torch.norm(backbone_cpu - p0_cpu, p=2).item())
+    if p_cpu.ndim != 1:
+        raise ValueError(f"Expected APPLE DR vector, got shape={tuple(p_cpu.shape)}")
 
     rows.append(
         {
-            "run_type": "apple_backbone_taskhead_multi_select",
-            "algorithm": "apple_backbone_taskhead_multi_select",
+            "run_type": "apple_original_multi_select",
+            "algorithm": "apple_original_multi_select",
             "subset_id": subset_id,
             "subset_clients": subset_clients,
             "seed": seed,
@@ -1074,27 +946,15 @@ def append_apple_train_diag_row(
             "dr_prox_loss": float(train_stats["prox_loss"]),
             "apple_lambda": float(lambda_r),
             "apple_mu": float(apple_mu),
-            # Backward-compatible averaged task-head summaries.
-            "dr_row_sum": float(task_row_sums.mean().item()),
-            "dr_l2_to_p0": float(task_l2_to_p0.mean().item()),
-            "dr_self_weight": float(task_self_weights.mean().item()),
-            "dr_row_sum_by_task_json": json.dumps(
-                [float(x) for x in task_row_sums.tolist()]
-            ),
-            "dr_self_weight_by_task_json": json.dumps(
-                [float(x) for x in task_self_weights.tolist()]
-            ),
-            "dr_l2_to_p0_by_task_json": json.dumps(
-                [float(x) for x in task_l2_to_p0.tolist()]
-            ),
-            # New backbone diagnostics.
-            "dr_backbone_row_sum": backbone_row_sum,
-            "dr_backbone_self_weight": backbone_self_weight,
-            "dr_backbone_l2_to_p0": backbone_l2_to_p0,
+            "dr_row_sum": float(p_cpu.sum().item()),
+            "dr_row_abs_sum": float(p_cpu.abs().sum().item()),
+            "dr_l2_to_p0": float(torch.norm(p_cpu - p0_cpu, p=2).item()),
+            "dr_self_weight": float(p_cpu[int(client_idx)].item()),
+            "dr_vector_json": json.dumps([float(x) for x in p_cpu.tolist()]),
+            "p0_json": json.dumps([float(x) for x in p0_cpu.tolist()]),
             "num_nodes": int(runtime.num_train_nodes),
         }
     )
-
 
 def append_apple_mean_row(
     rows: List[Dict],
@@ -1122,8 +982,8 @@ def append_apple_mean_row(
 
     rows.append(
         {
-            "run_type": "apple_backbone_taskhead_multi_select",
-            "algorithm": "apple_backbone_taskhead_multi_select",
+            "run_type": "apple_original_multi_select",
+            "algorithm": "apple_original_multi_select",
             "subset_id": subset_id,
             "subset_clients": subset_clients,
             "seed": seed,
@@ -1180,72 +1040,43 @@ def append_apple_dr_rows(
     apple_mu: float,
     client_metadata: Optional[Dict[str, Dict]] = None,
 ) -> None:
-    """
-    DR logging for backbone+task-head APPLE.
-
-    Logged objects:
-        backbone matrix: [receiver_client, donor_client]
-        task tensor:     [receiver_client, task, donor_client]
-
-    Rows written:
-        row_type="backbone_summary"   one row per receiver-client
-        row_type="backbone_pair"      one row per receiver-client/donor-client
-        row_type="task_summary"       one row per receiver-client/task
-        row_type="task_pair"          one row per receiver-client/task/donor-client
-    """
-    task_tensor = dr_matrix_cpu(dr_vectors)
-    backbone_matrix = dr_backbone_matrix_cpu(dr_vectors)
-
-    if task_tensor.ndim != 3:
+    """Log the single APPLE DR matrix P with shape [receiver, donor]."""
+    matrix = dr_matrix_cpu(dr_vectors)
+    if matrix.ndim != 2:
         raise ValueError(
-            f"Expected task DR tensor shape [num_clients, num_tasks, num_clients], "
-            f"got shape={tuple(task_tensor.shape)}"
+            f"Expected APPLE DR matrix shape [num_clients, num_clients], "
+            f"got shape={tuple(matrix.shape)}"
         )
-    if backbone_matrix.ndim != 2:
+
+    num_receivers, num_donors = matrix.shape
+    if num_receivers != len(runtime_clients) or num_donors != len(runtime_clients):
         raise ValueError(
-            f"Expected backbone DR matrix shape [num_clients, num_clients], "
-            f"got shape={tuple(backbone_matrix.shape)}"
+            f"APPLE DR/client mismatch: matrix={tuple(matrix.shape)}, "
+            f"runtime_clients={len(runtime_clients)}"
         )
 
     p0_cpu = p0.detach().cpu()
-    num_receivers, num_tasks, num_donors = task_tensor.shape
-
-    if num_receivers != len(runtime_clients) or num_donors != len(runtime_clients):
-        raise ValueError(
-            f"Task DR tensor/client mismatch: tensor={tuple(task_tensor.shape)}, "
-            f"runtime_clients={len(runtime_clients)}"
-        )
-    if backbone_matrix.shape != (len(runtime_clients), len(runtime_clients)):
-        raise ValueError(
-            f"Backbone DR/client mismatch: matrix={tuple(backbone_matrix.shape)}, "
-            f"runtime_clients={len(runtime_clients)}"
-        )
-
-    incoming_abs_task = task_tensor.abs().sum(dim=0)  # [task, donor]
-    incoming_signed_task = task_tensor.sum(dim=0)  # [task, donor]
-    incoming_abs_backbone = backbone_matrix.abs().sum(dim=0)  # [donor]
-    incoming_signed_backbone = backbone_matrix.sum(dim=0)  # [donor]
+    incoming_abs = matrix.abs().sum(dim=0)
+    incoming_signed = matrix.sum(dim=0)
 
     for i, runtime_i in enumerate(runtime_clients):
         meta_i = _client_extra_metadata(runtime_i, client_metadata)
+        row = matrix[i]
+        off_mask = torch.ones(num_donors, dtype=torch.bool)
+        off_mask[i] = False
+        off = row[off_mask]
 
-        # Backbone rows.
-        brow = backbone_matrix[i]
-        boff_mask = torch.ones(num_donors, dtype=torch.bool)
-        boff_mask[i] = False
-        boff = brow[boff_mask]
-        b_abs_row = brow.abs()
-        b_top_order = torch.argsort(b_abs_row, descending=True).tolist()
-        b_top_parts = []
-        for donor_idx in b_top_order[: min(3, num_donors)]:
+        top_order = torch.argsort(row.abs(), descending=True).tolist()
+        top_parts = []
+        for donor_idx in top_order[: min(3, num_donors)]:
             donor_graph = str(runtime_clients[donor_idx].client.graph_id)
-            b_top_parts.append(f"{donor_graph}:{float(brow[donor_idx].item()):.6g}")
+            top_parts.append(f"{donor_graph}:{float(row[donor_idx].item()):.6g}")
 
         dr_rows.append(
             {
-                "row_type": "backbone_summary",
-                "run_type": "apple_backbone_taskhead_multi_select",
-                "algorithm": "apple_backbone_taskhead_multi_select",
+                "row_type": "dr_summary",
+                "run_type": "apple_original_multi_select",
+                "algorithm": "apple_original_multi_select",
                 "subset_id": subset_id,
                 "subset_clients": subset_clients,
                 "seed": seed,
@@ -1260,36 +1091,30 @@ def append_apple_dr_rows(
                 "mask_task": meta_i.get("mask_task"),
                 "mask_fraction": meta_i.get("mask_fraction"),
                 "task_idx": None,
-                "task": "backbone",
-                "dr_self_weight": float(brow[i].item()),
-                "dr_row_sum": float(brow.sum().item()),
-                "dr_row_abs_sum": float(brow.abs().sum().item()),
-                "dr_offdiag_pos_mass": float(torch.clamp(boff, min=0.0).sum().item()),
-                "dr_offdiag_neg_mass": float(torch.clamp(boff, max=0.0).sum().item()),
-                "dr_offdiag_abs_mass": float(boff.abs().sum().item()),
-                "dr_l2_to_p0": float(torch.norm(brow - p0_cpu, p=2).item()),
-                "dr_top_abs_donors": "|".join(b_top_parts),
-                "incoming_abs_mass_this_client_task": None,
-                "incoming_signed_mass_this_client_task": None,
-                "incoming_abs_mass_this_client_backbone": float(
-                    incoming_abs_backbone[i].item()
-                ),
-                "incoming_signed_mass_this_client_backbone": float(
-                    incoming_signed_backbone[i].item()
-                ),
-                "dr_vector_json": json.dumps([float(x) for x in brow.tolist()]),
+                "task": None,
+                "dr_self_weight": float(row[i].item()),
+                "dr_row_sum": float(row.sum().item()),
+                "dr_row_abs_sum": float(row.abs().sum().item()),
+                "dr_offdiag_pos_mass": float(torch.clamp(off, min=0.0).sum().item()),
+                "dr_offdiag_neg_mass": float(torch.clamp(off, max=0.0).sum().item()),
+                "dr_offdiag_abs_mass": float(off.abs().sum().item()),
+                "dr_l2_to_p0": float(torch.norm(row - p0_cpu, p=2).item()),
+                "dr_top_abs_donors": "|".join(top_parts),
+                "incoming_abs_mass_this_client": float(incoming_abs[i].item()),
+                "incoming_signed_mass_this_client": float(incoming_signed[i].item()),
+                "dr_vector_json": json.dumps([float(x) for x in row.tolist()]),
                 "p0_json": json.dumps([float(x) for x in p0_cpu.tolist()]),
             }
         )
 
         for j, runtime_j in enumerate(runtime_clients):
             meta_j = _client_extra_metadata(runtime_j, client_metadata)
-            value = float(brow[j].item())
+            value = float(row[j].item())
             dr_rows.append(
                 {
-                    "row_type": "backbone_pair",
-                    "run_type": "apple_backbone_taskhead_multi_select",
-                    "algorithm": "apple_backbone_taskhead_multi_select",
+                    "row_type": "dr_pair",
+                    "run_type": "apple_original_multi_select",
+                    "algorithm": "apple_original_multi_select",
                     "subset_id": subset_id,
                     "subset_clients": subset_clients,
                     "seed": seed,
@@ -1302,122 +1127,16 @@ def append_apple_dr_rows(
                     "dataset_id": str(runtime_i.client.dataset_id),
                     "family": meta_i.get("family"),
                     "assigned_task": meta_i.get("assigned_task"),
-                    "task_idx": None,
-                    "task": "backbone",
                     "donor_graph_id": str(runtime_j.client.graph_id),
                     "donor_dataset_id": str(runtime_j.client.dataset_id),
                     "donor_family": meta_j.get("family"),
                     "donor_assigned_task": meta_j.get("assigned_task"),
-                    "p_itj": value,
                     "p_ij": value,
-                    "p_backbone_ij": value,
-                    "abs_p_itj": float(abs(value)),
                     "abs_p_ij": float(abs(value)),
-                    "abs_p_backbone_ij": float(abs(value)),
                     "p0_j": float(p0_cpu[j].item()),
                     "is_self": int(i == j),
                 }
             )
-
-        # Task-head rows.
-        for task_idx in range(num_tasks):
-            task_name = TASKS[task_idx] if task_idx < len(TASKS) else f"task{task_idx}"
-            row = task_tensor[i, task_idx]
-
-            off_mask = torch.ones(num_donors, dtype=torch.bool)
-            off_mask[i] = False
-            off = row[off_mask]
-
-            pos_off = torch.clamp(off, min=0.0).sum().item()
-            neg_off = torch.clamp(off, max=0.0).sum().item()
-            abs_off = off.abs().sum().item()
-
-            abs_row = row.abs()
-            top_order = torch.argsort(abs_row, descending=True).tolist()
-            top_parts = []
-            for donor_idx in top_order[: min(3, num_donors)]:
-                donor_graph = str(runtime_clients[donor_idx].client.graph_id)
-                top_parts.append(f"{donor_graph}:{float(row[donor_idx].item()):.6g}")
-
-            dr_rows.append(
-                {
-                    "row_type": "task_summary",
-                    "run_type": "apple_backbone_taskhead_multi_select",
-                    "algorithm": "apple_backbone_taskhead_multi_select",
-                    "subset_id": subset_id,
-                    "subset_clients": subset_clients,
-                    "seed": seed,
-                    "round": round_idx,
-                    "apple_lambda": float(lambda_r),
-                    "apple_mu": float(apple_mu),
-                    "client_idx": i,
-                    "graph_id": str(runtime_i.client.graph_id),
-                    "dataset_id": str(runtime_i.client.dataset_id),
-                    "family": meta_i.get("family"),
-                    "assigned_task": meta_i.get("assigned_task"),
-                    "mask_task": meta_i.get("mask_task"),
-                    "mask_fraction": meta_i.get("mask_fraction"),
-                    "task_idx": task_idx,
-                    "task": task_name,
-                    "dr_self_weight": float(row[i].item()),
-                    "dr_row_sum": float(row.sum().item()),
-                    "dr_row_abs_sum": float(row.abs().sum().item()),
-                    "dr_offdiag_pos_mass": float(pos_off),
-                    "dr_offdiag_neg_mass": float(neg_off),
-                    "dr_offdiag_abs_mass": float(abs_off),
-                    "dr_l2_to_p0": float(torch.norm(row - p0_cpu, p=2).item()),
-                    "dr_top_abs_donors": "|".join(top_parts),
-                    "incoming_abs_mass_this_client_task": float(
-                        incoming_abs_task[task_idx, i].item()
-                    ),
-                    "incoming_signed_mass_this_client_task": float(
-                        incoming_signed_task[task_idx, i].item()
-                    ),
-                    "incoming_abs_mass_this_client_backbone": None,
-                    "incoming_signed_mass_this_client_backbone": None,
-                    "dr_vector_json": json.dumps([float(x) for x in row.tolist()]),
-                    "p0_json": json.dumps([float(x) for x in p0_cpu.tolist()]),
-                }
-            )
-
-            for j, runtime_j in enumerate(runtime_clients):
-                meta_j = _client_extra_metadata(runtime_j, client_metadata)
-                value = float(row[j].item())
-
-                dr_rows.append(
-                    {
-                        "row_type": "task_pair",
-                        "run_type": "apple_backbone_taskhead_multi_select",
-                        "algorithm": "apple_backbone_taskhead_multi_select",
-                        "subset_id": subset_id,
-                        "subset_clients": subset_clients,
-                        "seed": seed,
-                        "round": round_idx,
-                        "apple_lambda": float(lambda_r),
-                        "apple_mu": float(apple_mu),
-                        "client_idx": i,
-                        "donor_idx": j,
-                        "graph_id": str(runtime_i.client.graph_id),
-                        "dataset_id": str(runtime_i.client.dataset_id),
-                        "family": meta_i.get("family"),
-                        "assigned_task": meta_i.get("assigned_task"),
-                        "task_idx": task_idx,
-                        "task": task_name,
-                        "donor_graph_id": str(runtime_j.client.graph_id),
-                        "donor_dataset_id": str(runtime_j.client.dataset_id),
-                        "donor_family": meta_j.get("family"),
-                        "donor_assigned_task": meta_j.get("assigned_task"),
-                        "p_itj": value,
-                        "p_ij": value,
-                        "p_task_itj": value,
-                        "abs_p_itj": float(abs(value)),
-                        "abs_p_ij": float(abs(value)),
-                        "abs_p_task_itj": float(abs(value)),
-                        "p0_j": float(p0_cpu[j].item()),
-                        "is_self": int(i == j),
-                    }
-                )
-
 
 # -----------------------------------------------------------------------------
 # Main APPLE experiment
@@ -1486,10 +1205,10 @@ def run_apple_experiment(
 
     p0 = make_p0_from_train_sizes(runtime_clients, device)
     num_tasks = int(ctx["out_dim"])
-    dr_vectors = initialize_dr_vectors(num_clients, num_tasks, p0, init=dr_init)
+    dr_vectors = initialize_dr_vectors(num_clients, p0, init=dr_init)
 
     print(
-        "[backbone+task-head apple]",
+        "[original apple single-dr]",
         "num_clients=",
         num_clients,
         "num_tasks=",
@@ -1498,10 +1217,8 @@ def run_apple_experiment(
         cfg.get("output_head"),
         "mixing_mode=",
         cfg.get("apple_mixing_mode"),
-        "task_dr_tensor_shape=",
+        "dr_matrix_shape=",
         tuple(dr_matrix_cpu(dr_vectors).shape),
-        "backbone_dr_matrix_shape=",
-        tuple(dr_backbone_matrix_cpu(dr_vectors).shape),
     )
 
     rows: List[Dict] = []
@@ -1512,7 +1229,6 @@ def run_apple_experiment(
         i: core_state_dicts(core_models) for i in range(num_clients)
     }
     initial_dr_matrix = dr_matrix_cpu(dr_vectors)
-    initial_backbone_dr_matrix = dr_backbone_matrix_cpu(dr_vectors)
 
     def _initial_best_record():
         record = {
@@ -1523,7 +1239,6 @@ def run_apple_experiment(
                 initial_local_eval_states_by_client
             ),
             "dr_matrix": initial_dr_matrix.clone(),
-            "backbone_dr_matrix": initial_backbone_dr_matrix.clone(),
         }
         return record
 
@@ -1595,8 +1310,8 @@ def run_apple_experiment(
                 )
                 append_train_row(
                     rows,
-                    run_type="apple_backbone_taskhead_multi_select",
-                    algorithm="apple_backbone_taskhead_multi_select",
+                    run_type="apple_original_multi_select",
+                    algorithm="apple_original_multi_select",
                     subset_id=subset_id,
                     subset_clients=subset_clients_str,
                     seed=seed,
@@ -1645,8 +1360,8 @@ def run_apple_experiment(
 
                 append_eval_rows(
                     rows,
-                    run_type="apple_backbone_taskhead_multi_select",
-                    algorithm="apple_backbone_taskhead_multi_select",
+                    run_type="apple_original_multi_select",
+                    algorithm="apple_original_multi_select",
                     subset_id=subset_id,
                     subset_clients=subset_clients_str,
                     seed=seed,
@@ -1719,8 +1434,8 @@ def run_apple_experiment(
 
                 append_eval_rows(
                     rows,
-                    run_type="apple_backbone_taskhead_multi_select",
-                    algorithm="apple_backbone_taskhead_multi_select",
+                    run_type="apple_original_multi_select",
+                    algorithm="apple_original_multi_select",
                     subset_id=subset_id,
                     subset_clients=subset_clients_str,
                     seed=seed,
@@ -1801,9 +1516,6 @@ def run_apple_experiment(
                     )
                     best_record["server_core_states"] = core_state_dicts(core_models)
                     best_record["dr_matrix"] = dr_matrix_cpu(dr_vectors)
-                    best_record["backbone_dr_matrix"] = dr_backbone_matrix_cpu(
-                        dr_vectors
-                    )
 
         run_elapsed = time.perf_counter() - run_start_time
         print(f"run time: {format_seconds(run_elapsed)}")
@@ -1886,26 +1598,12 @@ def run_apple_experiment(
             selected_round = selected_state["round"]
             selected_dr_matrix = selected_state["dr_matrix"]
 
-            if "backbone_dr_matrix" in selected_state:
-                selected_backbone_dr_matrix = selected_state["backbone_dr_matrix"]
-            else:
-                selected_backbone_dr_matrix = torch.stack(
-                    [
-                        p0.detach().cpu().clone()
-                        for _ in range(selected_dr_matrix.size(0))
-                    ],
-                    dim=0,
-                )
-
             selected_dr_vectors = [
                 AppleDRState(
-                    backbone=torch.nn.Parameter(
-                        selected_backbone_dr_matrix[i].to(device).clone(),
+                    vector=torch.nn.Parameter(
+                        selected_dr_matrix[i].to(device).clone(),
                         requires_grad=False,
-                    ),
-                    task=torch.nn.Parameter(
-                        selected_dr_matrix[i].to(device).clone(), requires_grad=False
-                    ),
+                    )
                 )
                 for i in range(selected_dr_matrix.size(0))
             ]
@@ -1941,8 +1639,8 @@ def run_apple_experiment(
 
                     append_eval_rows(
                         rows,
-                        run_type="apple_backbone_taskhead_multi_select",
-                        algorithm="apple_backbone_taskhead_multi_select",
+                        run_type="apple_original_multi_select",
+                        algorithm="apple_original_multi_select",
                         subset_id=subset_id,
                         subset_clients=subset_clients_str,
                         seed=seed,
@@ -2001,7 +1699,7 @@ def run_apple_experiment(
     out_df = pd.DataFrame(rows)
 
     print("\n" + "=" * 100)
-    print("APPLE BACKBONE+TASK-HEAD DUAL-EVALUATION SMOKE CHECK")
+    print("APPLE ORIGINAL SINGLE-DR DUAL-EVALUATION SMOKE CHECK")
     print("=" * 100)
     print("csv path:", run_paths.csv_path)
     print("checkpoint path:", run_paths.ckpt_path)

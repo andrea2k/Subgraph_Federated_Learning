@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 
 from andrea.helper_funcs_multihead.benchmark_config import resolve_benchmark_paths
-from andrea.helper_funcs_multihead.apple_experimental_run_helper_multi_select import (
+from andrea.helper_funcs_multihead.backbone_affinity_probe_run_helper_multi_select import (
     build_apple_log_row,
     run_apple,
 )
@@ -28,9 +28,14 @@ from andrea.helper_funcs_multihead.load_client_helper import (
 BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
-RUN_TAG = os.environ.get("RUN_TAG", "multiselect_apple")
-BASE_EXPERIMENT_LOG_FOLDER = "apple_ala_fedavg_backbone_taskhead_clustering_experiment_multi_select"
-EXPERIMENT_LOG_FOLDER = f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
+
+RUN_TAG = os.environ.get("RUN_TAG", "backbone_affinity_probe")
+BASE_EXPERIMENT_LOG_FOLDER = (
+    "backbone_affinity_probe_experiment_multi_select"
+)
+EXPERIMENT_LOG_FOLDER = (
+    f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
+)
 DATA_DIR = f"{SELECT_SUBSET_PATH}/cluster_generation_parameters.csv"
 
 SELECTED_SUBSETS_CSV_PATH = f"./andrea/{SELECT_SUBSET_PATH}/{SELECT_SUBSET}.csv"
@@ -38,7 +43,7 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_multiselect_apple_ala")
+RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_backbone_affinity_probe")
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
@@ -76,9 +81,9 @@ USE_EGO_IDS = [True]
 BATCH_SIZE = [64]
 MASK_SPLITS = ("train", "val", "test")
 
-RESULT_RUN_TYPE = "apple_ala_multi_select"
-RESULT_ALGORITHM = "apple_ala_multi_select"
-DISPLAY_NAME = "APPLE-ALA FedAvg-Backbone+TaskHead (multi-selection)"
+RESULT_RUN_TYPE = "backbone_affinity_probe_multi_select"
+RESULT_ALGORITHM = "backbone_affinity_probe_multi_select"
+DISPLAY_NAME = "Backbone-Affinity Probe: APPLE-PostALA"
 
 
 def load_cfg(config_path: str, key: str) -> Dict:
@@ -98,17 +103,36 @@ def load_cfg(config_path: str, key: str) -> Dict:
 
 def add_subset_metadata(log_row: Dict, row: pd.Series) -> None:
     log_row["subset_clients"] = str(row["subset_clients"])
-    log_row["gamma"] = row["gamma"] if "gamma" in row.index and pd.notna(row["gamma"]) else row.get("q_value", row.get("mask_fraction", None))
+    log_row["gamma"] = (
+        row["gamma"]
+        if "gamma" in row.index and pd.notna(row["gamma"])
+        else row.get("q_value", row.get("mask_fraction", None))
+    )
     extra_cols = [
-        "q_value", "q_iid", "q_other_share", "q_assigned_share", "q_allocation_mode",
-        "global_visible_positive_support_fraction_ideal", "mask_fraction",
-        "specialization_fraction", "designed_heterogeneity", "global_visible_support_fraction_ideal",
-        "task_profile_jsd_mean", "task_profile_jsd_median", "task_profile_jsd_max",
-        "between_family_centroid_jsd_mean", "controlled_benchmark", "mask_mode", "family", "subset_id",
+        "q_value",
+        "q_iid",
+        "q_other_share",
+        "q_assigned_share",
+        "q_allocation_mode",
+        "global_visible_positive_support_fraction_ideal",
+        "mask_fraction",
+        "specialization_fraction",
+        "designed_heterogeneity",
+        "global_visible_support_fraction_ideal",
+        "task_profile_jsd_mean",
+        "task_profile_jsd_median",
+        "task_profile_jsd_max",
+        "between_family_centroid_jsd_mean",
+        "controlled_benchmark",
+        "mask_mode",
+        "family",
+        "subset_id",
     ]
     for col in extra_cols:
         if col in row.index:
-            log_row[f"manifest_{col}" if col == "subset_id" else col] = row.get(col, None)
+            log_row[f"manifest_{col}" if col == "subset_id" else col] = row.get(
+                col, None
+            )
 
 
 def _safe_json_loads(value, default):
@@ -145,7 +169,10 @@ def main() -> None:
     print("SELECT_SUBSET_PATH:", SELECT_SUBSET_PATH)
     print("SELECT_SUBSET:", SELECT_SUBSET)
     os.environ["APPLE_EXPERIMENT_ALGORITHM"] = RESULT_ALGORITHM
-    print("RUN VARIANT: APPLE-ALA FedAvgBackboneTaskHead (multi-selection) | selection_metrics=" + "|".join(SELECTION_METRICS))
+    print(
+        "RUN VARIANT: Backbone-Affinity Probe APPLE-PostALA (multi-selection) | selection_metrics="
+        + "|".join(SELECTION_METRICS)
+    )
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
@@ -156,9 +183,15 @@ def main() -> None:
     only_q = os.environ.get("ONLY_Q")
     if only_q is not None:
         if "q_value" not in chosen_df.columns:
-            raise ValueError("ONLY_Q was set, but selected_subset.csv has no q_value column.")
+            raise ValueError(
+                "ONLY_Q was set, but selected_subset.csv has no q_value column."
+            )
         q = float(only_q)
-        chosen_df = chosen_df[pd.to_numeric(chosen_df["q_value"], errors="coerce").round(10).eq(round(q, 10))].copy()
+        chosen_df = chosen_df[
+            pd.to_numeric(chosen_df["q_value"], errors="coerce")
+            .round(10)
+            .eq(round(q, 10))
+        ].copy()
         print("ONLY_Q filter:", only_q, "remaining subsets:", len(chosen_df))
 
     max_subsets = os.environ.get("MAX_SUBSETS")
@@ -167,10 +200,19 @@ def main() -> None:
         print("MAX_SUBSETS filter:", max_subsets, "remaining subsets:", len(chosen_df))
 
     if chosen_df.empty:
-        raise ValueError("No selected subsets remain after ONLY_Q/MAX_SUBSETS filtering.")
+        raise ValueError(
+            "No selected subsets remain after ONLY_Q/MAX_SUBSETS filtering."
+        )
 
-    id_to_client = load_clients(chosen_df, csv_path=ALL_DATA_LOGS, verbose=True, mask_splits=MASK_SPLITS)
-    audit_loaded_q_label_masks(chosen_df, id_to_client, strict=True, mask_splits=MASK_SPLITS)
+    id_to_client = load_clients(
+        chosen_df, csv_path=ALL_DATA_LOGS, verbose=True, mask_splits=MASK_SPLITS
+    )
+    if os.environ.get("SKIP_Q_MASK_AUDIT", "0") == "1":
+        print("SKIP_Q_MASK_AUDIT=1 -> skipping q-mask audit.")
+    else:
+        audit_loaded_q_label_masks(
+            chosen_df, id_to_client, strict=True, mask_splits=MASK_SPLITS
+        )
 
     if os.environ.get("MASK_AUDIT_ONLY") == "1":
         print("MASK_AUDIT_ONLY=1 -> stopping after mask audit.")
@@ -178,8 +220,8 @@ def main() -> None:
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     base_cfg["output_head"] = "multi"
-    base_cfg["apple_mixing_mode"] = "fedavg_backbone_task_head"
-    base_cfg["selection_tag"] = "ms5_apple_ala"
+    base_cfg["apple_mixing_mode"] = "fedavg_backbone_task_head_affinity_probe"
+    base_cfg["selection_tag"] = "ms5_backbone_affinity_probe"
     base_cfg["result_algorithm"] = RESULT_ALGORITHM
     base_cfg["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
     base_cfg["apple_ala_lr"] = APPLE_ALA_LR
@@ -191,7 +233,14 @@ def main() -> None:
     base_cfg["apple_expert_rho"] = APPLE_EXPERT_RHO
     base_cfg["apple_expert_pseudo_count"] = APPLE_EXPERT_PSEUDO_COUNT
 
-    cols = ["task_profile_jsd_mean", "subset_id", "subset_size", "gamma", "mask_fraction", "q_value"]
+    cols = [
+        "task_profile_jsd_mean",
+        "subset_id",
+        "subset_size",
+        "gamma",
+        "mask_fraction",
+        "q_value",
+    ]
     cols = [col for col in cols if col in chosen_df.columns]
     print(chosen_df[cols])
     if "family_counts_json" in chosen_df.columns:
@@ -200,25 +249,29 @@ def main() -> None:
     only_seed = os.environ.get("ONLY_SEED")
     if only_seed is not None:
         active_seeds = [int(only_seed)]
-        experiment_log_csv = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log_{only_seed}.csv")
+        experiment_log_csv = Path(
+            f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log_{only_seed}.csv"
+        )
         print("working only with seed:", active_seeds)
     else:
         active_seeds = SEEDS
         experiment_log_csv = EXPERIMENT_LOG_CSV
         print("working with all seed:", active_seeds)
 
-    sweep = list(iter_sweep_cfgs(
-        base_cfg,
-        seeds=active_seeds,
-        mcw=MCW,
-        num_layers=NUM_LAYERS,
-        lrs=LRS,
-        weight_decays=WEIGHT_DECAYS,
-        dropouts=DROPOUTS,
-        hidden_dims=HIDDEN_DIMS,
-        use_ego_ids=USE_EGO_IDS,
-        batch_sizes=BATCH_SIZE,
-    ))
+    sweep = list(
+        iter_sweep_cfgs(
+            base_cfg,
+            seeds=active_seeds,
+            mcw=MCW,
+            num_layers=NUM_LAYERS,
+            lrs=LRS,
+            weight_decays=WEIGHT_DECAYS,
+            dropouts=DROPOUTS,
+            hidden_dims=HIDDEN_DIMS,
+            use_ego_ids=USE_EGO_IDS,
+            batch_sizes=BATCH_SIZE,
+        )
+    )
 
     print("Number of sweep configs:", len(sweep))
     print("Number of runs:", len(sweep) * len(chosen_df))
@@ -233,15 +286,44 @@ def main() -> None:
             run_start = time.perf_counter()
 
             print()
-            print(f"Starting with {len(subset_clients)}-client APPLE-ALA FedAvgBackboneTaskHead training", row["subset_clients"])
+            print(
+                f"Starting with {len(subset_clients)}-client Backbone-Affinity Probe training",
+                row["subset_clients"],
+            )
             print(meta)
             print("SEED:", seed, "ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
-            print("APPLE_DR_LR:", APPLE_DR_LR, "APPLE_MU:", APPLE_MU, "DR_INIT:", APPLE_DR_INIT)
-            print("APPLE_USE_HEAD_ALA:", APPLE_USE_HEAD_ALA, "ALA_LR:", APPLE_ALA_LR, "ALA_RAND_PERCENT:", APPLE_ALA_RAND_PERCENT)
-            print("APPLE_EXPERT_RHO:", APPLE_EXPERT_RHO, "APPLE_EXPERT_PSEUDO_COUNT:", APPLE_EXPERT_PSEUDO_COUNT)
+            print(
+                "APPLE_DR_LR:",
+                APPLE_DR_LR,
+                "APPLE_MU:",
+                APPLE_MU,
+                "DR_INIT:",
+                APPLE_DR_INIT,
+            )
+            print(
+                "APPLE_USE_HEAD_ALA:",
+                APPLE_USE_HEAD_ALA,
+                "ALA_LR:",
+                APPLE_ALA_LR,
+                "ALA_RAND_PERCENT:",
+                APPLE_ALA_RAND_PERCENT,
+            )
+            print(
+                "APPLE_EXPERT_RHO:",
+                APPLE_EXPERT_RHO,
+                "APPLE_EXPERT_PSEUDO_COUNT:",
+                APPLE_EXPERT_PSEUDO_COUNT,
+            )
 
             for client in subset_clients:
-                print("client:", client.graph_id, "dataset:", client.dataset_id, "mask_meta:", client.mask_meta)
+                print(
+                    "client:",
+                    client.graph_id,
+                    "dataset:",
+                    client.dataset_id,
+                    "mask_meta:",
+                    client.mask_meta,
+                )
 
             run_paths = run_apple(
                 subset_clients,
@@ -289,7 +371,9 @@ def main() -> None:
             log_row["selection_direction"] = "mixed"
             log_row["mask_splits"] = "|".join(MASK_SPLITS)
             log_row["selection_modes"] = "full|visible"
-            log_row["eval_protocols"] = "oracle_full|realistic_visible|realistic_selection_oracle"
+            log_row["eval_protocols"] = (
+                "oracle_full|realistic_visible|realistic_selection_oracle"
+            )
             log_row["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
             log_row["apple_ala_lr"] = APPLE_ALA_LR
             log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
@@ -298,9 +382,14 @@ def main() -> None:
             log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
             log_row["apple_expert_rho"] = APPLE_EXPERT_RHO
             log_row["apple_expert_pseudo_count"] = APPLE_EXPERT_PSEUDO_COUNT
+            log_row["apple_ala_training_order"] = "apple_train_then_ala_filter"
+            log_row["apple_ala_materialized_filter"] = True
             upsert_experiment_rows(experiment_log_csv, [log_row])
 
-            progress.step(label=f"APPLE-ALA FedAvgBackboneTaskHead done -> {run_paths.csv_path}", run_start_time=run_start)
+            progress.step(
+                label=f"Backbone-Affinity Probe done -> {run_paths.csv_path}",
+                run_start_time=run_start,
+            )
 
 
 if __name__ == "__main__":

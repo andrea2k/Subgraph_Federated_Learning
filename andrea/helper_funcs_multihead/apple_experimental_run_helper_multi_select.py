@@ -141,6 +141,59 @@ def compact_model_tag_for_filename(model_tag: str) -> str:
     return f"{tag[:88]}_{digest}"
 
 
+def safe_stem_for_suffixes(
+    stem: str,
+    suffixes: Sequence[str],
+    *,
+    max_filename_bytes: int = 255,
+) -> str:
+    """Return a deterministic filename stem safe for every requested suffix.
+
+    Linux/macOS filesystems commonly cap a single filename component at 255
+    bytes.  We preserve the original stem whenever it is already safe.  Only
+    overlong stems are shortened, and a SHA-1 digest keeps the shortened name
+    deterministic and collision-resistant.
+    """
+    stem = str(stem)
+    suffixes = tuple(str(s) for s in suffixes)
+    if not suffixes:
+        raise ValueError("suffixes must not be empty")
+
+    def _nbytes(value: str) -> int:
+        return len(value.encode("utf-8"))
+
+    if max(_nbytes(stem + suffix) for suffix in suffixes) <= int(max_filename_bytes):
+        return stem
+
+    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()[:12]
+    longest_suffix_bytes = max(_nbytes(suffix) for suffix in suffixes)
+    digest_reserve = _nbytes("_" + digest)
+    prefix_budget = int(max_filename_bytes) - longest_suffix_bytes - digest_reserve
+    if prefix_budget < 1:
+        raise RuntimeError(
+            "Suffix leaves no room for a safe filename stem: "
+            f"suffixes={suffixes!r}"
+        )
+
+    prefix = stem
+    while prefix and _nbytes(prefix) > prefix_budget:
+        prefix = prefix[:-1]
+    prefix = prefix.rstrip("._-") or "run"
+
+    safe_stem = f"{prefix}_{digest}"
+    too_long = [
+        safe_stem + suffix
+        for suffix in suffixes
+        if _nbytes(safe_stem + suffix) > int(max_filename_bytes)
+    ]
+    if too_long:
+        raise RuntimeError(
+            "Could not construct a safe filename component: "
+            f"{too_long[0]!r}"
+        )
+    return safe_stem
+
+
 # -----------------------------------------------------------------------------
 # Run paths and manifest rows
 # -----------------------------------------------------------------------------
@@ -189,6 +242,8 @@ def create_apple_run_paths(
             f"_r{rounds}_e{local_epochs}"
             f"_seed{seed}_{digest}"
         )
+
+    stem = safe_stem_for_suffixes(stem, (".csv", ".pt", "_dr.csv"))
 
     return AppleRunPaths(
         csv_path=root / f"{stem}.csv",
