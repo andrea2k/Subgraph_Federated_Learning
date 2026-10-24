@@ -1,0 +1,15 @@
+setup,K,Q,method,per_round_bytes,per_round_MiB,total_bytes,total_MiB,total_GiB,note
+twenty_client,20,80,Fully Local,0.0,0.0,0.0,0.0,0.0,
+twenty_client,20,80,FedAvg,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,FedProx,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,FedALA,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,GCFL+,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,Task-Weighted FedAvg,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,cwFedAvg-Task,210983840.0,201.20986938476562,16878707200.0,16096.78955078125,15.719521045684814,full state_dict payload
+twenty_client,20,80,APPLE,2108552000.0,2010.8718872070312,168684160000.0,160869.7509765625,157.09936618804932,learnable donor parameters; receiver buffers remain local
+twenty_client,20,80,Support-Simplex,241403840.0,230.22064208984375,19312307200.0,18417.6513671875,17.985987663269043,non-head state_dict for backbone; head parameters for donor routing
+twenty_client,20,80,Support-Simplex + PostALA,241403840.0,230.22064208984375,19312307200.0,18417.6513671875,17.985987663269043,non-head state_dict for backbone; head parameters for donor routing
+twenty_client,20,80,Learned-Simplex + PostALA,241403840.0,230.22064208984375,19312307200.0,18417.6513671875,17.985987663269043,non-head state_dict for backbone; head parameters for donor routing
+twenty_client,20,80,Support-Only + PostALA,241403840.0,230.22064208984375,19312307200.0,18417.6513671875,17.985987663269043,non-head state_dict for backbone; head parameters for donor routing
+twenty_client,20,80,Task-Specialist Representatives,54013460.0,51.51124954223633,4321076800.0,4120.899963378906,4.024316370487213,"training only, J=5; validation broadcasts excluded"
+twenty_client,20,80,Global-Centralized,,,,,,N/A: not a federated model-exchange competitor

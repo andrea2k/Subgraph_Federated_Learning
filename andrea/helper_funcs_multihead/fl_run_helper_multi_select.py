@@ -69,42 +69,55 @@ def is_better_selection_value(current_value, best_value, selection_metric: str) 
 # -----------------------------------------------------------------------------
 # multi-selection helpers
 # -----------------------------------------------------------------------------
-DEFAULT_SELECTION_METRICS = (
-    "loss",
-    "micro_f1",
-    "macro_pos_f1",
-    "micro_pr_auc",
-    "macro_pr_auc",
-)
+PRIMARY_SELECTION_METRIC = "macro_pr_auc"
+DEFAULT_SELECTION_METRICS = (PRIMARY_SELECTION_METRIC,)
 
-# By default we only write CSVs. Set SAVE_CHECKPOINTS=1 if you explicitly want
-# .pt files for debugging. No andrea/checkpoints folder is created in this helper.
-SAVE_CHECKPOINTS = os.environ.get("SAVE_CHECKPOINTS", "0") == "1"
+# Final PR-AUC reruns are intentionally CSV-only.  Selected states are kept
+# in memory for final VV/VO/OO evaluation, but never serialized to disk.
+if os.environ.get("SAVE_CHECKPOINTS", "0") == "1":
+    raise RuntimeError(
+        "SAVE_CHECKPOINTS=1 is disabled for the final PR-AUC rerun. "
+        "Use SAVE_CHECKPOINTS=0; only CSV outputs should be persisted."
+    )
+SAVE_CHECKPOINTS = False
 
 
 def normalize_selection_metrics(
     selection_metrics: Optional[Sequence[str]] = None,
     selection_metric: Optional[str] = None,
 ) -> tuple[str, ...]:
-    if selection_metrics is None:
-        if selection_metric is None:
-            selection_metrics = DEFAULT_SELECTION_METRICS
-        else:
-            selection_metrics = [selection_metric]
+    """Return the one allowed checkpoint selector: Macro true PR-AUC.
 
-    out = []
-    for metric in selection_metrics:
+    The final-paper rerun deliberately has one metric selector only.  Both
+    validation *views* are still retained: visible validation selects the VV/VO
+    state and full validation selects the OO state.  What is no longer allowed
+    is selecting parallel checkpoints by loss, F1, AP, Micro PR-AUC, etc.
+
+    Passing an explicit legacy selector is treated as an error rather than
+    being silently ignored, so an old launcher cannot accidentally reproduce
+    the previous multi-selection protocol.
+    """
+    requested = []
+    if selection_metrics is not None:
+        requested.extend(selection_metrics)
+    if selection_metric is not None:
+        requested.append(selection_metric)
+
+    normalized = []
+    for metric in requested:
         metric = str(metric).strip().lower()
-        if not metric:
-            continue
-        if metric not in out:
-            out.append(metric)
+        if metric and metric not in normalized:
+            normalized.append(metric)
 
-    if not out:
-        raise ValueError("selection_metrics is empty")
+    invalid = [m for m in normalized if m != PRIMARY_SELECTION_METRIC]
+    if invalid:
+        raise ValueError(
+            "Final PR-AUC protocol supports only selection_metric='macro_pr_auc'. "
+            f"Received legacy/unsupported selector(s): {invalid}. "
+            "Patch the launcher before submitting jobs."
+        )
 
-    return tuple(out)
-
+    return DEFAULT_SELECTION_METRICS
 
 def init_best_by_eval_mode_and_metric(model, selection_metrics: Sequence[str], key_name: str):
     initial_state = {
@@ -176,7 +189,7 @@ def maybe_save_checkpoint(checkpoint: Dict, ckpt_path: Path | None) -> None:
         torch.save(checkpoint, ckpt_path)
         print(f"saved checkpoint -> {ckpt_path}")
     else:
-        print("SAVE_CHECKPOINTS=0 -> not saving .pt checkpoint; CSV keeps selected-checkpoint performances.")
+        print("CSV-only PR-AUC protocol -> not saving .pt checkpoint; selected states remain in memory only.")
 
 
 @dataclass
@@ -807,6 +820,7 @@ def append_eval_rows(
             "eval_mask_mode": eval_mask_mode,
             "selection_protocol": selection_protocol,
             "selected_by": selected_by,
+            "pr_auc_definition": "trapezoidal_precision_recall_curve_auc",
             "visible_pairs": metrics["counts"].get("visible_pairs"),
             "total_pairs": metrics["counts"].get("total_pairs"),
             "visible_pair_rate": metrics["counts"].get("visible_pair_rate"),
@@ -858,6 +872,7 @@ def append_eval_rows(
                 "eval_mask_mode": eval_mask_mode,
                 "selection_protocol": selection_protocol,
                 "selected_by": selected_by,
+                "pr_auc_definition": "trapezoidal_precision_recall_curve_auc",
                 "visible_pairs": metrics["counts"].get("visible_pairs"),
                 "total_pairs": metrics["counts"].get("total_pairs"),
                 "visible_pair_rate": metrics["counts"].get("visible_pair_rate"),
@@ -983,13 +998,12 @@ def run_local_experiment(
     selection_metrics: Optional[Sequence[str]] = None,
     selection_metric: Optional[str] = None,
 ) -> None:
-    """Train once and evaluate multiple selected checkpoints.
+    """Train once and select by Macro PR-AUC only.
 
-    One training trajectory is produced. During validation we keep the best
-    in-memory state for every selector in selection_metrics and for both
-    validation modes (full and visible). At the end, every selected state is
-    evaluated and written to the same CSV. No .pt checkpoint is saved unless
-    SAVE_CHECKPOINTS=1 is set explicitly.
+    One training trajectory is produced. During validation we keep one best
+    in-memory state for each validation view (full and visible), both selected
+    by Macro true PR-AUC. Final VV/VO/OO evaluations are written to CSV only;
+    no .pt checkpoint is persisted.
     """
     set_seed(seed)
     selection_metrics = normalize_selection_metrics(selection_metrics, selection_metric)
@@ -1221,7 +1235,7 @@ def run_local_experiment(
     out_df = pd.DataFrame(rows)
 
     print("\n" + "=" * 100)
-    print("LOCAL MULTI-SELECTION SMOKE CHECK")
+    print("LOCAL MACRO-PR-AUC SELECTION SMOKE CHECK")
     print("=" * 100)
     print("csv path:", run_paths.csv_path)
     print("selection_metrics:", selection_metrics)
@@ -1287,7 +1301,7 @@ def run_local(
 ) -> RunPaths:
     selection_metrics = normalize_selection_metrics(selection_metrics, selection_metric)
     cfg = dict(cfg)
-    cfg["selection_tag"] = "multiselect_" + "_".join(selection_metrics)
+    cfg["selection_tag"] = "macro_pr_auc"
     model_tag = f"{_model_tag_from_cfg(cfg)}_multiselect"
     local_file_tag = _safe_subset_file_tag(str(client.dataset_id))
     run_paths = create_local_run_paths(
@@ -1349,7 +1363,7 @@ def run_fedavg_experiment(
     selection_metrics: Optional[Sequence[str]] = None,
     selection_metric: Optional[str] = None,
 ) -> None:
-    """FedAvg training once, with multiple selected checkpoints kept in memory."""
+    """FedAvg training once, selecting one checkpoint per validation view by Macro PR-AUC."""
     if not subset_clients:
         raise ValueError("subset_clients is empty")
 
@@ -1670,7 +1684,7 @@ def run_fedavg_experiment(
     out_df = pd.DataFrame(rows)
 
     print("\n" + "=" * 100)
-    print("FEDAVG MULTI-SELECTION SMOKE CHECK")
+    print("FEDAVG MACRO-PR-AUC SELECTION SMOKE CHECK")
     print("=" * 100)
     print("csv path:", run_paths.csv_path)
     print("selection_metrics:", selection_metrics)
@@ -1743,7 +1757,7 @@ def run_fedavg(
     """
     selection_metrics = normalize_selection_metrics(selection_metrics, selection_metric)
     cfg = dict(cfg)
-    cfg["selection_tag"] = "multiselect_" + "_".join(selection_metrics)
+    cfg["selection_tag"] = "macro_pr_auc"
 
     subset_id = _subset_clients_str(subset_clients)
     subset_file_tag = _safe_subset_file_tag(subset_id)
@@ -1795,11 +1809,11 @@ def run_fedprox_experiment(
     selection_metrics: Optional[Sequence[str]] = None,
     selection_metric: Optional[str] = None,
 ) -> None:
-    """FedProx training once, with multiple selected checkpoints kept in memory.
+    """FedProx training once, selecting one checkpoint per validation view by Macro PR-AUC.
 
     This mirrors run_fedavg_experiment(...) but uses the FedProx proximal term
     during local training. It writes one CSV containing all selected-checkpoint
-    performances and does not save .pt files unless SAVE_CHECKPOINTS=1.
+    performances and never writes .pt checkpoints in the final PR-AUC protocol.
     """
     if not subset_clients:
         raise ValueError("subset_clients is empty")
@@ -2136,7 +2150,7 @@ def run_fedprox_experiment(
     out_df = pd.DataFrame(rows)
 
     print("\n" + "=" * 100)
-    print("FEDPROX MULTI-SELECTION SMOKE CHECK")
+    print("FEDPROX MACRO-PR-AUC SELECTION SMOKE CHECK")
     print("=" * 100)
     print("csv path:", run_paths.csv_path)
     print("selection_metrics:", selection_metrics)
@@ -2202,10 +2216,10 @@ def run_fedprox(
     selection_metrics: Optional[Sequence[str]] = None,
     selection_metric: Optional[str] = None,
 ) -> RunPaths:
-    """Run FedProx once and evaluate multiple selected checkpoints."""
+    """Run FedProx once using Macro PR-AUC as the only checkpoint selector."""
     selection_metrics = normalize_selection_metrics(selection_metrics, selection_metric)
     cfg = dict(cfg)
-    cfg["selection_tag"] = "multiselect_" + "_".join(selection_metrics)
+    cfg["selection_tag"] = "macro_pr_auc"
 
     subset_id = _subset_clients_str(subset_clients)
     subset_file_tag = _safe_subset_file_tag(subset_id)

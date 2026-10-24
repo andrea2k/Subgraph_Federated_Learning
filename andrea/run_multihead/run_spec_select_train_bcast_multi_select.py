@@ -29,7 +29,7 @@ BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
-RUN_TAG = os.environ.get("RUN_TAG", "spec_select_train_bcast_v1")
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 BASE_EXPERIMENT_LOG_FOLDER = "spec_select_train_bcast_experiment_multi_select"
 EXPERIMENT_LOG_FOLDER = (
     f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
@@ -40,14 +40,15 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
 RUNS_ROOT = os.environ.get(
-    "RUNS_ROOT", "andrea/runs_spec_select_train_bcast"
+    "RUNS_ROOT",
+    "andrea/final_runs_prauc_20260824/twenty_client/specialist_rep_transfer",
 )
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 WARMUP_ROUNDS = 0
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
 CLIENT_FRACTION = float(os.environ.get("CLIENT_FRACTION", 1.0))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 APPLE_DR_LR = float(os.environ.get("APPLE_DR_LR", 1e-3))
@@ -205,9 +206,7 @@ def main() -> None:
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     base_cfg["output_head"] = "multi"
     base_cfg["apple_mixing_mode"] = "five_rep_fedavg_postala_full_model_broadcast"
-    base_cfg["selection_tag"] = (
-        "round0_argmax_visible_train_support_known_specialist_groups"
-    )
+    base_cfg["selection_tag"] = "prauc_20260824"
     base_cfg["result_algorithm"] = RESULT_ALGORITHM
     base_cfg["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
     base_cfg["apple_ala_lr"] = APPLE_ALA_LR

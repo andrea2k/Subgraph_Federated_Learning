@@ -213,15 +213,15 @@ def compute_positive_f1_score_per_task(logits, labels, threshold=0.5):
 
 
 def average_precision_binary(scores: torch.Tensor, labels: torch.Tensor) -> float:
-    """Compute binary Average Precision (area under precision-recall curve).
+    """Compute binary Average Precision (AP).
 
-    This is the metric commonly reported as PR-AUC / AP for binary labels.
-    It is threshold-free: it uses the ranking induced by sigmoid probabilities,
-    not the fixed 0.5 decision threshold used by F1.
+    This helper is retained only for legacy/reproducibility purposes.  AP and
+    trapezoidal PR-AUC are related but numerically different summaries of the
+    precision-recall curve.  The new final-paper pipeline does *not* use this
+    function for checkpoint selection or for the paper-facing ``pr_auc``
+    columns; use :func:`pr_auc_binary` instead.
 
-    Returns NaN when no positive label is present, because AP is undefined in
-    that case. In the q-label benchmark, every task/split we use has positive
-    support, so this should normally be finite.
+    Returns NaN when no positive label is present.
     """
     scores = scores.detach().flatten().float().cpu()
     labels = labels.detach().flatten().float().cpu()
@@ -249,6 +249,81 @@ def average_precision_binary(scores: torch.Tensor, labels: torch.Tensor) -> floa
     ap = (precision_at_k * y_sorted).sum() / float(num_pos)
     return float(ap.item())
 
+
+def pr_auc_binary(scores: torch.Tensor, labels: torch.Tensor) -> float:
+    """Compute true trapezoidal area under the binary precision-recall curve.
+
+    Semantics match ``precision_recall_curve`` followed by
+    ``auc(recall, precision)`` with all distinct score thresholds retained.
+    Tied prediction scores are handled as a single threshold, so the result
+    depends only on thresholded prediction sets rather than on arbitrary order
+    within a tie.
+
+    This is the metric stored in the new pipeline's ``pr_auc``,
+    ``micro_pr_auc`` and ``macro_pr_auc`` fields.
+
+    Returns NaN when no positive label is present, because a recall axis is not
+    defined for that evaluated set.
+    """
+    scores = scores.detach().flatten().float().cpu()
+    labels = labels.detach().flatten().float().cpu()
+
+    if scores.numel() == 0:
+        return float("nan")
+    if scores.numel() != labels.numel():
+        raise ValueError(
+            f"scores/labels length mismatch: {scores.numel()} vs {labels.numel()}"
+        )
+
+    positives = labels > 0.5
+    num_pos = int(positives.sum().item())
+    if num_pos == 0:
+        return float("nan")
+
+    # Descending score order.  We evaluate the curve only after the final item
+    # of each tied-score block, which is equivalent to sweeping distinct
+    # decision thresholds.
+    order = torch.argsort(scores, descending=True)
+    scores_sorted = scores[order]
+    y_sorted = positives[order].to(torch.float64)
+
+    tp_cum = torch.cumsum(y_sorted, dim=0)
+    n = int(scores_sorted.numel())
+    if n == 1:
+        threshold_idx = torch.tensor([0], dtype=torch.long)
+    else:
+        distinct_end = torch.nonzero(
+            scores_sorted[:-1] != scores_sorted[1:],
+            as_tuple=False,
+        ).flatten()
+        threshold_idx = torch.cat(
+            [distinct_end, torch.tensor([n - 1], dtype=torch.long)],
+            dim=0,
+        )
+
+    tp = tp_cum[threshold_idx]
+    predicted_positive = threshold_idx.to(torch.float64) + 1.0
+    fp = predicted_positive - tp
+
+    precision = tp / (tp + fp).clamp_min(1e-15)
+    recall = tp / float(num_pos)
+
+    # Precision-recall libraries conventionally return the curve from recall=1
+    # down to recall=0 and append (recall=0, precision=1).  Integrate the same
+    # piecewise-linear curve, but use positive recall widths explicitly.
+    precision_curve = torch.cat(
+        [precision.flip(0), torch.ones(1, dtype=torch.float64)], dim=0
+    )
+    recall_curve = torch.cat(
+        [recall.flip(0), torch.zeros(1, dtype=torch.float64)], dim=0
+    )
+
+    recall_width = recall_curve[:-1] - recall_curve[1:]
+    trapezoid_height = 0.5 * (
+        precision_curve[:-1] + precision_curve[1:]
+    )
+    area = torch.sum(recall_width * trapezoid_height)
+    return float(area.item())
 
 def nanmean_float(values) -> float:
     tensor = torch.tensor([float(v) for v in values], dtype=torch.float32)
@@ -555,7 +630,7 @@ def evaluate_loader(
         if y.numel() == 0:
             tp = fp = tn = fn = 0
             precision = recall = f1_pos = f1_min = float("nan")
-            ap = float("nan")
+            pr_auc = float("nan")
             pc = 0
             pr = float("nan")
         else:
@@ -572,7 +647,7 @@ def evaluate_loader(
             negatives = int((~y).sum().item())
             pc = positives
             pr = positives / max(positives + negatives, 1)
-            ap = average_precision_binary(probs[vc, c], y.float())
+            pr_auc = pr_auc_binary(probs[vc, c], y.float())
 
             # Minority F1: compute F1 for whichever class is minority
             if positives <= negatives:
@@ -605,7 +680,7 @@ def evaluate_loader(
         rec_task.append(float(recall))
         positive_f1_task.append(float(f1_pos))
         minority_f1_task.append(float(f1_min))
-        pr_auc_task.append(float(ap))
+        pr_auc_task.append(float(pr_auc))
         pos_cnt.append(int(pc))
         pos_rate.append(float(pr))
 
@@ -622,7 +697,7 @@ def evaluate_loader(
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
-    micro_pr_auc = average_precision_binary(probs[valid], labels[valid])
+    micro_pr_auc = pr_auc_binary(probs[valid], labels[valid])
 
     return {
         "scalar": {

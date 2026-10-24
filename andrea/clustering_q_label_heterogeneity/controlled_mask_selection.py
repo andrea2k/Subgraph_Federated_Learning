@@ -17,7 +17,7 @@ MASKED_SELECTED_SUBSET_CSV = os.path.join(OUT_DIR, "selected_subset.csv")
 NUM_BASE_GRAPHS = 1
 
 # Low / medium / high designed heterogeneity.
-Q_VALUES = [1.0 / len(TASKS), 0.50, 0.80]
+Q_VALUES = [1.0 / len(TASKS), 0.50, 0.80, 0.95]
 
 FAMILY_PREFIX = "q_task"
 

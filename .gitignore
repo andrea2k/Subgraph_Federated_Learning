@@ -37,32 +37,16 @@ andrea/cluster_data_rep/
 # Twenty-client planted-community graph tensors
 andrea/planted_community_data/
 andrea/planted_community_clients/
+andrea/final_prauc_suite/
+andrea/final_prauc_analysis/
+andrea/frozen_evaluation/
+andrea/evaluation_contract/
 
-# ------------------------------------------------------------
-# Copied raw analysis inputs
-# ------------------------------------------------------------
+start_from_zero/
+audit_oracle_regional_payload_v2.py
+audit_communication_payload_v2.py
+build_final_result_atlases.py
 
-# Copies of large twenty-client result and diagnostic CSV files.
-# Analysis scripts and compact summaries remain tracked.
-andrea/analysis_inputs/twenty_client/
-
-# Old copied oracle result files
-andrea/oracle_results_q08_s0/
-
-# ------------------------------------------------------------
-# Other generated large artifacts
-# ------------------------------------------------------------
-
-andrea/heterogeneity/heterogeneity_all_pairs.csv
-
+thesis_latex/
 # Keep the repository thesis source, but ignore this legacy build folder.
-# This preserves your existing rule.
 /thesis/
-
-# END thesis generated artifacts
-
-# Regenerable analysis input copies
-andrea/analysis_inputs/
-
-# Runtime and Slurm logs
-logs/

@@ -1,0 +1,8 @@
+{
+  "setup": "five_client",
+  "num_selected_subsets": 4,
+  "payload_identical_across_selected_subsets": true,
+  "unique_payload_rows": 1,
+  "head_state_equals_head_params_all": true,
+  "full_state_equals_full_params_all": false
+}

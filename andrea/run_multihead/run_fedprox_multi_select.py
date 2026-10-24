@@ -28,7 +28,7 @@ SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
 BASE_EXPERIMENT_LOG_FOLDER = "fedprox_multihead_clustering_experiment_multi_select"
-RUN_TAG = os.environ.get("RUN_TAG", "").strip()
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 EXPERIMENT_LOG_FOLDER = (
     f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
 )
@@ -39,7 +39,10 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs")
+RUNS_ROOT = os.environ.get(
+    "RUNS_ROOT",
+    f"andrea/final_runs_prauc_20260824/{BENCHMARK.setup}/fedprox",
+)
 
 # -----------------------------------------------------------------------------
 # Training setup
@@ -48,10 +51,10 @@ ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
 CLIENT_FRACTION = 1.0
 FEDPROX_MU = float(os.environ.get("FEDPROX_MU", 0.01))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 RESULT_RUN_TYPE = "fedprox_multi_select"
 RESULT_ALGORITHM = "fedprox_multi_select"
-DISPLAY_NAME = "FedProx (multi-selection)"
+DISPLAY_NAME = "FedProx (Macro PR-AUC selection)"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # -----------------------------------------------------------------------------
@@ -138,7 +141,7 @@ def main():
     print("SELECT_SUBSET_PATH:", SELECT_SUBSET_PATH)
     print("SELECT_SUBSET:", SELECT_SUBSET)
     print(
-        "RUN VARIANT: FedProx (multi-selection) | selection_metrics=loss|micro_f1|macro_pos_f1|micro_pr_auc|macro_pr_auc"
+        "RUN VARIANT: FedProx (Macro PR-AUC selection) | selection_metrics=macro_pr_auc"
     )
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
@@ -306,10 +309,11 @@ def main():
                     "baseline_role": "fedprox_masked_clients",
                     "fedprox_mu": FEDPROX_MU,
                     "mask_splits": "|".join(MASK_SPLITS),
-                    "selection_metric": "multi",
+                    "selection_metric": "macro_pr_auc",
                     "selection_metrics": "|".join(SELECTION_METRICS),
-                    "selection_direction": "mixed",
+                    "selection_direction": "max",
                     "selection_modes": "full|visible",
+                    "pr_auc_definition": "trapezoidal_precision_recall_curve_auc",
                     "eval_protocols": "oracle_full|realistic_visible|realistic_selection_oracle",
                 },
             )
@@ -323,16 +327,16 @@ def main():
                 local_epochs=LOCAL_EPOCHS,
                 client_fraction=CLIENT_FRACTION,
                 fedprox_mu=FEDPROX_MU,
-                selection_metric="multi",
+                selection_metric="macro_pr_auc",
             )
             add_subset_metadata(fed_row, row)
 
             fed_row["run_type"] = RESULT_RUN_TYPE
             fed_row["algorithm"] = RESULT_ALGORITHM
             fed_row["display_name"] = DISPLAY_NAME
-            fed_row["selection_metric"] = "multi"
+            fed_row["selection_metric"] = "macro_pr_auc"
             fed_row["selection_metrics"] = "|".join(SELECTION_METRICS)
-            fed_row["selection_direction"] = "mixed"
+            fed_row["selection_direction"] = "max"
             fed_row["training_scope"] = "federated_masked_virtual_client_graphs"
             fed_row["communication"] = "fedprox"
             fed_row["baseline_role"] = "fedprox_masked_clients"

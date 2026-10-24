@@ -38,7 +38,7 @@ from andrea.helper_funcs_multihead.train_eval_helper import (
     get_seed_label_mask,
     masked_loss_from_logits,
     unpack_batch_edges,
-    average_precision_binary,
+    pr_auc_binary,
     nanmean_float,
 )
 from utils.seed import set_seed
@@ -237,9 +237,9 @@ def build_apple_log_row(
         "dr_csv_path": str(run_paths.dr_csv_path),
         "rounds": rounds,
         "local_epochs": local_epochs,
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": "|".join(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "apple_dr_lr": dr_lr,
         "apple_mu": apple_mu,
         "apple_scheduler_type": scheduler_type,
@@ -779,7 +779,7 @@ def evaluate_loader_apple(
         if y.numel() == 0:
             tp = fp = tn = fn = 0
             precision = recall = f1_pos = f1_min = float("nan")
-            ap = float("nan")
+            pr_auc = float("nan")
             pc = 0
             pr = float("nan")
         else:
@@ -796,7 +796,7 @@ def evaluate_loader_apple(
             negatives = int((~y).sum().item())
             pc = positives
             pr = positives / max(positives + negatives, 1)
-            ap = average_precision_binary(probs[vc, c], y.float())
+            pr_auc = pr_auc_binary(probs[vc, c], y.float())
 
             if positives <= negatives:
                 min_tp = tp
@@ -827,7 +827,7 @@ def evaluate_loader_apple(
         rec_task.append(float(recall))
         positive_f1_task.append(float(f1_pos))
         minority_f1_task.append(float(f1_min))
-        pr_auc_task.append(float(ap))
+        pr_auc_task.append(float(pr_auc))
         pos_cnt.append(int(pc))
         pos_rate.append(float(pr))
 
@@ -845,7 +845,7 @@ def evaluate_loader_apple(
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
-    micro_pr_auc = average_precision_binary(probs[valid], labels[valid])
+    micro_pr_auc = pr_auc_binary(probs[valid], labels[valid])
 
     return {
         "scalar": {
@@ -1527,9 +1527,9 @@ def run_apple_experiment(
         del downloaded_core_models
 
     checkpoint = {
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": list(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "best_round_by_eval_mode_and_metric": {
             mode: {
                 metric: best_by_eval_mode[mode][metric]["round"]

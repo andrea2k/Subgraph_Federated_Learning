@@ -28,7 +28,7 @@ SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
 BASE_EXPERIMENT_LOG_FOLDER = "local_centralized_multihead_clustering_experiment_multi_select"
-RUN_TAG = os.environ.get("RUN_TAG", "").strip()
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 EXPERIMENT_LOG_FOLDER = (
     f"{BASE_EXPERIMENT_LOG_FOLDER}_{RUN_TAG}" if RUN_TAG else BASE_EXPERIMENT_LOG_FOLDER
 )
@@ -39,17 +39,20 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs")
+RUNS_ROOT = os.environ.get(
+    "RUNS_ROOT",
+    f"andrea/final_runs_prauc_20260824/{BENCHMARK.setup}/centralized",
+)
 
 # -----------------------------------------------------------------------------
 # Training setup
 # -----------------------------------------------------------------------------
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 RESULT_RUN_TYPE = "global_centralized_multi_select"
 RESULT_ALGORITHM = "global_centralized_multi_select"
-DISPLAY_NAME = "Global-centralized upper bound (multi-selection)"
+DISPLAY_NAME = "Global-centralized upper bound (Macro PR-AUC selection)"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # -----------------------------------------------------------------------------
@@ -131,7 +134,7 @@ def main():
     print("BENCHMARK_SETUP:", BENCHMARK.setup)
     print("SELECT_SUBSET_PATH:", SELECT_SUBSET_PATH)
     print("SELECT_SUBSET:", SELECT_SUBSET)
-    print("RUN VARIANT: Global-Centralized (multi-selection) | selection_metrics=loss|micro_f1|macro_pos_f1|micro_pr_auc|macro_pr_auc")
+    print("RUN VARIANT: Global-Centralized (Macro PR-AUC selection) | selection_metrics=macro_pr_auc")
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
@@ -155,6 +158,7 @@ def main():
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
+    print("CHECKPOINT SELECTOR: macro_pr_auc (true trapezoidal PR-AUC)")
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
 
@@ -249,10 +253,11 @@ def main():
                 "communication": "none",
                 "baseline_role": "global_upper_bound_full_supervision",
                 "mask_splits": "none",
-                "selection_metric": "multi",
+                "selection_metric": "macro_pr_auc",
                 "selection_metrics": "|".join(SELECTION_METRICS),
-                "selection_direction": "mixed",
+                "selection_direction": "max",
                 "selection_modes": "full|visible",
+                    "pr_auc_definition": "trapezoidal_precision_recall_curve_auc",
                 "eval_protocols": "oracle_full|realistic_visible|realistic_selection_oracle",
                 "subset_clients": str(row["subset_clients"]),
                 "q_value": row.get("q_value", None),
@@ -275,16 +280,16 @@ def main():
                 run_paths=local_paths,
                 rounds=ROUNDS,
                 local_epochs=LOCAL_EPOCHS,
-                selection_metric="multi",
+                selection_metric="macro_pr_auc",
             )
             add_subset_metadata(local_log_row, row)
 
             local_log_row["run_type"] = RESULT_RUN_TYPE
             local_log_row["algorithm"] = RESULT_ALGORITHM
             local_log_row["display_name"] = DISPLAY_NAME
-            local_log_row["selection_metric"] = "multi"
+            local_log_row["selection_metric"] = "macro_pr_auc"
             local_log_row["selection_metrics"] = "|".join(SELECTION_METRICS)
-            local_log_row["selection_direction"] = "mixed"
+            local_log_row["selection_direction"] = "max"
             local_log_row["training_scope"] = "unmasked_unsplit_global_graph"
             local_log_row["communication"] = "none"
             local_log_row["baseline_role"] = "global_upper_bound_full_supervision"

@@ -28,9 +28,6 @@ BASE_SEED = 0
 DATA_ROOT = "./andrea/cluster_data"
 GRAPH_PARAM_CSV = "./andrea/clustering/cluster_generation_parameters.csv"
 
-# DATA_ROOT = "./andrea/cluster_data_benchmarkA"
-# GRAPH_PARAM_CSV = "./andrea/clustering_benchmarkA/cluster_generation_parameters.csv"
-
 N_POOL = [3800, 3900, 4000, 4100, 4200]
 D_POOL = [
     3,
@@ -64,15 +61,6 @@ R_POOL = [
 GEN = ["chordal"]
 
 REPEATS_PER_CELL = 4
-
-# BASE_SEED = 0
-# DATA_ROOT = "./andrea/big_graph_data"
-# GRAPH_PARAM_CSV = "./andrea/big_graph_generation_parameters.csv"
-
-# N_POOL = [8192]
-# D_POOL = [6]
-# R_POOL = [11.1]
-# GEN = ["chordal"]
 
 TASK_FUNCS = {
     # "deg_in_three": lambda adj: deg_in_three(adj["out_list"], adj["in_list"]),

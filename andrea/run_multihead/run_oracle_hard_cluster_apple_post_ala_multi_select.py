@@ -31,7 +31,7 @@ BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
-RUN_TAG = os.environ.get("RUN_TAG", "oracle_hard_support_simplex_v2")
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 _ONLY_ORACLE_CLUSTER_AT_IMPORT = os.environ.get("ONLY_ORACLE_CLUSTER")
 if _ONLY_ORACLE_CLUSTER_AT_IMPORT is not None:
     _cluster_suffix = f"_c{int(_ONLY_ORACLE_CLUSTER_AT_IMPORT)}"
@@ -51,12 +51,15 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_oracle_hard_cluster_apple_post_ala_support_simplex")
+RUNS_ROOT = os.environ.get(
+    "RUNS_ROOT",
+    "andrea/final_runs_prauc_20260824/twenty_client/oracle_physical_community",
+)
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
 CLIENT_FRACTION = float(os.environ.get("CLIENT_FRACTION", 1.0))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 APPLE_DR_LR = float(os.environ.get("APPLE_DR_LR", 1e-3))
@@ -165,7 +168,6 @@ def build_client_metadata(row: pd.Series, subset_clients) -> Dict[str, Dict]:
     return out
 
 
-
 def _load_json_value(value, default):
     if value is None:
         return default
@@ -182,9 +184,7 @@ def _load_json_value(value, default):
     try:
         return json.loads(str(value))
     except Exception as exc:
-        raise ValueError(
-            f"Could not parse JSON value: {value}"
-        ) from exc
+        raise ValueError(f"Could not parse JSON value: {value}") from exc
 
 
 def _json_dump(value) -> str:
@@ -207,9 +207,7 @@ def expand_oracle_hard_clusters(
     rows = []
 
     for parent_row_idx, parent_row in parent_df.iterrows():
-        parent_clients = parse_subset_clients(
-            parent_row["subset_clients"]
-        )
+        parent_clients = parse_subset_clients(parent_row["subset_clients"])
 
         if len(parent_clients) != 20:
             raise ValueError(
@@ -232,13 +230,9 @@ def expand_oracle_hard_clusters(
 
         for item in membership:
             if "planted_community_id" not in item:
-                raise ValueError(
-                    "membership_json has no planted_community_id."
-                )
+                raise ValueError("membership_json has no planted_community_id.")
 
-            community_id = int(
-                item["planted_community_id"]
-            )
+            community_id = int(item["planted_community_id"])
 
             membership_by_community.setdefault(
                 community_id,
@@ -258,13 +252,9 @@ def expand_oracle_hard_clusters(
                 f"parent_{parent_row_idx}",
             )
         )
-        parent_subset_clients = str(
-            parent_row["subset_clients"]
-        )
+        parent_subset_clients = str(parent_row["subset_clients"])
 
-        for community_id in sorted(
-            membership_by_community
-        ):
+        for community_id in sorted(membership_by_community):
             members = sorted(
                 membership_by_community[community_id],
                 key=lambda item: int(item["graph_id"]),
@@ -276,25 +266,17 @@ def expand_oracle_hard_clusters(
                     f"clients, found {len(members)}."
                 )
 
-            member_ids = [
-                int(item["graph_id"])
-                for item in members
-            ]
+            member_ids = [int(item["graph_id"]) for item in members]
             member_id_set = set(member_ids)
 
-            if not member_id_set.issubset(
-                set(parent_clients)
-            ):
+            if not member_id_set.issubset(set(parent_clients)):
                 raise ValueError(
                     f"Community {community_id}: membership IDs "
                     f"{member_ids} are not contained in parent "
                     f"clients {parent_clients}."
                 )
 
-            assigned_tasks = [
-                str(item["assigned_task"])
-                for item in members
-            ]
+            assigned_tasks = [str(item["assigned_task"]) for item in members]
 
             if set(assigned_tasks) != set(TASKS):
                 raise ValueError(
@@ -303,10 +285,7 @@ def expand_oracle_hard_clusters(
                     f"{assigned_tasks}."
                 )
 
-            base_graph_ids = {
-                int(item["base_graph_id"])
-                for item in members
-            }
+            base_graph_ids = {int(item["base_graph_id"]) for item in members}
 
             if len(base_graph_ids) != 1:
                 raise ValueError(
@@ -323,122 +302,76 @@ def expand_oracle_hard_clusters(
             )
 
             graph_to_task = {
-                str(item["graph_id"]): str(
-                    item["assigned_task"]
-                )
-                for item in members
+                str(item["graph_id"]): str(item["assigned_task"]) for item in members
             }
             graph_to_community = {
-                str(item["graph_id"]): int(
-                    item["planted_community_id"]
-                )
+                str(item["graph_id"]): int(item["planted_community_id"])
                 for item in members
             }
             graph_to_family = {
-                str(item["graph_id"]): (
-                    f"q_task_{item['assigned_task']}"
-                )
+                str(item["graph_id"]): (f"q_task_{item['assigned_task']}")
                 for item in members
             }
 
             family_to_graph_ids = {
-                f"q_task_{item['assigned_task']}": [
-                    int(item["graph_id"])
-                ]
+                f"q_task_{item['assigned_task']}": [int(item["graph_id"])]
                 for item in members
             }
 
             family_counts = {
                 family: len(graph_ids)
-                for family, graph_ids
-                in family_to_graph_ids.items()
+                for family, graph_ids in family_to_graph_ids.items()
             }
 
             hard_row = parent_row.to_dict()
 
-            hard_row["oracle_parent_subset_id"] = (
-                parent_subset_id
-            )
-            hard_row["oracle_parent_subset_clients"] = (
-                parent_subset_clients
-            )
-            hard_row["oracle_hard_cluster_id"] = int(
-                community_id
-            )
-            hard_row["oracle_hard_base_graph_id"] = int(
-                next(iter(base_graph_ids))
-            )
+            hard_row["oracle_parent_subset_id"] = parent_subset_id
+            hard_row["oracle_parent_subset_clients"] = parent_subset_clients
+            hard_row["oracle_hard_cluster_id"] = int(community_id)
+            hard_row["oracle_hard_base_graph_id"] = int(next(iter(base_graph_ids)))
             hard_row["oracle_hard_community_source"] = (
                 "membership_json.planted_community_id"
             )
 
-            hard_row["family"] = (
-                "oracle_hard_cluster_q_task_label_heterogeneity"
-            )
+            hard_row["family"] = "oracle_hard_cluster_q_task_label_heterogeneity"
             hard_row["subset_id"] = (
-                f"{parent_subset_id}"
-                f"__oracle_hard_c{community_id}"
+                f"{parent_subset_id}" f"__oracle_hard_c{community_id}"
             )
             hard_row["subset_clients"] = "|".join(
-                str(graph_id)
-                for graph_id in member_ids
+                str(graph_id) for graph_id in member_ids
             )
             hard_row["subset_size"] = 5
 
             hard_row["num_structural_clusters"] = 1
             hard_row["clients_per_structural_cluster"] = 5
 
-            hard_row["graph_ids_json"] = _json_dump(
-                member_ids
-            )
+            hard_row["graph_ids_json"] = _json_dump(member_ids)
             hard_row["dataset_ids_json"] = _json_dump(
-                [
-                    str(item["dataset_id"])
-                    for item in members
-                ]
+                [str(item["dataset_id"]) for item in members]
             )
-            hard_row["base_graph_ids_json"] = _json_dump(
-                sorted(base_graph_ids)
+            hard_row["base_graph_ids_json"] = _json_dump(sorted(base_graph_ids))
+            hard_row["base_dataset_ids_json"] = _json_dump(base_dataset_ids)
+            hard_row["membership_json"] = _json_dump(members)
+            hard_row["graph_to_task_json"] = _json_dump(graph_to_task)
+            hard_row["graph_to_community_json"] = _json_dump(graph_to_community)
+            hard_row["graph_to_family_json"] = _json_dump(graph_to_family)
+            hard_row["community_to_graph_ids_json"] = _json_dump(
+                {
+                    str(community_id): member_ids,
+                }
             )
-            hard_row["base_dataset_ids_json"] = _json_dump(
-                base_dataset_ids
-            )
-            hard_row["membership_json"] = _json_dump(
-                members
-            )
-            hard_row["graph_to_task_json"] = _json_dump(
-                graph_to_task
-            )
-            hard_row["graph_to_community_json"] = _json_dump(
-                graph_to_community
-            )
-            hard_row["graph_to_family_json"] = _json_dump(
-                graph_to_family
-            )
-            hard_row["community_to_graph_ids_json"] = (
-                _json_dump(
-                    {
-                        str(community_id): member_ids,
-                    }
-                )
-            )
-            hard_row["family_to_graph_ids_json"] = (
-                _json_dump(family_to_graph_ids)
-            )
-            hard_row["family_counts_json"] = _json_dump(
-                family_counts
-            )
+            hard_row["family_to_graph_ids_json"] = _json_dump(family_to_graph_ids)
+            hard_row["family_counts_json"] = _json_dump(family_counts)
 
             rows.append(hard_row)
 
     expanded = pd.DataFrame(rows)
 
     if expanded.empty:
-        raise ValueError(
-            "Oracle hard-cluster expansion produced no rows."
-        )
+        raise ValueError("Oracle hard-cluster expansion produced no rows.")
 
     return expanded.reset_index(drop=True)
+
 
 def main() -> None:
     print("BENCHMARK_SETUP:", BENCHMARK.setup)
@@ -451,13 +384,14 @@ def main() -> None:
     print("SELECT_SUBSET:", SELECT_SUBSET)
     os.environ["APPLE_EXPERIMENT_ALGORITHM"] = RESULT_ALGORITHM
     print(
-        "RUN VARIANT: OracleHardCluster-APPLE-PostALA (multi-selection) | selection_metrics="
+        "RUN VARIANT: OracleHardCluster-APPLE-PostALA (Macro PR-AUC selection) | selection_metrics="
         + "|".join(SELECTION_METRICS)
     )
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
     print("SAVE_CHECKPOINTS:", os.environ.get("SAVE_CHECKPOINTS", "0"))
+    print("CHECKPOINT SELECTOR: macro_pr_auc (true trapezoidal PR-AUC)")
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 
@@ -487,9 +421,7 @@ def main() -> None:
 
     parent_subset_count = len(chosen_df)
 
-    chosen_df = expand_oracle_hard_clusters(
-        chosen_df
-    )
+    chosen_df = expand_oracle_hard_clusters(chosen_df)
 
     print(
         "Oracle hard-cluster expansion:",
@@ -499,20 +431,18 @@ def main() -> None:
         "five-client rows",
     )
 
-    only_oracle_cluster = os.environ.get(
-        "ONLY_ORACLE_CLUSTER"
-    )
+    only_oracle_cluster = os.environ.get("ONLY_ORACLE_CLUSTER")
 
     if only_oracle_cluster is not None:
-        oracle_cluster_id = int(
-            only_oracle_cluster
-        )
+        oracle_cluster_id = int(only_oracle_cluster)
 
         chosen_df = chosen_df[
             pd.to_numeric(
                 chosen_df["oracle_hard_cluster_id"],
                 errors="raise",
-            ).astype(int).eq(oracle_cluster_id)
+            )
+            .astype(int)
+            .eq(oracle_cluster_id)
         ].copy()
 
         print(
@@ -524,8 +454,7 @@ def main() -> None:
 
     if chosen_df.empty:
         raise ValueError(
-            "No hard-cluster subsets remain after "
-            "oracle-cluster filtering."
+            "No hard-cluster subsets remain after " "oracle-cluster filtering."
         )
 
     print(
@@ -556,8 +485,10 @@ def main() -> None:
 
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     base_cfg["output_head"] = "multi"
-    base_cfg["apple_mixing_mode"] = "oracle_hard_cluster_fedavg_backbone_support_simplex_task_head"
-    base_cfg["selection_tag"] = "ms5_oracle_hard_cluster_postala_supportsimplex_v2"
+    base_cfg["apple_mixing_mode"] = (
+        "oracle_hard_cluster_fedavg_backbone_support_simplex_task_head"
+    )
+    base_cfg["selection_tag"] = "prauc_20260824"
     base_cfg["result_algorithm"] = RESULT_ALGORITHM
     base_cfg["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
     base_cfg["apple_ala_lr"] = APPLE_ALA_LR
@@ -681,9 +612,9 @@ def main() -> None:
             log_row["run_type"] = RESULT_RUN_TYPE
             log_row["algorithm"] = RESULT_ALGORITHM
             log_row["display_name"] = DISPLAY_NAME
-            log_row["selection_metric"] = "multi"
+            log_row["selection_metric"] = "macro_pr_auc"
             log_row["selection_metrics"] = "|".join(SELECTION_METRICS)
-            log_row["selection_direction"] = "mixed"
+            log_row["selection_direction"] = "max"
             log_row["mask_splits"] = "|".join(MASK_SPLITS)
             log_row["selection_modes"] = "full|visible"
             log_row["eval_protocols"] = (
@@ -700,27 +631,13 @@ def main() -> None:
             log_row["apple_dr_proximal_regularization"] = False
             log_row["apple_ala_training_order"] = "apple_train_then_ala_filter"
             log_row["apple_ala_materialized_filter"] = True
-            log_row["backbone_aggregation_scope"] = (
-                "oracle_hard_cluster_only"
-            )
-            log_row["task_head_donor_scope"] = (
-                "oracle_hard_cluster_only"
-            )
-            log_row["communication"] = (
-                "within_oracle_cluster_only"
-            )
-            log_row["task_head_dr_length"] = len(
-                subset_clients
-            )
-            log_row["oracle_hard_cluster_id"] = int(
-                row["oracle_hard_cluster_id"]
-            )
-            log_row["oracle_hard_base_graph_id"] = int(
-                row["oracle_hard_base_graph_id"]
-            )
-            log_row["oracle_parent_subset_id"] = str(
-                row["oracle_parent_subset_id"]
-            )
+            log_row["backbone_aggregation_scope"] = "oracle_hard_cluster_only"
+            log_row["task_head_donor_scope"] = "oracle_hard_cluster_only"
+            log_row["communication"] = "within_oracle_cluster_only"
+            log_row["task_head_dr_length"] = len(subset_clients)
+            log_row["oracle_hard_cluster_id"] = int(row["oracle_hard_cluster_id"])
+            log_row["oracle_hard_base_graph_id"] = int(row["oracle_hard_base_graph_id"])
+            log_row["oracle_parent_subset_id"] = str(row["oracle_parent_subset_id"])
             log_row["oracle_parent_subset_clients"] = str(
                 row["oracle_parent_subset_clients"]
             )

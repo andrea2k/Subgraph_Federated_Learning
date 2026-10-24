@@ -1,5 +1,0 @@
-{
-    "editor.semanticHighlighting.enabled": true,
-    "python.languageServer": "Pylance",
-    "python-envs.defaultPackageManager": "ms-python.python:pip"
-}

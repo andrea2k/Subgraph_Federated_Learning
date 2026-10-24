@@ -210,9 +210,9 @@ def build_gcfl_log_row(
         "grad_seq_len": grad_seq_len,
         "eps1_quantile": eps1_quantile,
         "eps2_quantile": eps2_quantile,
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": "|".join(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "mcw": cfg.get("minority_class_weight", None),
         "num_layers": cfg["num_layers"],
         "lr": cfg["lr"],
@@ -1792,7 +1792,7 @@ def run_gcfl(
     subset_id = _subset_clients_str(subset_clients)
     subset_file_tag = _safe_subset_file_tag(subset_id)
     cfg = dict(cfg)
-    cfg["selection_tag"] = "ms5"
+    cfg["selection_tag"] = "macro_pr_auc"
     model_tag = f"{_model_tag_from_cfg(cfg)}_ms"
 
     run_paths = create_gcfl_run_paths(

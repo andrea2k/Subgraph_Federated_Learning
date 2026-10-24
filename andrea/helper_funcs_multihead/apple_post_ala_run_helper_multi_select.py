@@ -43,7 +43,7 @@ from andrea.helper_funcs_multihead.train_eval_helper import (
     get_seed_label_mask,
     masked_loss_from_logits,
     unpack_batch_edges,
-    average_precision_binary,
+    pr_auc_binary,
     nanmean_float,
 )
 from utils.seed import set_seed
@@ -272,9 +272,9 @@ def build_apple_log_row(
         "dr_csv_path": str(run_paths.dr_csv_path),
         "rounds": rounds,
         "local_epochs": local_epochs,
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": "|".join(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "apple_dr_lr": dr_lr,
         "apple_routing_mode": "adaptive_visible_support_simplex",
         "apple_support_pseudo_count": support_pseudo_count,
@@ -1092,7 +1092,7 @@ def evaluate_loader_apple(
         if y.numel() == 0:
             tp = fp = tn = fn = 0
             precision = recall = f1_pos = f1_min = float("nan")
-            ap = float("nan")
+            pr_auc = float("nan")
             pc = 0
             pr = float("nan")
         else:
@@ -1109,7 +1109,7 @@ def evaluate_loader_apple(
             negatives = int((~y).sum().item())
             pc = positives
             pr = positives / max(positives + negatives, 1)
-            ap = average_precision_binary(probs[vc, c], y.float())
+            pr_auc = pr_auc_binary(probs[vc, c], y.float())
 
             if positives <= negatives:
                 min_tp = tp
@@ -1140,7 +1140,7 @@ def evaluate_loader_apple(
         rec_task.append(float(recall))
         positive_f1_task.append(float(f1_pos))
         minority_f1_task.append(float(f1_min))
-        pr_auc_task.append(float(ap))
+        pr_auc_task.append(float(pr_auc))
         pos_cnt.append(int(pc))
         pos_rate.append(float(pr))
 
@@ -1158,7 +1158,7 @@ def evaluate_loader_apple(
     micro_prec = tp_micro / max(tp_micro + fp_micro, eps)
     micro_rec = tp_micro / max(tp_micro + fn_micro, eps)
     micro_f1 = 2 * micro_prec * micro_rec / max(micro_prec + micro_rec, eps)
-    micro_pr_auc = average_precision_binary(probs[valid], labels[valid])
+    micro_pr_auc = pr_auc_binary(probs[valid], labels[valid])
 
     return {
         "scalar": {
@@ -1912,10 +1912,10 @@ def _postala_diag_build_summary(detail_df: pd.DataFrame) -> pd.DataFrame:
             "apple_mixture_pre_ala",
             "postala_final",
         ]:
-            row[f"{candidate}_visible_test_ap"] = _metric(
+            row[f"{candidate}_visible_test_pr_auc"] = _metric(
                 candidate, "test", "visible"
             )
-            row[f"{candidate}_full_test_ap"] = _metric(
+            row[f"{candidate}_full_test_pr_auc"] = _metric(
                 candidate, "test", "full"
             )
 
@@ -1934,7 +1934,7 @@ def _postala_diag_build_summary(detail_df: pd.DataFrame) -> pd.DataFrame:
                 row[f"best_specialist_by_{label}_donor_graph_id"] = best[
                     "donor_graph_id"
                 ]
-                row[f"best_specialist_by_{label}_val_ap"] = float(best["pr_auc"])
+                row[f"best_specialist_by_{label}_val_pr_auc"] = float(best["pr_auc"])
                 for test_mask in ["visible", "full"]:
                     test_rows = specialists[
                         (specialists["split"] == "test")
@@ -1942,7 +1942,7 @@ def _postala_diag_build_summary(detail_df: pd.DataFrame) -> pd.DataFrame:
                         & (specialists["donor_idx"] == donor_idx)
                     ]
                     row[
-                        f"best_specialist_by_{label}_{test_mask}_test_ap"
+                        f"best_specialist_by_{label}_{test_mask}_test_pr_auc"
                     ] = (
                         float(test_rows.iloc[0]["pr_auc"])
                         if not test_rows.empty
@@ -1958,7 +1958,7 @@ def _postala_diag_build_summary(detail_df: pd.DataFrame) -> pd.DataFrame:
                 best = test_rows.sort_values(
                     ["pr_auc", "donor_idx"], ascending=[False, True]
                 ).iloc[0]
-                row[f"oracle_best_specialist_{test_mask}_test_ap"] = float(
+                row[f"oracle_best_specialist_{test_mask}_test_pr_auc"] = float(
                     best["pr_auc"]
                 )
                 row[f"oracle_best_specialist_{test_mask}_donor_idx"] = best[
@@ -2100,7 +2100,7 @@ def run_postala_head_swap_diagnostic(
         )
 
         # Four (normally) role-aligned composite models. For every task, slot k
-        # uses the kth specialist donor for that task. Per-task AP therefore gives
+        # uses the kth specialist donor for that task. Per-task PR-AUC therefore gives
         # the transfer performance of that exact same-task donor.
         max_slots = max(len(indices) for indices in donor_indices_by_task.values())
         for slot in range(max_slots):
@@ -2681,9 +2681,9 @@ def run_apple_experiment(
         )
 
     checkpoint = {
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": list(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "best_round_by_eval_mode_and_metric": {
             mode: {metric: best_by_eval_mode[mode][metric]["round"] for metric in selection_metrics}
             for mode in ("full", "visible")

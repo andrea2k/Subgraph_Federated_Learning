@@ -212,9 +212,9 @@ def build_fedala_log_row(
         "ala_csv_path": str(run_paths.ala_csv_path),
         "rounds": rounds,
         "local_epochs": local_epochs,
-        "selection_metric": "multi",
+        "selection_metric": selection_metrics[0],
         "selection_metrics": "|".join(selection_metrics),
-        "selection_direction": "mixed",
+        "selection_direction": selection_direction(selection_metrics[0]),
         "fedala_mode": mode,
         "fedala_ala_lr": ala_lr,
         "fedala_ala_rand_percent": ala_rand_percent,
@@ -1309,7 +1309,7 @@ def run_fedala(
     subset_id = _subset_clients_str(subset_clients)
     subset_file_tag = compact_subset_id_for_filename(subset_id)
     cfg = dict(cfg)
-    cfg["selection_tag"] = "ms5" if len(selection_metrics) == 5 else "ms" + str(len(selection_metrics))
+    cfg["selection_tag"] = "macro_pr_auc"
     model_tag = f"{_model_tag_from_cfg(cfg)}_ms"
 
     run_paths = create_fedala_run_paths(

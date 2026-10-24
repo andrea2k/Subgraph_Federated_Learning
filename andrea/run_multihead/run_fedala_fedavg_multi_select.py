@@ -29,7 +29,7 @@ BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
-RUN_TAG = os.environ.get("RUN_TAG", "multiselect_fedala")
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 EXPERIMENT_LOG_FOLDER = (
     f"fedala_fedavg_multihead_clustering_experiment_multi_select_{RUN_TAG}"
 )
@@ -40,12 +40,15 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_multiselect_fedala")
+RUNS_ROOT = os.environ.get(
+    "RUNS_ROOT",
+    f"andrea/final_runs_prauc_20260824/{BENCHMARK.setup}/fedala",
+)
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
 CLIENT_FRACTION = float(os.environ.get("CLIENT_FRACTION", 1.0))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 FEDALA_MODE = "all"
@@ -121,13 +124,14 @@ def main() -> None:
     print("SELECT_SUBSET_PATH:", SELECT_SUBSET_PATH)
     print("SELECT_SUBSET:", SELECT_SUBSET)
     print(
-        "RUN VARIANT: FedALA-FedAvg (multi-selection) | selection_metrics="
+        "RUN VARIANT: FedALA-FedAvg (Macro PR-AUC selection) | selection_metrics="
         + "|".join(SELECTION_METRICS)
     )
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
     print("SAVE_CHECKPOINTS:", os.environ.get("SAVE_CHECKPOINTS", "0"))
+    print("CHECKPOINT SELECTOR: macro_pr_auc (true trapezoidal PR-AUC)")
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
 

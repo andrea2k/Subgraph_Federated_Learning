@@ -1,0 +1,26 @@
+{
+  "setup": "twenty_client_oracle_regional",
+  "num_parent_selected_subsets": 4,
+  "num_regional_rows": 16,
+  "regional_rows_per_parent": 4,
+  "regional_client_count": 5,
+  "region_signature_unique_rows": {
+    "0": 1,
+    "1": 1,
+    "2": 1,
+    "3": 1
+  },
+  "physical_per_round_invariant_across_parents": true,
+  "hierarchy_inter_invariant_across_parents": true,
+  "previous_physical_per_round_remains_exact_all": false,
+  "previous_hierarchy_inter_remains_exact_all": true,
+  "previous_physical_total_gib_reference": 16.097265,
+  "final_physical_per_round_bytes": 216051280,
+  "final_physical_per_round_MiB": 206.0425567626953,
+  "final_physical_total_bytes": 17284102400,
+  "final_physical_total_GiB": 16.09707474708557,
+  "final_hierarchy_inter_bytes": 1690000,
+  "final_hierarchy_inter_MiB": 1.6117095947265625,
+  "final_hierarchy_total_bytes": 17285792400,
+  "final_hierarchy_total_GiB": 16.09864868223667
+}

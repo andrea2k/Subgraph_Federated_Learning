@@ -29,7 +29,7 @@ BENCHMARK = resolve_benchmark_paths()
 SELECT_SUBSET_PATH = BENCHMARK.select_subset_path
 SELECT_SUBSET = BENCHMARK.select_subset
 
-RUN_TAG = os.environ.get("RUN_TAG", "support_simplex_v2")
+RUN_TAG = os.environ.get("RUN_TAG", "prauc_20260824").strip()
 BASE_EXPERIMENT_LOG_FOLDER = (
     "apple_post_ala_fedavg_backbone_taskhead_clustering_experiment_multi_select"
 )
@@ -43,12 +43,15 @@ EXPERIMENT_LOG_CSV = Path(f"./andrea/{EXPERIMENT_LOG_FOLDER}/experiment_log.csv"
 ALL_DATA_LOGS = f"./andrea/{DATA_DIR}"
 CONFIG_PATH = "./configs/pna_configs.json"
 CONFIG_KEY = "reverse_mp_with_port_and_ego"
-RUNS_ROOT = os.environ.get("RUNS_ROOT", "andrea/runs_multiselect_apple_post_ala_support_simplex")
+RUNS_ROOT = os.environ.get(
+    "RUNS_ROOT",
+    f"andrea/final_runs_prauc_20260824/{BENCHMARK.setup}/support_simplex_postala",
+)
 
 ROUNDS = int(os.environ.get("ROUNDS", 80))
 LOCAL_EPOCHS = int(os.environ.get("LOCAL_EPOCHS", 1))
 CLIENT_FRACTION = float(os.environ.get("CLIENT_FRACTION", 1.0))
-SELECTION_METRICS = ["loss", "micro_f1", "macro_pos_f1", "micro_pr_auc", "macro_pr_auc"]
+SELECTION_METRICS = ["macro_pr_auc"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 APPLE_DR_LR = float(os.environ.get("APPLE_DR_LR", 1e-3))
@@ -107,7 +110,7 @@ MASK_SPLITS = ("train", "val", "test")
 
 RESULT_RUN_TYPE = "apple_post_ala_support_simplex_multi_select"
 RESULT_ALGORITHM = "apple_post_ala_support_simplex_multi_select"
-DISPLAY_NAME = "APPLE-PostALA Support-Simplex (multi-selection)"
+DISPLAY_NAME = "APPLE-PostALA Support-Simplex (Macro PR-AUC selection)"
 
 
 def load_cfg(config_path: str, key: str) -> Dict:
@@ -194,13 +197,14 @@ def main() -> None:
     print("SELECT_SUBSET:", SELECT_SUBSET)
     os.environ["APPLE_EXPERIMENT_ALGORITHM"] = RESULT_ALGORITHM
     print(
-        "RUN VARIANT: APPLE-PostALA Support-Simplex (multi-selection) | selection_metrics="
+        "RUN VARIANT: APPLE-PostALA Support-Simplex (Macro PR-AUC selection) | selection_metrics="
         + "|".join(SELECTION_METRICS)
     )
     print("RUNS_ROOT:", RUNS_ROOT)
     print("EXPERIMENT_LOG_FOLDER:", EXPERIMENT_LOG_FOLDER)
     print("ROUNDS:", ROUNDS, "LOCAL_EPOCHS:", LOCAL_EPOCHS)
     print("SAVE_CHECKPOINTS:", os.environ.get("SAVE_CHECKPOINTS", "0"))
+    print("CHECKPOINT SELECTOR: macro_pr_auc (true trapezoidal PR-AUC)")
     print("MCW_VALUES resolved to:", MCW)
 
     chosen_df = pd.read_csv(SELECTED_SUBSETS_CSV_PATH)
@@ -246,7 +250,7 @@ def main() -> None:
     base_cfg = load_cfg(CONFIG_PATH, CONFIG_KEY)
     base_cfg["output_head"] = "multi"
     base_cfg["apple_mixing_mode"] = "fedavg_backbone_support_simplex_task_head"
-    base_cfg["selection_tag"] = "ms5_apple_postala_supportsimplex_v2"
+    base_cfg["selection_tag"] = "prauc_20260824"
     base_cfg["result_algorithm"] = RESULT_ALGORITHM
     base_cfg["apple_use_head_ala"] = APPLE_USE_HEAD_ALA
     base_cfg["apple_ala_lr"] = APPLE_ALA_LR
@@ -370,9 +374,9 @@ def main() -> None:
             log_row["run_type"] = RESULT_RUN_TYPE
             log_row["algorithm"] = RESULT_ALGORITHM
             log_row["display_name"] = DISPLAY_NAME
-            log_row["selection_metric"] = "multi"
+            log_row["selection_metric"] = "macro_pr_auc"
             log_row["selection_metrics"] = "|".join(SELECTION_METRICS)
-            log_row["selection_direction"] = "mixed"
+            log_row["selection_direction"] = "max"
             log_row["mask_splits"] = "|".join(MASK_SPLITS)
             log_row["selection_modes"] = "full|visible"
             log_row["eval_protocols"] = (

@@ -21,8 +21,19 @@ cd ~/Subgraph_Federated_Learning
 export PYTHONPATH=$PWD
 mkdir -p logs/slurm
 
-# Default: do not write .pt checkpoint files. CSV files contain all selected-checkpoint results.
-export SAVE_CHECKPOINTS=${SAVE_CHECKPOINTS:-0}
-# Optional overrides: ONLY_Q=0.8 ONLY_SEED=0 ROUNDS=240 RUN_TAG=mytag
+# Final PR-AUC protocol safety.
+export SAVE_CHECKPOINTS=0
+export RUN_TAG="${PRAUC_RUN_TAG:-prauc_20260824}"
+FINAL_RUNS_BASE="${FINAL_RUNS_BASE:-andrea/final_runs_prauc_20260824}"
+export RUNS_ROOT="$FINAL_RUNS_BASE/twenty_client/oracle_physical_community"
+
+echo "PR-AUC final diagnostic: BENCHMARK_SETUP=$BENCHMARK_SETUP RUNS_ROOT=$RUNS_ROOT RUN_TAG=$RUN_TAG SAVE_CHECKPOINTS=$SAVE_CHECKPOINTS"
+
+export BENCHMARK_SETUP=${BENCHMARK_SETUP:-twenty_client}
+if [[ "$BENCHMARK_SETUP" != "twenty_client" ]]; then
+  echo "ERROR: oracle-hard-cluster APPLE-PostALA is only valid for BENCHMARK_SETUP=twenty_client" >&2
+  exit 2
+fi
+
 
 srun apptainer exec --nv "$SIF" python -u -m andrea.run_multihead.run_oracle_hard_cluster_apple_post_ala_multi_select
