@@ -1,0 +1,11 @@
+{
+  "name": "FedALA",
+  "parameters": {
+    "mode": "all",
+    "ala_lr": 1.0,
+    "ala_rand_percent": 100.0,
+    "ala_convergence_std": 0.1,
+    "ala_convergence_window": 10,
+    "ala_max_steps": 100
+  }
+}

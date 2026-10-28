@@ -1,0 +1,11 @@
+{
+  "name": "GCFL+",
+  "parameters": {
+    "warmup_rounds": 5,
+    "min_cluster_size": 2,
+    "min_child_size": 1,
+    "grad_seq_len": 5,
+    "eps1_quantile": 0.25,
+    "eps2_quantile": 0.7
+  }
+}

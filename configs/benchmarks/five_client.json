@@ -1,0 +1,42 @@
+{
+  "clients": 5,
+  "tasks": [
+    "cycle2",
+    "cycle3",
+    "cycle4",
+    "cycle5",
+    "cycle6"
+  ],
+  "q_values": [
+    0.2,
+    0.5,
+    0.8,
+    0.95
+  ],
+  "registry": "configs/benchmarks/five_client/cluster_generation_parameters.csv",
+  "selected_subsets": "configs/benchmarks/five_client/selected_subset.csv",
+  "mask_splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "generation": {
+    "nodes": 4200,
+    "average_degree": 3.0,
+    "locality": 10.0,
+    "dataset_id": "data_4200_3_10.0_chordal",
+    "split_seeds": {
+      "train": 142481938,
+      "val": 1274523672,
+      "test": 1989203511
+    },
+    "source": "canonical_graph_tensors",
+    "seed_reproduction_verified": false
+  },
+  "method_overrides": {
+    "gcflplus": {
+      "eps1_quantile": 0.25,
+      "eps2_quantile": 0.7
+    }
+  }
+}

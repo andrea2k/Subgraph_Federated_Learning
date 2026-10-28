@@ -1,0 +1,12 @@
+{
+  "name": "APPLE",
+  "parameters": {
+    "dr_lr": 0.001,
+    "apple_mu": 0.001,
+    "scheduler_type": "cosine",
+    "scheduler_fraction": 0.2,
+    "dr_init": "sample_size",
+    "dr_constraint": "unconstrained",
+    "download_strategy": "full"
+  }
+}

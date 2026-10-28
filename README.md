@@ -1,143 +1,92 @@
-# Personalized Federated Graph Learning for Synthetic Financial-Crime Pattern Detection
+# FedPTHA: Personalized Task Head Aggregation for Federated Graph Learning
 
-**MSc thesis | TU Delft (2024–2026)**
+TU Delft MSc thesis research on synthetic directed multigraphs. Each node has five binary labels: membership in directed cycles of lengths 2–6. The benchmarks have **5 or 20 clients**, four heterogeneity levels (`q = 0.20, 0.50, 0.80, 0.95`), and three training seeds (`0, 1, 2`). FedPTHA shares a Multi-PNA backbone and personalizes the task heads; PostALA adds optional head refinement.
 
-**Python · PyTorch · PyTorch Geometric · Graph Neural Networks · Synthetic data generation · Federated learning · Reproducible experimentation**
+## Setup
 
-## Overview
+Use the existing local environment:
 
-How can graph models identify suspicious structural patterns when a graph is distributed across multiple clients and each client sees only part of the topology?
+```bash
+source thesis/bin/activate
+```
 
-This thesis investigated **personalized federated graph learning** using **synthetic directed multigraphs** with node-level pattern labels. I developed an experimental workflow for generating graph data, deriving labels, creating federated client partitions, training graph models and comparing centralized, federated and personalized approaches.
+For a new environment, use Python 3.10+ with compatible PyTorch/PyG sampling extensions and install the package:
 
-The application is inspired by **cross-institution financial-crime detection**, but **all reported benchmark experiments are synthetic**. No real bank transactions or customer records were used.
+```bash
+pip install -e ".[report,sampling]"
+```
 
-## Thesis contribution and reported result
+See [environment notes](docs/environment.md). Graph tensors and large frozen result CSVs are local artifacts excluded from Git; another machine needs a copy of them.
 
-My thesis explored **FedPTHA (Personalized Task Head Aggregation)** as an approach to personalized federated learning. The experiments examined how models behave when clients have different graph structures, label distributions and local tasks.
+## Train
 
-| Metric / setup | FedPTHA | FedAvg baseline |
-| --- | ---: | ---: |
-| **Macro PR-AUC** on a synthetic **20-client** graph benchmark | **71.61%** | **63.44%** |
+Run FedPTHA with the original parameters: **80 rounds, all three seeds, all four q values**.
 
-**Interpretation:** FedPTHA improved the reported Macro PR-AUC by **8.17 percentage points** for this particular thesis benchmark and configuration. This is **not** a claim of general improvement across datasets or real-world financial institutions.
+```bash
+python -m fedptha train \
+  --method fedptha \
+  --benchmark twenty_client \
+  --output-dir results/runs/paper
+```
 
-> **Reproduction note:** the 20-client result comes from the thesis experiment. Some default settings described below use **15** or **32** clients. Those default commands should **not** be assumed to reproduce the 20-client FedPTHA number without the matching experiment configuration and result artifacts.
+Choose one method, seed, and q:
 
-## Technical workflow
+```bash
+python -m fedptha train \
+  --method fedavg \
+  --benchmark five_client \
+  --seeds 0 --q 0.95 --rounds 80 \
+  --output-dir results/runs/fedavg_trial
+```
+
+For a short run, use `--rounds 2` and a separate output directory. It uses the normal model architecture. `--dry-run` displays configuration without training; `--device cpu` or `--device cuda` selects the device. [Methods and parameters](docs/methods.md) lists the supported methods; `python -m fedptha train --help` lists the options.
+
+Results have predictable paths:
 
 ```text
-Synthetic directed multigraph generation
-                 |
-                 v
-    Structural-pattern labels
-                 |
-                 v
-   Train / validation / test graphs
-                 |
-                 v
- Federated client subgraph partitioning
-  (Louvain / METIS / pattern-aware)
-                 |
-                 v
-  Graph neural network training
-   (PNA + federated baselines)
-                 |
-                 v
- Personalized aggregation experiments
-                 |
-                 v
-   Evaluation and error analysis
+results/runs/paper/twenty_client/fedptha/
+    configuration.json
+    q_0.95/seed_0/
+        metrics.csv
+        routing.csv
 ```
 
-### 1. Synthetic graph generation and labels
+Methods add `refinement.csv`, `clusters.csv`, `representatives.csv`, or `task_distributions.csv` where needed. Fully Local uses `client_<id>/` subdirectories. Oracle physical-community runs use `region_<id>/`; hierarchical runs also retain their intra-region outputs and `hierarchy_weights.csv`. `metrics.csv` includes per-round results and selected AA/AC/CC evaluations. Best model states stay in memory; no model checkpoints are written.
 
-The benchmark follows the structural-pattern setting used in directed-multigraph research. It contains **11 node-labelling tasks**: degree and fan-in/fan-out patterns, plus higher-order motifs including scatter–gather, directed bicliques and directed cycles. Nodes are labelled according to whether they satisfy the associated structural criteria.
+Existing completed metric files are reused for the same configuration. A changed configuration requires a separate output directory. New training cannot write into `results/frozen/`.
 
-The documented default generator uses **8,192 nodes**, average degree **6** and radius parameter **11.1**. Generated graphs and labels are saved to `data/` along with label-count checks.
-
-### 2. Federated graph partitioning
-
-Different partitioning strategies simulate different levels of heterogeneity across clients:
-
-- **Louvain / METIS** community-based partitioning with approximately balanced client sizes.
-- **Zipf-skewed** partitions for imbalanced client sizes.
-- **Label-controlled** partitions for more controlled comparisons of label distributions.
-- **Pattern-aware / witness-based** partitions that distribute some structural motifs across clients, including configurable treatment of cross-client edges.
-
-### 3. Graph models and training
-
-The repository contains **Principal Neighborhood Aggregation (PNA)** implementations, including a basic full-batch model and a variant with reverse message passing, identity/port features and neighborhood sampling. It also contains federated training code and experiment configurations for baseline comparisons.
-
-The research workflow included implementation, training, debugging, comparison with baselines, and repeated discussions with academic supervisors. This is an **experimental codebase**, not a deployed financial-crime detection service.
-
-## Repository structure
-
-| Folder / file | Description |
-| --- | --- |
-| `scripts/data/` | Synthetic graph generation and client partitioning |
-| `scripts/training/` | Graph-model training entry points |
-| `models/` | Graph-model implementations |
-| `fed_algo/` | Federated learning components and algorithm code |
-| `configs/` | Training and data-generation settings |
-| `slurm_ablation_studies/` and `*.slurm` | Experiment and cluster-job scripts |
-| `utils/` and `task/` | Supporting utilities and task logic |
-| `requirements.txt` | Listed Python dependencies |
-| `00_benchmark_v1_alignment.md` | Additional benchmark notes |
-
-## Getting started
-
-The commands below are entry points **documented by the repository**; they have not been validated in a fresh environment as part of this README rewrite. Model training may require a suitable PyTorch/PyG environment and significant compute resources.
+## Data and thesis analysis
 
 ```bash
-git clone https://github.com/andrea2k/Subgraph_Federated_Learning.git
-cd Subgraph_Federated_Learning
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m fedptha generate-data --benchmark twenty_client
+python -m fedptha reproduce
 ```
 
-### Generate synthetic graphs
+`generate-data` writes a separate dataset under `data/generated/`. The five-client command copies the original cached graph realization; its recorded seed recipe cannot reconstruct that realization. See [reproduction](docs/reproduction.md) for details.
+
+`reproduce` reads **frozen experiments**, rebuilds thesis tables under `results/generated/`, and generates Figures 3–6 and appendix figures under `figures/generated/`. It does not train models or automatically use new runs. Figures 1–2 are in [figures/source](figures/source).
+
+Submit a cluster job from the repository root:
 
 ```bash
-python3 -m scripts.data.generate_synthetic
+mkdir -p logs/slurm
+BENCHMARK_SETUP=twenty_client sbatch slurm/fedptha.slurm
 ```
 
-Expected generated artifacts documented in the repository include `data/train.pt`, `data/val.pt`, `data/test.pt`, `data/y_sums.csv` and label-statistic outputs.
+## Layout
 
-### Generate community-based federated splits
+| Location | Purpose |
+|---|---|
+| `src/fedptha/data`, `models` | Graph generation/loading, client masks, and Multi-PNA |
+| `src/fedptha/algorithms` | Method-specific updates and routing |
+| `src/fedptha/training` | Shared loaders, training/evaluation steps, in-memory state selection, and run dispatch |
+| `src/fedptha/evaluation`, `reporting` | Metrics, result extraction, statistics, and thesis figures |
+| `configs` | JSON training settings, benchmark registries, and method parameters |
+| `slurm` | Method jobs and shared container launcher |
+| `data` | Original and separately generated graph tensors |
+| `results/frozen` | Original experiment CSVs, scientific manifests, and provenance |
+| `results/runs`, `results/generated` | New training results and rebuilt analysis |
+| `figures/source`, `figures/generated` | Source diagrams and generated thesis/appendix figures |
+| `experiments/scratch` | Independent exploration outside the thesis pipeline |
 
-```bash
-python3 -m scripts.data.make_federated_splits
-```
-
-This generates client subgraphs for the supported Louvain and METIS partition strategies. Pattern-aware splits are described in the generator's configuration and the original codebase.
-
-### Run documented model baselines
-
-```bash
-python3 -m scripts.training.train_pna_baseline
-python3 -m scripts.training.train_pna_reverse_mp
-python3 -m scripts.training.train_federated_pna
-```
-
-These are **baseline training entry points**, not a validated one-command reproduction of the reported FedPTHA result. To replicate a specific thesis experiment, use its exact configuration, seed, aggregation implementation, client count and corresponding evaluation procedure. Consult the configuration files and SLURM scripts for the relevant experiment setup.
-
-## Evaluation and reproducibility
-
-The thesis comparisons focused on model performance under different graph partitioning and federated learning settings. The reported headline metric is **Macro PR-AUC**, which is useful when positive structural patterns are sparse.
-
-Experiments were organized around configuration files and controlled seeds. The repository includes scripts for ablation studies and cluster execution. Exact numerical replication can still depend on software versions, compute environment and the specific experiment configuration.
-
-## Limitations
-
-- **Synthetic benchmark only:** results do not establish performance on real financial-crime cases.
-- **No formal privacy guarantee claimed:** federated training was investigated as a decentralized learning setup, not as proof of differential privacy or secure multi-party computation.
-- **Partition choices matter:** client heterogeneity and treatment of cross-client edges change the learning problem.
-- **Research prototype:** the repository is not an API, dashboard or production-ready AML system.
-
-## Research context
-
-This work builds on research in directed-multigraph pattern detection, PNA graph neural networks and federated graph-learning benchmarks. The original repository's documentation provides methodological references, including Egressy et al. (2023), Corso et al. (2020) and the OpenFGL benchmark (2024).
-
-**Author:** Andrea Li · **Institution:** Delft University of Technology (TU Delft) · **Project type:** MSc thesis research
+Read [evaluation rules](docs/evaluation.md) and the [completed validation record](docs/validation.md). Migration tests, source archives, and automatic comparison tools have been removed after validation.

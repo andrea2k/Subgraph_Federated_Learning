@@ -1,0 +1,17 @@
+{
+  "name": "Learned source weights only + PostALA",
+  "parameters": {
+    "dr_lr": 0.001,
+    "support_pseudo_count": 1.0
+  },
+  "refinement": {
+    "lr": 1.0,
+    "rand_percent": 100.0,
+    "convergence_std": 0.1,
+    "convergence_window": 10,
+    "max_steps": 100,
+    "debug": false,
+    "enabled": true
+  },
+  "routing": "learned"
+}

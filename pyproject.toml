@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fedptha"
+version = "0.1.0"
+description = "Personalized Task Head Aggregation for Federated Graph Learning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "networkx==3.1",
+    "scikit-learn==1.6.1",
+    "torch>=2.2,<3",
+    "torch-geometric==2.6.1",
+    "tqdm>=4.67,<5",
+]
+
+[project.optional-dependencies]
+report = ["matplotlib>=3.9,<4"]
+sampling = ["torch-scatter", "torch-sparse"]
+
+[project.scripts]
+fedptha = "fedptha.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

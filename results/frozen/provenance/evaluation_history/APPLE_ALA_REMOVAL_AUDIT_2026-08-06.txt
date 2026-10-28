@@ -1,0 +1,181 @@
+APPLE-ALA value-aware safe audit v2
+===================================
+
+Repository: /Users/andreali/Documents/Subgraph_Federated_Learning
+Canonical CSVs checked: 34
+Thesis text files checked: 0
+Read errors: 0
+
+SECTION A - THESIS-FACING FAILURES
+Exact legacy method values in canonical identity columns, or legacy mentions in thesis .tex files. CSV header names such as apple_ala_lr are intentionally ignored.
+
+None.
+
+SECTION B - CANONICAL CSV CHECKS
+
+andrea/five_client_final_manifest.csv | identity_columns=['display_method', 'algorithm', 'run_type', 'apple_variant']
+andrea/twenty_client_final_manifest.csv | identity_columns=['display_method', 'algorithm', 'run_type']
+andrea/final_outputs/five_client/results/coverage_audit.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/diagnostic_oo_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/five_client/results/primary_vv_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/five_client/results/secondary_vo_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/five_client/results/secondary_vv_pooled_micro_f1.csv | identity_columns=none
+andrea/final_outputs/five_client/results/secondary_vv_pooled_task_macro_f1.csv | identity_columns=none
+andrea/final_outputs/five_client/results/selected_scalar_rows.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/selected_task_rows.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/system_by_seed.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/system_summary.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/task_by_seed.csv | identity_columns=['display_method']
+andrea/final_outputs/five_client/results/task_summary.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/coverage_audit.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/diagnostic_oo_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/twenty_client/results/primary_vv_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/twenty_client/results/secondary_vo_macro_pr_auc.csv | identity_columns=none
+andrea/final_outputs/twenty_client/results/secondary_vv_pooled_micro_f1.csv | identity_columns=none
+andrea/final_outputs/twenty_client/results/secondary_vv_pooled_task_macro_f1.csv | identity_columns=none
+andrea/final_outputs/twenty_client/results/selected_scalar_rows.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/selected_task_rows.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/system_by_seed.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/system_summary.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/task_by_seed.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/results/task_summary.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/selected_scalar_rows.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/selected_task_rows.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/pooled_system_by_seed.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/pooled_system_summary.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/pooled_task_by_seed.csv | identity_columns=['display_method']
+andrea/analysis_outputs/frozen_evaluation/pooled_metrics/per_task_summary.csv | identity_columns=['display_method']
+andrea/final_outputs/twenty_client/dr_diagnostics/dr_entropy_per_receiver_task.csv | identity_columns=['method']
+andrea/final_outputs/twenty_client/dr_diagnostics/dr_top_donors.csv | identity_columns=['method']
+
+SECTION C - REVIEW-ONLY REFERENCES
+These can be expected in exclusion logic, historical documentation, PostALA implementation variables, FedALA code, or legacy runners.
+
+Total review-only matches: 201
+
+andrea/final_analysis/build_final_results_tables.py:50: "apple_ala_multi_select": "APPLE-ALA",
+andrea/final_analysis/build_final_results_tables.py:78: # APPLE-ALA was an intermediate development variant. Its raw runs are retained
+andrea/final_analysis/build_final_results_tables.py:81: EXCLUDED_FROM_FINAL = ("APPLE-ALA",)
+andrea/final_analysis/build_final_results_tables.py:217: f"INFO: excluded {excluded_rows} APPLE-ALA manifest rows from the "
+andrea/final_analysis/build_five_client_manifest.py:16: #   - finalized APPLE-PostALA (the intermediate APPLE-ALA variant is excluded)
+andrea/final_analysis/build_five_client_manifest.py:46: EXCLUDED_RUN_TYPES = {"apple_ala_multi_select"}
+andrea/final_analysis/build_five_client_manifest.py:360: is_apple_ala = (
+andrea/final_analysis/build_five_client_manifest.py:361: out_csv.str.contains("apple_ala_multi_select", na=False) & ~is_taskexpert_apple
+andrea/final_analysis/build_five_client_manifest.py:364: df.loc[is_apple_ala, "run_type"] = "apple_ala_multi_select"
+andrea/final_analysis/build_five_client_manifest.py:365: df.loc[is_apple_ala, "algorithm"] = "apple_ala_multi_select"
+andrea/final_analysis/build_five_client_manifest.py:366: df.loc[is_apple_ala, "apple_variant"] = "apple_ala"
+andrea/final_analysis/README.md:159: ### 3.4 Final-method scope: APPLE-PostALA replaces APPLE-ALA
+andrea/final_analysis/README.md:161: `APPLE-ALA` was an intermediate development variant. It is retained only in the
+andrea/final_analysis/README.md:1254: After rerunning the corrected pipeline without APPLE-ALA, the expected validated status is:
+andrea/frozen_evaluation/build_protocol_aware_pooled_metrics.py:568: excluded_mask = manifest["display_method"].astype(str).eq("APPLE-ALA")
+andrea/frozen_evaluation/build_protocol_aware_pooled_metrics.py:571: f"INFO: excluded {int(excluded_mask.sum())} APPLE-ALA manifest rows; "
+andrea/evaluation_contract/EVALUATION_STATUS_AFTER_FREEZE.md:20: `APPLE-ALA` was an intermediate development variant. The finalized thesis method is
+andrea/evaluation_contract/EVALUATION_STATUS_AFTER_FREEZE.md:25: - `APPLE-ALA` is excluded from canonical manifests, tables, plots, and discussion;
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:70: # Extra experimental options for TaskExpert-APPLE / APPLE-ALA.
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:72: APPLE_ALA_LR = float(os.environ.get("APPLE_ALA_LR", 1.0))
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:73: APPLE_ALA_RAND_PERCENT = float(os.environ.get("APPLE_ALA_RAND_PERCENT", 20.0))
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:74: APPLE_ALA_CONVERGENCE_STD = float(os.environ.get("APPLE_ALA_CONVERGENCE_STD", 0.1))
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:75: APPLE_ALA_CONVERGENCE_WINDOW = int(os.environ.get("APPLE_ALA_CONVERGENCE_WINDOW", 10))
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:76: APPLE_ALA_MAX_STEPS = int(os.environ.get("APPLE_ALA_MAX_STEPS", 100))
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:77: APPLE_ALA_DEBUG = os.environ.get("APPLE_ALA_DEBUG", "0") == "1"
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:565: base_cfg["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:566: base_cfg["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:567: base_cfg["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:568: base_cfg["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:569: base_cfg["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:570: base_cfg["apple_ala_debug"] = APPLE_ALA_DEBUG
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:645: APPLE_ALA_LR,
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:647: APPLE_ALA_RAND_PERCENT,
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:716: log_row["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:717: log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:718: log_row["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:719: log_row["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:720: log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:723: log_row["apple_ala_training_order"] = "apple_train_then_ala_filter"
+andrea/run_multihead/run_oracle_hard_cluster_apple_post_ala_multi_select.py:724: log_row["apple_ala_materialized_filter"] = True
+andrea/run_multihead/run_apple_post_ala_multi_select.py:62: # Extra experimental options for TaskExpert-APPLE / APPLE-ALA.
+andrea/run_multihead/run_apple_post_ala_multi_select.py:64: APPLE_ALA_LR = float(os.environ.get("APPLE_ALA_LR", 1.0))
+andrea/run_multihead/run_apple_post_ala_multi_select.py:65: APPLE_ALA_RAND_PERCENT = float(os.environ.get("APPLE_ALA_RAND_PERCENT", 20.0))
+andrea/run_multihead/run_apple_post_ala_multi_select.py:66: APPLE_ALA_CONVERGENCE_STD = float(os.environ.get("APPLE_ALA_CONVERGENCE_STD", 0.1))
+andrea/run_multihead/run_apple_post_ala_multi_select.py:67: APPLE_ALA_CONVERGENCE_WINDOW = int(os.environ.get("APPLE_ALA_CONVERGENCE_WINDOW", 10))
+andrea/run_multihead/run_apple_post_ala_multi_select.py:68: APPLE_ALA_MAX_STEPS = int(os.environ.get("APPLE_ALA_MAX_STEPS", 100))
+andrea/run_multihead/run_apple_post_ala_multi_select.py:69: APPLE_ALA_DEBUG = os.environ.get("APPLE_ALA_DEBUG", "0") == "1"
+andrea/run_multihead/run_apple_post_ala_multi_select.py:227: base_cfg["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/run_apple_post_ala_multi_select.py:228: base_cfg["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/run_apple_post_ala_multi_select.py:229: base_cfg["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/run_apple_post_ala_multi_select.py:230: base_cfg["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/run_apple_post_ala_multi_select.py:231: base_cfg["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/run_apple_post_ala_multi_select.py:232: base_cfg["apple_ala_debug"] = APPLE_ALA_DEBUG
+andrea/run_multihead/run_apple_post_ala_multi_select.py:307: APPLE_ALA_LR,
+andrea/run_multihead/run_apple_post_ala_multi_select.py:309: APPLE_ALA_RAND_PERCENT,
+andrea/run_multihead/run_apple_post_ala_multi_select.py:378: log_row["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/run_apple_post_ala_multi_select.py:379: log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/run_apple_post_ala_multi_select.py:380: log_row["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/run_apple_post_ala_multi_select.py:381: log_row["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/run_apple_post_ala_multi_select.py:382: log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/run_apple_post_ala_multi_select.py:385: log_row["apple_ala_training_order"] = "apple_train_then_ala_filter"
+andrea/run_multihead/run_apple_post_ala_multi_select.py:386: log_row["apple_ala_materialized_filter"] = True
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:55: # Extra experimental options for TaskExpert-APPLE / APPLE-ALA.
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:57: APPLE_ALA_LR = float(os.environ.get("APPLE_ALA_LR", 1.0))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:58: APPLE_ALA_RAND_PERCENT = float(os.environ.get("APPLE_ALA_RAND_PERCENT", 20.0))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:59: APPLE_ALA_CONVERGENCE_STD = float(os.environ.get("APPLE_ALA_CONVERGENCE_STD", 0.1))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:60: APPLE_ALA_CONVERGENCE_WINDOW = int(os.environ.get("APPLE_ALA_CONVERGENCE_WINDOW", 10))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:61: APPLE_ALA_MAX_STEPS = int(os.environ.get("APPLE_ALA_MAX_STEPS", 100))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:62: APPLE_ALA_DEBUG = os.environ.get("APPLE_ALA_DEBUG", "0") == "1"
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:66: APPLE_ALA_START_ROUND = int(os.environ.get("APPLE_ALA_START_ROUND", 20))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:67: APPLE_ALA_ALPHA_MIN = float(os.environ.get("APPLE_ALA_ALPHA_MIN", 0.5))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:68: APPLE_ALA_ALPHA_MAX = float(os.environ.get("APPLE_ALA_ALPHA_MAX", 1.0))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:69: APPLE_ALA_TASK_LEVEL = os.environ.get("APPLE_ALA_TASK_LEVEL", "True") == "True"
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:70: APPLE_ALA_SUPPORT_AWARE_INIT = os.environ.get("APPLE_ALA_SUPPORT_AWARE_INIT", "True") == "True"
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:186: base_cfg["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:187: base_cfg["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:188: base_cfg["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:189: base_cfg["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:190: base_cfg["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:191: base_cfg["apple_ala_debug"] = APPLE_ALA_DEBUG
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:195: base_cfg["apple_ala_start_round"] = APPLE_ALA_START_ROUND
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:196: base_cfg["apple_ala_alpha_min"] = APPLE_ALA_ALPHA_MIN
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:197: base_cfg["apple_ala_alpha_max"] = APPLE_ALA_ALPHA_MAX
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:198: base_cfg["apple_ala_task_level"] = APPLE_ALA_TASK_LEVEL
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:199: base_cfg["apple_ala_support_aware_init"] = APPLE_ALA_SUPPORT_AWARE_INIT
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:247: print("APPLE_USE_HEAD_ALA:", APPLE_USE_HEAD_ALA, "ALA_LR:", APPLE_ALA_LR, "ALA_RAND_PERCENT:", APPLE_ALA_RAND_PERCENT)
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:249: print("APPLE_EXPERT_PROX_TARGET:", APPLE_EXPERT_PROX_TARGET, "ALA_START_ROUND:", APPLE_ALA_START_ROUND, "ALA_ALPHA_BOUNDS:", (APPLE_ALA_ALPHA_MIN, APPLE_ALA_ALPHA_MAX), "ALA_TASK_LEVEL:", APPLE_ALA_TASK_LEVEL, "ALA_SUPPORT_AWARE_INIT:", APPLE_ALA_SUPPORT_AWARE_INIT)
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:302: log_row["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:303: log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:304: log_row["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:305: log_row["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_expertprox_multi_select.py:306: log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:55: # Extra experimental options for TaskExpert-APPLE / APPLE-ALA.
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:57: APPLE_ALA_LR = float(os.environ.get("APPLE_ALA_LR", 1.0))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:58: APPLE_ALA_RAND_PERCENT = float(os.environ.get("APPLE_ALA_RAND_PERCENT", 20.0))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:59: APPLE_ALA_CONVERGENCE_STD = float(os.environ.get("APPLE_ALA_CONVERGENCE_STD", 0.1))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:60: APPLE_ALA_CONVERGENCE_WINDOW = int(os.environ.get("APPLE_ALA_CONVERGENCE_WINDOW", 10))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:61: APPLE_ALA_MAX_STEPS = int(os.environ.get("APPLE_ALA_MAX_STEPS", 100))
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:62: APPLE_ALA_DEBUG = os.environ.get("APPLE_ALA_DEBUG", "0") == "1"
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:180: base_cfg["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:181: base_cfg["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:182: base_cfg["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:183: base_cfg["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:184: base_cfg["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:185: base_cfg["apple_ala_debug"] = APPLE_ALA_DEBUG
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:235: print("APPLE_USE_HEAD_ALA:", APPLE_USE_HEAD_ALA, "ALA_LR:", APPLE_ALA_LR, "ALA_RAND_PERCENT:", APPLE_ALA_RAND_PERCENT)
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:289: log_row["apple_ala_lr"] = APPLE_ALA_LR
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:290: log_row["apple_ala_rand_percent"] = APPLE_ALA_RAND_PERCENT
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:291: log_row["apple_ala_convergence_std"] = APPLE_ALA_CONVERGENCE_STD
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:292: log_row["apple_ala_convergence_window"] = APPLE_ALA_CONVERGENCE_WINDOW
+andrea/run_multihead/ablation_studies/run_taskexpert_apple_multi_select.py:293: log_row["apple_ala_max_steps"] = APPLE_ALA_MAX_STEPS
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:257: "apple_ala_lr": cfg.get("apple_ala_lr", None),
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:258: "apple_ala_rand_percent": cfg.get("apple_ala_rand_percent", None),
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:259: "apple_ala_convergence_std": cfg.get("apple_ala_convergence_std", None),
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:260: "apple_ala_convergence_window": cfg.get("apple_ala_convergence_window", None),
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:261: "apple_ala_max_steps": cfg.get("apple_ala_max_steps", None),
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:1630: def append_apple_ala_diag_row(
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:1733: ala_lr = float(cfg.get("apple_ala_lr", 1.0))
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:1734: ala_rand_percent = float(cfg.get("apple_ala_rand_percent", 20.0))
+andrea/helper_funcs_multihead/apple_post_ala_run_helper_multi_select.py:1735: ala_convergence_std = float(cfg.get("apple_ala_convergence_std", 0.1))
+
+Output truncated: showing 120 of 201 review-only matches.
+
+SECTION D - READ ERRORS
+
+None.

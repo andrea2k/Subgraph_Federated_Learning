@@ -1,0 +1,17 @@
+method,q,vo_mean_percent,vo_sd_percent,total_algorithmic_bytes,total_algorithmic_GiB,pareto_nondominated_within_diagnostics,dominated_by
+Task-Specialist Representatives,0.2,85.8,0.26,4400195740.0,4.098001625388861,True,
+Oracle Physical-Community Isolation,0.2,83.8,0.08,17284102400.0,16.09707474708557,False,Task-Specialist Representatives
+Oracle Hierarchical Collaboration + ALA,0.2,76.52,0.7,17285792400.0,16.09864868223667,False,Oracle Physical-Community Isolation | Task-Specialist Representatives
+Support-Simplex + PostALA,0.2,86.29,0.6,19312307200.0,17.985987663269043,True,
+Task-Specialist Representatives,0.5,83.37,1.25,4400195740.0,4.098001625388861,True,
+Oracle Physical-Community Isolation,0.5,83.07,0.82,17284102400.0,16.09707474708557,False,Task-Specialist Representatives
+Oracle Hierarchical Collaboration + ALA,0.5,76.63,0.83,17285792400.0,16.09864868223667,False,Oracle Physical-Community Isolation | Task-Specialist Representatives
+Support-Simplex + PostALA,0.5,84.03,2.46,19312307200.0,17.985987663269043,True,
+Task-Specialist Representatives,0.8,80.34,1.82,4400195740.0,4.098001625388861,True,
+Oracle Physical-Community Isolation,0.8,78.56,1.11,17284102400.0,16.09707474708557,False,Task-Specialist Representatives
+Oracle Hierarchical Collaboration + ALA,0.8,59.16,3.52,17285792400.0,16.09864868223667,False,Oracle Physical-Community Isolation | Task-Specialist Representatives
+Support-Simplex + PostALA,0.8,82.21,1.78,19312307200.0,17.985987663269043,True,
+Task-Specialist Representatives,0.95,70.52,1.47,4400195740.0,4.098001625388861,True,
+Oracle Physical-Community Isolation,0.95,66.44,0.91,17284102400.0,16.09707474708557,False,Task-Specialist Representatives
+Oracle Hierarchical Collaboration + ALA,0.95,42.35,3.43,17285792400.0,16.09864868223667,False,Oracle Physical-Community Isolation | Task-Specialist Representatives
+Support-Simplex + PostALA,0.95,71.99,3.25,19312307200.0,17.985987663269043,True,

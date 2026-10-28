@@ -1,0 +1,6 @@
+{
+  "name": "FedProx",
+  "parameters": {
+    "fedprox_mu": 0.01
+  }
+}
