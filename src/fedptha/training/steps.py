@@ -506,7 +506,7 @@ def evaluate_loader(
             "pair_acc": float(pair_acc),
             "subset_acc": float(subset_acc),
             "micro_f1": float(micro_f1),
-            "macro_f1": float(macro_pos_f1),  # backward compatibility
+            "macro_f1": float(macro_pos_f1),  # positive-class macro F1
             "macro_pos_f1": float(macro_pos_f1),
             "macro_minority_f1": float(macro_minority_f1),
             "micro_pr_auc": float(micro_pr_auc),
@@ -519,7 +519,7 @@ def evaluate_loader(
             "fn": fn_task,
             "precision": prec_task,
             "recall": rec_task,
-            "f1": positive_f1_task,  # backward compatibility
+            "f1": positive_f1_task,  # positive-class task F1
             "positive_f1": positive_f1_task,
             "minority_f1": minority_f1_task,
             "pr_auc": pr_auc_task,

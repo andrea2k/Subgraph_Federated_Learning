@@ -1,9 +1,0 @@
-setup,q,protocol,mean_macro_pr_auc,sample_sd_macro_pr_auc,mean_percent,sample_sd_percent,aggregation_rule
-five_client,0.20,VO,0.941747784615,0.002698966814,94.174778,0.269897,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-five_client,0.50,VO,0.941747784615,0.002698966814,94.174778,0.269897,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-five_client,0.80,VO,0.941747784615,0.002698966814,94.174778,0.269897,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-five_client,0.95,VO,0.941747784615,0.002698966814,94.174778,0.269897,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-twenty_client,0.20,VO,0.975995535652,0.002147940013,97.599554,0.214794,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-twenty_client,0.50,VO,0.975995535652,0.002147940013,97.599554,0.214794,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-twenty_client,0.80,VO,0.975995535652,0.002147940013,97.599554,0.214794,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"
-twenty_client,0.95,VO,0.975995535652,0.002147940013,97.599554,0.214794,"average four q-tagged values within each model seed; compute mean and sample SD across seeds 0,1,2; repeat summary at all q"

@@ -1,4 +1,4 @@
-# Python environments and build/cache artifacts
+# Environments and build artifacts
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -9,19 +9,36 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
-# Generated datasets and new runs stay local.
-/data/*
+# Benchmark tensors are included; other datasets stay local.
+/data/**
 !/data/README.md
+!/data/manifest.csv
+!/data/shared_graphs/
+!/data/shared_graphs/**/
+!/data/shared_graphs/**/train.pt
+!/data/shared_graphs/**/val.pt
+!/data/shared_graphs/**/test.pt
+!/data/planted/
+!/data/planted/**/
+!/data/planted/**/train.pt
+!/data/planted/**/val.pt
+!/data/planted/**/test.pt
+
+# Generated results and runtime files
 /results/runs/
 /results/generated/
 /results/.cache/
 /logs/
-/experiments
+/figures/*
+!/figures/source/
+!/figures/generated/
+/figures/generated/*
+!/figures/generated/*.pdf
 
-# Preserve small scientific indexes/evidence in Git, not the 19 GB raw CSV suite.
-/results/frozen/main/
-/results/frozen/additions/
-/results/frozen/cwfedavg/
+# Local experiment archive
+/results/frozen/
 
-# Historical proposal, unrelated to the final reproduction workflow.
+# Local research material
+/experiments/
 /thesis_latex/
+/docs/validation.md

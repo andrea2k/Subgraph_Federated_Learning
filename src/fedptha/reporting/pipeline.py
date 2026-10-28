@@ -35,6 +35,17 @@ def reproduce(*, start_at=None):
     for destination in (output, figures):
         if destination == frozen_root() or frozen_root() in destination.parents:
             raise ValueError("Regenerated outputs must be outside results/frozen/.")
+    if start_at in (None, "extract_results"):
+        missing = [
+            name
+            for name in ("main", "additions", "cwfedavg")
+            if not (frozen_root() / name).is_dir()
+        ]
+        if missing:
+            raise FileNotFoundError(
+                f"Frozen experiment archive is required at {frozen_root()} "
+                f"(missing: {', '.join(missing)}). See docs/reproduction.md."
+            )
     for directory in (output / "tables", output / "atlases", output / "logs", figures):
         directory.mkdir(parents=True, exist_ok=True)
     stages = list(STAGES)

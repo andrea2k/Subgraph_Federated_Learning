@@ -10,17 +10,11 @@ from fedptha.paths import absolute, generated_root
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import pandas as pd
 import torch
-
-# The final oracle runner resolves benchmark paths at import time. Force the
-# intended setup before importing its exact expansion helper, so this audit is
-# robust even when BENCHMARK_SETUP was not exported by the shell.
-os.environ.setdefault("BENCHMARK_SETUP", "twenty_client")
 
 from fedptha.config import read_config
 from fedptha.data.clients import (
@@ -138,7 +132,6 @@ def gib(value: int | float) -> float:
 
 def main() -> None:
     args = parse_args()
-    os.environ["BENCHMARK_SETUP"] = "twenty_client"
 
     bench = read_config(f"configs/benchmarks/{args.benchmark_setup}.json")
     selected_path = Path(

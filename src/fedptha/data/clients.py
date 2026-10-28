@@ -68,7 +68,7 @@ def mask_meta_from_row(row: pd.Series) -> Optional[dict]:
             if assigned_task is not None and pd.notna(assigned_task)
             else str(row["mask_task"])
         ),
-        # Backward-compatible old name.
+        # Registry field for the assigned task's positive-label share.
         "mask_fraction": (
             float(row["mask_fraction"])
             if "mask_fraction" in row and pd.notna(row["mask_fraction"])

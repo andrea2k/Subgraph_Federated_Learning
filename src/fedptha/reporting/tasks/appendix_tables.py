@@ -304,7 +304,7 @@ audit.append("Diagnostic summary cross-check: PASS")
 main_lines = [
     "% Auto-generated from audited seed-level results.",
     "% Do not edit numeric cells by hand.",
-    "% Caption and label intentionally left to the writing branch.",
+    "% Set the caption and label when including this table.",
     r"\begin{table}[t]",
     r"\centering",
     r"\small",
@@ -323,7 +323,7 @@ for method_key, display, _ in ROWS:
 main_lines += [
     r"\bottomrule",
     r"\end{tabular}",
-    r"% \caption{Supplied by writing branch.}",
+    r"% \caption{Collaboration diagnostics: AC Macro PR-AUC.}",
     r"% \label{tab:collaboration_diagnostics}",
     r"\end{table}",
     "",
@@ -476,7 +476,7 @@ if "is_exact_physical_region" in gcfl.columns:
 appendix_lines = [
     "% Auto-generated from audited GCFL+ final-cluster results.",
     "% Requires booktabs and longtable.",
-    "% Caption and label intentionally left to the writing branch.",
+    "% Set the caption and label when including this table.",
     (r"\begin{longtable}" r"{ccclp{0.58\textwidth}}"),
     r"\toprule",
     (r"$q$ & Seed & Final clusters" r" & Sizes & Memberships \\"),

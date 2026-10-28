@@ -11,7 +11,7 @@ import pandas as pd
 
 ROOT = Path(str(generated_root()))
 CANON = ROOT / "tables" / "main_protocol_results.csv"
-STEP3 = ROOT / "tables" / "protocol_summary.csv"
+SUMMARY = ROOT / "tables" / "protocol_summary.csv"
 OUT = ROOT / "tables" / "protocol_comparison.csv"
 
 SETUPS = ("five_client", "twenty_client")
@@ -201,17 +201,17 @@ print("=" * 92)
 print()
 print("READ-ONLY INPUTS")
 print(" ", CANON)
-print(" ", STEP3)
+print(" ", SUMMARY)
 print()
 print("DERIVED OUTPUT")
 print(" ", OUT)
 
-for path in (CANON, STEP3):
+for path in (CANON, SUMMARY):
     if not path.is_file():
         abort(f"missing input: {path}")
 
 canonical = pd.read_csv(CANON)
-summary = pd.read_csv(STEP3)
+summary = pd.read_csv(SUMMARY)
 
 canonical["q"] = pd.to_numeric(canonical["q"], errors="raise").round(2)
 summary["q"] = pd.to_numeric(summary["q"], errors="raise").round(2)
@@ -254,7 +254,7 @@ if missing:
     abort("canonical missing columns: " + ", ".join(missing))
 missing = sorted(required_summary - set(summary.columns))
 if missing:
-    abort("Step-3 summary missing columns: " + ", ".join(missing))
+    abort("protocol summary missing columns: " + ", ".join(missing))
 
 print()
 print("STEP A1 - GRID / REGISTRY / METRIC AUDIT")
@@ -263,10 +263,10 @@ print("-" * 92)
 if len(canonical) != 720:
     abort(f"canonical rows = {len(canonical)}, expected 720")
 if len(summary) != 240:
-    abort(f"Step-3 summary rows = {len(summary)}, expected 240")
+    abort(f"protocol summary rows = {len(summary)}, expected 240")
 
 check_registry(canonical, "canonical", require_seed=True)
-check_registry(summary, "Step-3 summary", require_seed=False)
+check_registry(summary, "protocol summary", require_seed=False)
 
 seed_key = ["setup", "method", "q", "seed", "protocol"]
 summary_key = ["setup", "method", "q", "protocol"]
@@ -274,7 +274,7 @@ summary_key = ["setup", "method", "q", "protocol"]
 if canonical.duplicated(seed_key).any():
     abort("duplicate canonical logical keys")
 if summary.duplicated(summary_key).any():
-    abort("duplicate Step-3 summary logical keys")
+    abort("duplicate protocol summary logical keys")
 
 for key, group in canonical.groupby(summary_key, sort=False):
     seeds = tuple(sorted(group["seed"].tolist()))
@@ -291,9 +291,9 @@ for metric in METRICS:
     means = pd.to_numeric(summary[f"{metric}_mean"], errors="coerce")
     sds = pd.to_numeric(summary[f"{metric}_sample_sd"], errors="coerce")
     if not np.isfinite(means).all() or not np.isfinite(sds).all():
-        abort(f"Step-3 {metric} summary contains non-finite values")
+        abort(f"protocol {metric} summary contains non-finite values")
     if ((means < 0) | (means > 1)).any() or (sds < 0).any():
-        abort(f"Step-3 {metric} summary invalid")
+        abort(f"protocol {metric} summary invalid")
 
 if set(canonical["pr_auc_definition"].astype(str)) != {
     "trapezoidal_precision_recall_curve_auc"
@@ -304,10 +304,10 @@ if set(canonical["selector_metric"].astype(str)) != {"macro_pr_auc"}:
     abort("unexpected selector metric")
 
 if not (pd.to_numeric(summary["n_model_seeds"], errors="raise") == 3).all():
-    abort("Step-3 summary contains n_model_seeds != 3")
+    abort("protocol summary contains n_model_seeds != 3")
 
 print("Canonical rows          : 720 / 720")
-print("Step-3 summary rows     : 240 / 240")
+print("protocol summary rows     : 240 / 240")
 print("Methods                 : 10 / 10")
 print("Setups                  : 2 / 2")
 print("q values                : 0.20, 0.50, 0.80, 0.95")
@@ -353,7 +353,7 @@ for metric in METRICS:
     paper_seed.loc[idx, metric] = central_rows["_pooled_value"].to_numpy()
 
 print()
-print("STEP A2 - REPRODUCE FROZEN STEP-3 SUMMARIES")
+print("STEP A2 - REPRODUCE PROTOCOL SUMMARIES")
 print("-" * 92)
 
 reproduced_rows = []
@@ -373,7 +373,7 @@ check = summary.merge(
     indicator=True,
 )
 if not (check["_merge"] == "both").all():
-    abort("canonical and Step-3 summary logical keys do not match")
+    abort("canonical and protocol summary logical keys do not match")
 
 max_mean_error = 0.0
 max_sd_error = 0.0
@@ -385,9 +385,9 @@ for metric in METRICS:
     max_sd_error = max(max_sd_error, float(sd_error.max()))
 
     if (mean_error > ATOL).any():
-        abort(f"{metric} means do not reproduce frozen Step 3")
+        abort(f"{metric} means do not reproduce frozen the protocol summary")
     if (sd_error > ATOL).any():
-        abort(f"{metric} sample SDs do not reproduce frozen Step 3")
+        abort(f"{metric} sample SDs do not reproduce frozen the protocol summary")
 
 macro_lookup = paper_seed.set_index(seed_key)["macro_pr_auc"]
 for row in summary.itertuples(index=False):
@@ -421,11 +421,11 @@ summary_central = summary[summary["method"] == "centralized"].copy()
 if not (
     pd.to_numeric(summary_central["centralized_q_pooled"], errors="raise") == 1
 ).all():
-    abort("Step-3 Centralized rows are not marked centralized_q_pooled=1")
+    abort("protocol Centralized rows are not marked centralized_q_pooled=1")
 
 expected_rule = "pool_q_within_seed_then_mean_sample_sd_across_seeds"
 if set(summary_central["aggregation_rule"].astype(str)) != {expected_rule}:
-    abort("unexpected Step-3 Global-Centralized aggregation_rule")
+    abort("unexpected protocol Global-Centralized aggregation_rule")
 
 # The raw canonical rows are q-tagged inputs. They may differ across q.
 # The paper-facing numeric values must equal the within-seed q average
@@ -453,18 +453,20 @@ for key, raw_group in raw_central.groupby(["setup", "seed", "protocol"], sort=Fa
 # The frozen summary must repeat the same mean/SD at every q within setup/protocol.
 for key, group in summary_central.groupby(["setup", "protocol"], sort=False):
     if tuple(sorted(group["q"].tolist())) != Q_VALUES:
-        abort(f"Global-Centralized bad Step-3 q grid at {key}")
+        abort(f"Global-Centralized bad protocol q grid at {key}")
     for metric in METRICS:
         if group[f"{metric}_mean"].nunique(dropna=False) != 1:
-            abort(f"Global-Centralized {metric} Step-3 mean changes across q at {key}")
+            abort(
+                f"Global-Centralized {metric} protocol mean changes across q at {key}"
+            )
         if group[f"{metric}_sample_sd"].nunique(dropna=False) != 1:
-            abort(f"Global-Centralized {metric} Step-3 SD changes across q at {key}")
+            abort(f"Global-Centralized {metric} protocol SD changes across q at {key}")
 
 print("Raw q-tagged Centralized values : allowed to differ across q")
 print("Within-seed q pooling           : CONFIRMED")
 print("Repeated paper-facing q values  : CONFIRMED")
-print("Frozen Step-3 pooling rule      : CONFIRMED")
-print("Step-3 Centralized q repeat     : CONFIRMED")
+print("Frozen protocol pooling rule      : CONFIRMED")
+print("protocol Centralized q repeat     : CONFIRMED")
 print()
 print("STEP A4 - VV / VO SAME-SELECTED-STATE AUDIT")
 print("-" * 92)
@@ -618,14 +620,14 @@ for protocol in PROTOCOLS:
         rtol=0.0,
         atol=ATOL,
     ):
-        abort(f"derived {protocol} means disagree with Step 3")
+        abort(f"derived {protocol} means disagree with the protocol summary")
     if not np.allclose(
         merged[f"{protocol}_sample_sd"],
         merged["macro_pr_auc_sample_sd"],
         rtol=0.0,
         atol=ATOL,
     ):
-        abort(f"derived {protocol} sample SDs disagree with Step 3")
+        abort(f"derived {protocol} sample SDs disagree with the protocol summary")
 
 method_order = {method: i for i, method in enumerate(METHODS)}
 analysis["_method_order"] = analysis["method"].map(method_order)

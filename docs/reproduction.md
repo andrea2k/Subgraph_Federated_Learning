@@ -1,39 +1,55 @@
-# Reproduction
+# Reproducing the experiments
 
-`results/frozen/{main,additions,cwfedavg}` contains 1,068 canonical artifacts representing 348 logical runs. The final main-comparison manifest selects 240 method/benchmark/q/seed entries. Manifests identify accepted experiments; provenance explains repaired and replaced historical runs. These remain useful scientific records.
+## Train on the thesis benchmarks
 
-Large CSVs and graph tensors are excluded from Git. Copy them from the original experiment backup when setting up another machine. There is no public artifact download URL in this repository.
+The repository includes the original **18 graph files** used by both benchmarks. After [installation](environment.md), training needs no additional data download:
 
 ```bash
-python -m fedptha reproduce
+python -m fedptha train \
+  --method fedavg --benchmark five_client \
+  --seeds 0 --q 0.95 --rounds 2 \
+  --output-dir results/runs/fedavg_example
 ```
 
-This rebuilds tables under `results/generated/` and Figures 3–6 plus appendix figures under `figures/generated/`. It reads frozen experiments, without retraining or switching to `results/runs/`. Historical method/protocol IDs are translated when presenting results. The preserved numerical reference tables are evidence; they are not inputs used to manufacture new scores.
+Omitting `--seeds`, `--q`, and `--rounds` uses seeds 0–2, all four benchmark q values, and 80 rounds. Settings are defined in `configs/training.json`, `configs/benchmarks/`, and `configs/methods/`. See [methods](methods.md) and [evaluation](evaluation.md).
 
-Use `--output-dir` and `--figures-dir` for separate outputs. An interrupted run can resume with `--start-at STAGE` using its existing intermediate files. Stage logs are in the output's `logs/` directory. The normal pipeline no longer performs automatic regression comparisons.
+Outputs follow `results/runs/<group>/<benchmark>/<method>/q_<q>/seed_<seed>/`. Fully Local adds `client_<id>/`; physical-community methods add region directories. Existing completed results are reused for the same configuration. Choose another output directory for a different configuration.
 
-## Graph data
+## Generate a separate dataset
 
 ```bash
 python -m fedptha generate-data --benchmark twenty_client
 python -m fedptha generate-data --benchmark five_client
 ```
 
-These write separate datasets under `data/generated/<benchmark>/`. Repeated requests reuse completed output with the same recipe; `--output-dir` selects another destination.
+Outputs go to `data/generated/<benchmark>/`; `--output-dir` selects another destination. Each generated dataset includes `registry.csv` and `selected_subsets.csv`. Update the corresponding benchmark JSON's `registry` and `selected_subsets` paths to train on it.
 
-The twenty-client generator reproduced the original 15 graphs and 90 tensor attributes in the validated environment.
+The twenty-client command reconstructs the planted-community graphs from their recorded recipe. The five-client command copies the supplied benchmark realization because its recorded seeds do not reconstruct the cached graph exactly. Use the included graphs when comparing with the thesis results.
 
-**Five-client limitation:** the recorded seeds do not reconstruct the cached paper graph. The five-client command therefore materializes the original graph tensors and registries. The original tensors remain the benchmark source and are retained byte-for-byte. A small decoder in `data/io.py` resolves the class path encoded inside the old files.
+## SLURM and Apptainer
 
-Generated datasets include `registry.csv` and `selected_subsets.csv`. To train on them, update the corresponding benchmark JSON's `registry` and `selected_subsets` paths. A different graph realization changes the experiment.
-
-## Cluster
-
-Submit from the repository root:
+Use an Apptainer image containing the PyTorch/PyG stack described in [environment setup](environment.md). Submit from the repository root:
 
 ```bash
 mkdir -p logs/slurm
+export FEDPTHA_CONTAINER=/absolute/path/to/pytorch-pyg.sif
 BENCHMARK_SETUP=twenty_client sbatch slurm/fedptha.slurm
 ```
 
-`FEDPTHA_PROJECT_ROOT`, `FEDPTHA_CONTAINER`, and `FEDPTHA_CONTAINER_ROOT` configure locations. `TRAIN_SEED`, `TRAIN_Q`, and `TRAIN_ROUNDS` narrow a job. `RUN_TAG` or `FEDPTHA_RUNS_ROOT` selects a run group. JSON supplies the original algorithm parameters and the job files retain the original resource requests.
+Supply your cluster's account, partition, or QoS with `sbatch --account=... --partition=... --qos=...` as required. Each method job specifies time, CPU, GPU, and memory requests; adjust them for your cluster.
+
+`TRAIN_SEED`, `TRAIN_Q`, and `TRAIN_ROUNDS` narrow a job. `RUN_TAG` chooses a run group under `results/runs/`; `FEDPTHA_RUNS_ROOT` overrides that group path. `FEDPTHA_PROJECT_ROOT` selects the checkout when submission happens elsewhere.
+
+## Rebuild tables and figures
+
+The [published AC summary](../results/paper_results.csv) and [thesis figures](../figures/generated) are included. Reporting scripts regenerate the analysis from the original experiment CSV logs under `results/frozen/`. Those logs remain local and are excluded from this repository.
+
+For a checkout with the logs available:
+
+```bash
+python -m fedptha reproduce
+```
+
+This writes tables under `results/generated/` and figures under `figures/generated/`. New training outputs in `results/runs/` remain separate. Derived analysis files are regenerated when the command is repeated.
+
+Use `--output-dir` and `--figures-dir` for separate destinations. Stage logs are in the output's `logs/` directory; `--start-at STAGE` resumes using existing intermediate outputs. Stage names are listed in `src/fedptha/reporting/pipeline.py`.

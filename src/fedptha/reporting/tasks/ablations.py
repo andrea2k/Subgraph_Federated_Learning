@@ -467,7 +467,7 @@ for path in (
 print("\nInputs:")
 print(f"  main seed source     : {MAIN_SEED_SOURCE}")
 print(f"  main frozen summary : {MAIN_FROZEN_SUMMARY}")
-print("  extra raw extractor : audit_figure5_ablations.py")
+print("  extra raw extractor : fedptha.reporting.tasks.ablations")
 print(f"  extra frozen summary: {EXTRA_FROZEN_SUMMARY}")
 
 # -----------------------------------------------------------------------------
@@ -596,7 +596,7 @@ print(f"Frozen rows         : {len(main_summary)} / 48")
 print(f"Reproduced rows     : {len(rep_main)} / 48")
 print(f"Max absolute error  : {max_main_error:.3e}")
 if max_main_error > 5e-10:
-    abort("main variants do not reproduce frozen Step-3 summary")
+    abort("main variants do not reproduce protocol summary")
 print("Main reproduction   : PASS")
 
 # -----------------------------------------------------------------------------
@@ -646,7 +646,7 @@ for setup, method, directory in targets:
                 "selector_metric": "macro_pr_auc",
                 "source_result_paths": str(path),
                 "extraction_source": (
-                    "audit_figure5_ablations.py:" "extract_seed_protocol_metrics"
+                    "fedptha.reporting.tasks.ablations:" "extract_seed_protocol_metrics"
                 ),
                 "selection_scope": np.nan,
                 "selected_round_values": np.nan,

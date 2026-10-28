@@ -244,18 +244,12 @@ def compare_macro(stored, recomputed):
 # ------------------------------------------------------------------
 
 print("=" * 72)
-print("STEP 2 - CANONICAL EXTRACTED RESULTS TABLE")
+print("Extract frozen experiment metrics")
 print("=" * 72)
 
 for required in (FREEZE, FREEZE_MD, CANON_SHA):
     if not required.is_file():
         raise SystemExit(f"ABORT: missing authoritative input: {required}")
-
-for output in (MASTER_OUT, CLIENT_OUT, AUDIT_OUT):
-    if output.exists():
-        raise SystemExit(
-            f"ABORT: output already exists and will not be overwritten: " f"{output}"
-        )
 
 freeze_rows = read_csv(FREEZE)
 
@@ -771,7 +765,7 @@ for row in master_rows:
 
 if errors:
     print("=" * 72)
-    print(f"FAIL - STEP 2 EXTRACTION NOT ACCEPTED " f"({len(errors)} issue(s))")
+    print(f"Experiment extraction failed " f"({len(errors)} issue(s))")
     print("=" * 72)
 
     for error in errors:
@@ -882,121 +876,25 @@ client_sha = sha256(CLIENT_OUT)
 freeze_sha = sha256(FREEZE)
 canonical_sha = sha256(CANON_SHA)
 
-audit_text = f"""STEP 2 - CANONICAL EXTRACTED RESULTS AUDIT
-============================================================
+audit_text = f"""Experiment extraction
 
-STATUS: PASS
+Source index: {FREEZE}
+Index SHA-256: {freeze_sha}
+Artifact manifest SHA-256: {canonical_sha}
+System protocol rows: {len(master_rows)}
+Client evaluation rows: {len(client_rows)}
+Maximum stored/recomputed client macro difference: {max_macro_diff:.12e}
+Undefined task cells: {undefined_task_cells}
 
-Authoritative input:
-  {FREEZE}
-  SHA-256: {freeze_sha}
+Metric: trapezoidal precision-recall AUC; undefined tasks remain NaN.
+Fully Local preserves independent per-client selection.
+Centralized q-tagged entries are pooled during summary generation.
 
-Canonical artifact checksum manifest:
-  {CANON_SHA}
-  SHA-256: {canonical_sha}
-
-Main registry:
-  10 methods/references
-
-Frozen logical q-indexed entries:
-  240
-
-Protocols:
-  VV, VO, OO
-
-Canonical extracted rows:
-  720 / 720
-
-Unique canonical logical keys:
-  720 / 720
-
-Client-level audit rows:
-  {len(client_rows)} / {expected_client_rows}
-
-Metric:
-  macro_pr_auc
-
-Definition:
-  trapezoidal_precision_recall_curve_auc
-
-Client macro rule:
-  arithmetic mean of defined task-level PR-AUC values
-
-Undefined task PR-AUC:
-  preserved as NaN
-  never replaced by zero
-
-Maximum stored-vs-recomputed client macro difference:
-  {max_macro_diff:.12e}
-
-Tolerance:
-  {MACRO_TOL:.12e}
-
-Fully Local:
-  per-client selected states preserved
-  no artificial single selected round created
-
-Centralized:
-  raw q-tagged entries preserved in this canonical table
-  q pooling NOT applied in Step 2
-  pooling is deferred to Step 3 paper-summary analysis
-
-Primary Figure 3 protocol:
-  VO
-
-Output:
-  {MASTER_OUT}
-  SHA-256: {master_sha}
-
-Client macro audit:
-  {CLIENT_OUT}
-  SHA-256: {client_sha}
-
-Undefined task cells in 720-row system table:
-  {undefined_task_cells}
-
-NEXT STEP:
-  Step 3 - audit the canonical extracted table and produce
-  mean +/- SAMPLE SD summaries over seeds.
-
-  Centralized must use the frozen special rule:
-    pool q within each seed,
-    then mean/sample-SD across seeds,
-    then repeat the same summary at every q.
-
-  Do not plot Figure 3 until the Step-3 VO numerical
-  summary has been inspected.
+System output: {MASTER_OUT}
+SHA-256: {master_sha}
+Client output: {CLIENT_OUT}
+SHA-256: {client_sha}
 """
-
 AUDIT_OUT.write_text(audit_text, encoding="utf-8")
-
-print("=" * 72)
-print("PASS - STEP 2 CANONICAL EXTRACTION COMPLETE")
-print("=" * 72)
-print()
-print("Canonical protocol rows : 720 / 720")
-print("Unique logical keys     : " f"{len(actual_master_keys)} / 720")
-print("Client audit rows       : " f"{len(client_rows)} / {expected_client_rows}")
-print()
-print("Max client macro diff   : " f"{max_macro_diff:.12e}")
-print("Undefined task cells    : " f"{undefined_task_cells}")
-print("NaN zero-filling        : NEVER")
-print()
-print("Fully Local             : per-client selection preserved")
-print("Centralized             : raw q-tagged entries preserved")
-print("Centralized q pooling   : NOT applied yet")
-print()
-print("Created:")
-print(" ", MASTER_OUT)
-print(" ", CLIENT_OUT)
-print(" ", AUDIT_OUT)
-print()
-print("Raw frozen suite was NOT modified.")
-print()
-print("=" * 72)
-print("NEXT STEP")
-print("=" * 72)
-print("Step 3: produce audited mean +/- sample SD summaries")
-print("from main_protocol_results.csv.")
-print("Inspect VO numbers BEFORE making Figure 3.")
-print("=" * 72)
+print(f"Extracted {len(master_rows)} protocol rows and {len(client_rows)} client rows.")
+print(f"Results: {MASTER_OUT}")

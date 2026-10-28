@@ -1,5 +1,0 @@
-method_id,historical_display_name,final_display_name
-support_simplex,Support-Simplex,FedSSR
-support_simplex_postala,Support-Simplex + PostALA,FedSSR + PostALA
-learned_simplex_postala,Learned-Simplex + PostALA,Learned-Simplex + PostALA
-support_only_postala,Support-Only + PostALA,Support-Only + PostALA

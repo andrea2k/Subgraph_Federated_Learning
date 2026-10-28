@@ -635,12 +635,7 @@ def clone_model_from_state(
 def make_task_head_model(
     cfg, x_dim, out_dim, deg_fwd_hist, deg_rev_hist, ego_dim, in_vocab, out_vocab
 ):
-    """
-    Build the task-head PNA model.
-
-    This is intentionally separate from fl_run_helper.make_model(), so the
-    stable old baselines and old APPLE implementation remain untouched.
-    """
+    """Build Multi-PNA with the configured task heads and port/ego features."""
     return PNANetReverseMP(
         in_dim=x_dim,
         out_dim=out_dim,

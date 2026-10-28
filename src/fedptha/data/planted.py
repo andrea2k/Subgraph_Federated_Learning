@@ -1103,12 +1103,6 @@ def main() -> None:
 
     print_header("FINAL SUCCESS")
     print("Data generation finished with exact local/global label invariance.")
-    print("Next sanity check command:")
-    print(f"  ls -lh {global_out_dir}")
-    print(f"  find {community_root / dataset_id} -maxdepth 2 -type f | sort | head -40")
-    if not args.no_q_clients:
-        print(f"  head -5 {q_manifest_dir / 'selected_subset.csv'}")
-        print(f"  head -5 {q_manifest_dir / 'cluster_generation_parameters.csv'}")
 
 
 if __name__ == "__main__":

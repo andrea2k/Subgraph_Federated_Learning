@@ -10,7 +10,7 @@ class NodeOutputHead(nn.Module):
     """
     Per-node task output head.
 
-    head_type="single" preserves the old shared MLP that emits all task logits.
+    head_type="single" uses one shared MLP that emits all task logits.
     head_type="multi" uses one independent binary head per label column and
     concatenates the logits back to [num_nodes, num_tasks].
     """

@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=fully_local
-#SBATCH --account=ewi-st-dis
-#SBATCH --partition=ewi-st
-#SBATCH --qos=medium
 #SBATCH --time=15:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2

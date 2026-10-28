@@ -23,4 +23,4 @@ Shared values stay at six layers, hidden dimension 64, batch size 64, Adam learn
 
 Training state means the current models, optimizer states, routing coefficients, and best validation-selected states. These are in memory. The published CSV-only workflow does not save model checkpoints.
 
-Historical raw results use `support_simplex` for FedPTHA and `support_simplex_postala` for FedPTHA + PostALA. They are not APPLE baselines. Original IDs stay unchanged in frozen files.
+Reporting translates the raw identifiers `support_simplex` and `support_simplex_postala` to FedPTHA and FedPTHA + PostALA.

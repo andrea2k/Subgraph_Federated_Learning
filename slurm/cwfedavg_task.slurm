@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=cwfedavg_task
-#SBATCH --account=ewi-st-dis
-#SBATCH --partition=ewi-st
-#SBATCH --qos=medium
 #SBATCH --time=1-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2

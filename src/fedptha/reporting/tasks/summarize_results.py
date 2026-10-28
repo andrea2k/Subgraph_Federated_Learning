@@ -18,7 +18,7 @@ FULL_OUT = OUT_DIR / "protocol_summary.csv"
 VO_MACRO_OUT = OUT_DIR / "main_ac_summary.csv"
 VO_TASK_OUT = OUT_DIR / "task_ac_summary.csv"
 AUDIT_OUT = OUT_DIR / "summary_audit.txt"
-HANDOFF_OUT = OUT_DIR / "summary_notes.txt"
+NOTES_OUT = OUT_DIR / "summary_notes.txt"
 
 SETUPS = (
     "five_client",
@@ -160,23 +160,12 @@ def pct(value):
 
 
 print("=" * 76)
-print("STEP 3 - FINAL 10-METHOD NUMERICAL SUMMARY")
+print("Summarize experiment metrics")
 print("=" * 76)
 
 if not INPUT.is_file():
-    raise SystemExit(f"ABORT: missing authoritative Step-2 input: {INPUT}")
+    raise SystemExit(f"ABORT: missing extracted result table: {INPUT}")
 
-for target in (
-    FULL_OUT,
-    VO_MACRO_OUT,
-    VO_TASK_OUT,
-    AUDIT_OUT,
-    HANDOFF_OUT,
-):
-    if target.exists():
-        raise SystemExit(
-            f"ABORT: {target} already exists; " "nothing will be overwritten."
-        )
 
 rows = read_csv(INPUT)
 
@@ -510,14 +499,14 @@ for setup in SETUPS:
 if errors:
     print()
     print("=" * 76)
-    print(f"FAIL - STEP 3 NOT ACCEPTED " f"({len(errors)} issue(s))")
+    print(f"Result summary failed " f"({len(errors)} issue(s))")
     print("=" * 76)
 
     for error in errors:
         print(" -", error)
 
     print()
-    print("No Step-3 outputs were written.")
+    print("No summary outputs were written.")
     raise SystemExit(1)
 
 
@@ -722,267 +711,37 @@ five_table = markdown_table("five_client")
 twenty_table = markdown_table("twenty_client")
 
 
-# ============================================================
-# 9. Centralized sanity values
-# ============================================================
-
-
-def get_centralized_vo(setup):
-    row = next(
-        row
-        for row in vo_macro_rows
-        if (
-            row["setup"] == setup
-            and row["method"] == "centralized"
-            and row["q"] == "0.20"
-        )
-    )
-
-    return (
-        row["macro_pr_auc_mean_percent"],
-        row["macro_pr_auc_sample_sd_percent"],
-    )
-
-
-central_5 = get_centralized_vo("five_client")
-
-central_20 = get_centralized_vo("twenty_client")
-
-
-# ============================================================
-# 10. Audit report
-# ============================================================
-
 input_sha = sha256(INPUT)
 full_sha = sha256(FULL_OUT)
 vo_macro_sha = sha256(VO_MACRO_OUT)
 vo_task_sha = sha256(VO_TASK_OUT)
 
-audit_text = f"""STEP 3 - FINAL 10-METHOD NUMERICAL AUDIT
-================================================================
+audit_text = f"""Experiment summary
 
-STATUS: PASS
+Input: {INPUT}
+Input SHA-256: {input_sha}
+Protocol summary rows: {len(summary_rows)}
+AC macro rows: {len(vo_macro_rows)}
+Metric: trapezoidal precision-recall AUC.
+Aggregation: mean and sample standard deviation across seeds 0, 1, 2.
+Centralized: average q within each seed before summarizing across seeds.
 
-Authoritative input:
-  {INPUT}
-
-Input SHA-256:
-  {input_sha}
-
-Canonical rows:
-  720 / 720
-
-Unique canonical keys:
-  720 / 720
-
-Raw seed groups:
-  240 / 240
-
-Bad seed groups:
-  0
-
-Final protocol summary rows:
-  240 / 240
-
-VO Macro summary rows:
-  80 / 80
-
-VO task summary rows:
-  400 / 400
-
-Main methods/references:
-  10
-
-Task-Weighted FedAvg:
-  ABSENT
-
-Metric:
-  true trapezoidal PR-AUC
-
-Selector:
-  macro_pr_auc
-
-Non-Centralized aggregation:
-  mean and SAMPLE SD across model seeds 0,1,2
-  independently at each q and protocol
-
-Centralized aggregation:
-  average q-tagged values within each model seed
-  then mean and SAMPLE SD across seeds 0,1,2
-  then repeat the same summary at every displayed q
-
-5C Centralized VO sanity:
-  {central_5[0]} +/- {central_5[1]} %
-
-20C Centralized VO sanity:
-  {central_20[0]} +/- {central_20[1]} %
-
-Audit warnings:
-  NONE
-
-Figure 3 primary protocol:
-  VO
-
-No Figure 3 was created.
-No empirical ranking interpretation was performed.
-
-Outputs:
-
-  {FULL_OUT}
-  SHA-256: {full_sha}
-
-  {VO_MACRO_OUT}
-  SHA-256: {vo_macro_sha}
-
-  {VO_TASK_OUT}
-  SHA-256: {vo_task_sha}
+Protocol summary: {FULL_OUT}
+SHA-256: {full_sha}
+AC macro summary: {VO_MACRO_OUT}
+SHA-256: {vo_macro_sha}
+AC task summary: {VO_TASK_OUT}
+SHA-256: {vo_task_sha}
 """
+AUDIT_OUT.write_text(audit_text, encoding="utf-8")
+notes = f"""# AC Macro PR-AUC (%)
 
-AUDIT_OUT.write_text(
-    audit_text,
-    encoding="utf-8",
-)
-
-
-# ============================================================
-# 11. Writing-branch handoff file
-# ============================================================
-
-handoff_text = f"""STEP 3 COMPLETE - FINAL 10-METHOD MAIN ANALYSIS
-
-STATUS: PASS
-
-Canonical source:
-  {INPUT}
-
-Audit:
-  720 / 720 canonical rows
-  240 / 240 seed groups
-  0 bad seed groups
-  240 / 240 final VV/VO/OO summary rows
-  80 / 80 VO Macro rows
-  400 / 400 VO task rows
-
-Task-Weighted FedAvg:
-  ABSENT from final thesis-facing analysis.
-
-Metric:
-  true trapezoidal PR-AUC
-
-Seed reporting:
-  mean +/- SAMPLE SD across model seeds 0,1,2
-
-Centralized:
-  special q-within-seed pooling rule applied and verified.
-
-5C Centralized VO:
-  {central_5[0]} +/- {central_5[1]} %
-
-20C Centralized VO:
-  {central_20[0]} +/- {central_20[1]} %
-
-Audit warnings:
-  NONE
-
-Figure 3 protocol:
-  VO
-
-No Figure 3 has been created.
-No empirical interpretation has been performed yet.
-
-============================================================
-VO MACRO TRUE PR-AUC - MEAN +/- SAMPLE SD (%)
-============================================================
+Mean ± sample standard deviation over seeds 0, 1, 2.
+Global-Centralized pools q within each seed before summarizing across seeds.
 
 {five_table}
 
 {twenty_table}
-
-============================================================
-AUTHORITATIVE STEP-3 OUTPUTS
-============================================================
-
-Full VV/VO/OO summary:
-  {FULL_OUT}
-
-VO Macro summary:
-  {VO_MACRO_OUT}
-
-VO task-level summary:
-  {VO_TASK_OUT}
-
-Numerical audit:
-  {AUDIT_OUT}
-
-============================================================
-REQUEST TO WRITING BRANCH
-============================================================
-
-Please inspect the final 10-method VO results from first principles.
-
-In particular inspect:
-
-1. performance changes with q;
-2. differences between five-client and twenty-client settings;
-3. Support-Simplex and Support-Simplex + PostALA rankings;
-4. what cwFedAvg-Task tells us about the contribution;
-5. APPLE / FedALA / GCFL+ behavior;
-6. seed variability;
-7. Cycle-2 through Cycle-6 drivers using:
-   {VO_TASK_OUT}
-8. the clearest Figure-3 design without an unreadable 10-line plot.
-
-Do not use the old 11-method / 792-row analysis.
-Do not use old AP-era summaries.
-
-Figure 3 primary protocol remains VO.
-
-Please return the numerical interpretation and Figure-3 recommendation
-before the action branch creates the figure.
 """
-
-HANDOFF_OUT.write_text(
-    handoff_text,
-    encoding="utf-8",
-)
-
-
-# ============================================================
-# 12. Terminal PASS + copy-paste handoff
-# ============================================================
-
-print()
-print("=" * 76)
-print("PASS - STEP 3 FINAL 10-METHOD SUMMARY COMPLETE")
-print("=" * 76)
-print()
-print("Canonical rows audited : 720 / 720")
-print("Raw seed groups        : 240 / 240")
-print("Bad seed groups        : 0")
-print("Final summary rows     : 240 / 240")
-print("VO Macro rows          : 80 / 80")
-print("VO task rows           : 400 / 400")
-print()
-print("Task-Weighted FedAvg   : ABSENT")
-print("Centralized pooling    : verified")
-print("5C Centralized VO      : " + central_5[0] + " +/- " + central_5[1] + " %")
-print("20C Centralized VO     : " + central_20[0] + " +/- " + central_20[1] + " %")
-print()
-print("Audit warnings         : NONE")
-print()
-print("Created:")
-print(" ", FULL_OUT)
-print(" ", VO_MACRO_OUT)
-print(" ", VO_TASK_OUT)
-print(" ", AUDIT_OUT)
-print(" ", HANDOFF_OUT)
-print()
-print("=" * 76)
-print("COPY EVERYTHING BELOW TO THE WRITING BRANCH")
-print("=" * 76)
-print()
-print(handoff_text)
-print()
-print("=" * 76)
-print("END WRITING-BRANCH HANDOFF")
-print("=" * 76)
+NOTES_OUT.write_text(notes, encoding="utf-8")
+print(f"Wrote protocol, AC macro, and task summaries to {OUT_DIR}.")

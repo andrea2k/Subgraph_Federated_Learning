@@ -11,7 +11,6 @@ from fedptha.paths import absolute, generated_root
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
@@ -240,20 +239,8 @@ def communication_rows(
         )
 
     if setup == "twenty_client":
-        # Oracle Physical Isolation and Oracle Hierarchical Collaboration are
-        # intentionally NOT calculated from the whole-20C B_state here.
-        #
-        # Their final implementations rebuild one model context per physical
-        # region, and those region-local contexts can have slightly different
-        # non-head state payloads. Exact communication for those two diagnostics
-        # is therefore audited separately by:
-        #
-        #     audit_oracle_regional_payload_v2.py
-        #
-        # Using the whole-20C B_state for every region gives only an
-        # equal-region approximation and must not be reported as the exact
-        # audited thesis value.
-
+        # Physical and hierarchical costs use region-specific model contexts;
+        # regional_payload.py computes their exact parameter counts.
         rep_round = 2 * J * B_state + J * J * H_param
         add(
             "Task-Specialist Representatives",
@@ -273,7 +260,6 @@ def communication_rows(
 
 def main() -> None:
     args = parse_args()
-    os.environ["BENCHMARK_SETUP"] = args.benchmark_setup
 
     bench = read_config(f"configs/benchmarks/{args.benchmark_setup}.json")
     selected_path = Path(

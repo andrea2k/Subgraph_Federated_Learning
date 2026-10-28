@@ -1,92 +1,81 @@
 # FedPTHA: Personalized Task Head Aggregation for Federated Graph Learning
 
-TU Delft MSc thesis research on synthetic directed multigraphs. Each node has five binary labels: membership in directed cycles of lengths 2–6. The benchmarks have **5 or 20 clients**, four heterogeneity levels (`q = 0.20, 0.50, 0.80, 0.95`), and three training seeds (`0, 1, 2`). FedPTHA shares a Multi-PNA backbone and personalizes the task heads; PostALA adds optional head refinement.
+Code and benchmarks for an MSc thesis at TU Delft. FedPTHA shares a Multi-PNA backbone across clients and personalizes the prediction heads for individual graph tasks. PostALA provides optional local head refinement.
+
+Each node has five binary labels indicating membership in directed cycles of lengths 2–6. Experiments use **5 or 20 clients**, **q ∈ {0.20, 0.50, 0.80, 0.95}**, and **seeds 0, 1, 2**. The original benchmark graphs are included in this repository.
 
 ## Setup
 
-Use the existing local environment:
+Use Python **3.10–3.12**. These commands install the reference PyTorch 2.6.0 stack on Linux with CPU support:
 
 ```bash
-source thesis/bin/activate
+git clone https://github.com/andrea2k/Subgraph_Federated_Learning.git
+cd Subgraph_Federated_Learning
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install pyg_lib torch_scatter torch_sparse --only-binary=:all: \
+  -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+python -m pip install -e ".[report]"
 ```
 
-For a new environment, use Python 3.10+ with compatible PyTorch/PyG sampling extensions and install the package:
+See [environment setup](docs/environment.md) for macOS and CUDA installations. Sampling extensions must match the installed PyTorch/CUDA version; the commands above follow the official [PyTorch](https://pytorch.org/get-started/previous-versions/#v260) and [PyG](https://pytorch-geometric.readthedocs.io/en/stable/install/installation.html) installation instructions.
 
-```bash
-pip install -e ".[report,sampling]"
-```
+## Run an experiment
 
-See [environment notes](docs/environment.md). Graph tensors and large frozen result CSVs are local artifacts excluded from Git; another machine needs a copy of them.
-
-## Train
-
-Run FedPTHA with the original parameters: **80 rounds, all three seeds, all four q values**.
+Start with one seed, one q value, and two rounds:
 
 ```bash
 python -m fedptha train \
-  --method fedptha \
-  --benchmark twenty_client \
+  --method fedptha --benchmark five_client \
+  --seeds 0 --q 0.95 --rounds 2 \
+  --output-dir results/runs/example
+```
+
+This uses the full model architecture. To run the complete FedPTHA twenty-client experiment with **80 rounds, all three seeds, and all four q values**:
+
+```bash
+python -m fedptha train \
+  --method fedptha --benchmark twenty_client \
   --output-dir results/runs/paper
 ```
 
-Choose one method, seed, and q:
+Change `--method` to run a baseline or ablation. [Methods and configuration](docs/methods.md) lists the available methods. Use `--dry-run` to inspect settings or `--device cpu` / `--device cuda` to select a device.
 
-```bash
-python -m fedptha train \
-  --method fedavg \
-  --benchmark five_client \
-  --seeds 0 --q 0.95 --rounds 80 \
-  --output-dir results/runs/fedavg_trial
-```
-
-For a short run, use `--rounds 2` and a separate output directory. It uses the normal model architecture. `--dry-run` displays configuration without training; `--device cpu` or `--device cuda` selects the device. [Methods and parameters](docs/methods.md) lists the supported methods; `python -m fedptha train --help` lists the options.
-
-Results have predictable paths:
+Training writes:
 
 ```text
-results/runs/paper/twenty_client/fedptha/
-    configuration.json
-    q_0.95/seed_0/
-        metrics.csv
-        routing.csv
+results/runs/example/five_client/fedptha/
+├── configuration.json
+└── q_0.95/seed_0/
+    ├── metrics.csv
+    └── routing.csv
 ```
 
-Methods add `refinement.csv`, `clusters.csv`, `representatives.csv`, or `task_distributions.csv` where needed. Fully Local uses `client_<id>/` subdirectories. Oracle physical-community runs use `region_<id>/`; hierarchical runs also retain their intra-region outputs and `hierarchy_weights.csv`. `metrics.csv` includes per-round results and selected AA/AC/CC evaluations. Best model states stay in memory; no model checkpoints are written.
+`metrics.csv` contains training and evaluation results, including the selected **AA, AC, and CC** evaluations. Methods add refinement, cluster, or representative CSVs where applicable. Model selection uses validation Macro PR-AUC; selected states remain in memory. Use a separate output directory when changing configuration.
 
-Existing completed metric files are reused for the same configuration. A changed configuration requires a separate output directory. New training cannot write into `results/frozen/`.
+## Thesis results and figures
 
-## Data and thesis analysis
+The published AC summary is [results/paper_results.csv](results/paper_results.csv). Figures 1–2 are in [figures/source](figures/source); Figures 3–6 and appendix figures are in [figures/generated](figures/generated).
 
-```bash
-python -m fedptha generate-data --benchmark twenty_client
-python -m fedptha reproduce
-```
+The reporting code rebuilds tables and figures from saved experiment logs. These logs are local and excluded from Git; see [analysis and reproduction](docs/reproduction.md#rebuild-tables-and-figures) for the command and expected inputs.
 
-`generate-data` writes a separate dataset under `data/generated/`. The five-client command copies the original cached graph realization; its recorded seed recipe cannot reconstruct that realization. See [reproduction](docs/reproduction.md) for details.
+## Project structure
 
-`reproduce` reads **frozen experiments**, rebuilds thesis tables under `results/generated/`, and generates Figures 3–6 and appendix figures under `figures/generated/`. It does not train models or automatically use new runs. Figures 1–2 are in [figures/source](figures/source).
-
-Submit a cluster job from the repository root:
-
-```bash
-mkdir -p logs/slurm
-BENCHMARK_SETUP=twenty_client sbatch slurm/fedptha.slurm
-```
-
-## Layout
-
-| Location | Purpose |
+| Location | Contents |
 |---|---|
-| `src/fedptha/data`, `models` | Graph generation/loading, client masks, and Multi-PNA |
-| `src/fedptha/algorithms` | Method-specific updates and routing |
-| `src/fedptha/training` | Shared loaders, training/evaluation steps, in-memory state selection, and run dispatch |
-| `src/fedptha/evaluation`, `reporting` | Metrics, result extraction, statistics, and thesis figures |
-| `configs` | JSON training settings, benchmark registries, and method parameters |
-| `slurm` | Method jobs and shared container launcher |
-| `data` | Original and separately generated graph tensors |
-| `results/frozen` | Original experiment CSVs, scientific manifests, and provenance |
-| `results/runs`, `results/generated` | New training results and rebuilt analysis |
-| `figures/source`, `figures/generated` | Source diagrams and generated thesis/appendix figures |
-| `experiments/scratch` | Independent exploration outside the thesis pipeline |
+| `src/fedptha/data/` | Graph generation, loading, and client label masks |
+| `src/fedptha/models/` | Multi-PNA backbone and task heads |
+| `src/fedptha/algorithms/` | FedPTHA, baselines, routing, and ablations |
+| `src/fedptha/training/` | Experiment execution, training steps, and in-memory model selection |
+| `src/fedptha/evaluation/` | Metrics and AA/AC/CC definitions |
+| `src/fedptha/reporting/` | Result extraction, statistics, tables, and figures |
+| `configs/` | Shared training settings, benchmark registries, and method parameters |
+| `data/` | Original benchmark graph tensors and their checksum manifest |
+| `results/` | Published summary and local training/analysis outputs |
+| `figures/` | Thesis and appendix figures |
+| `slurm/` | Cluster job scripts |
+| `docs/` | Setup, code structure, methods, evaluation, and reproduction guides |
 
-Read [evaluation rules](docs/evaluation.md) and the [completed validation record](docs/validation.md). Migration tests, source archives, and automatic comparison tools have been removed after validation.
+See [code structure](docs/structure.md) for the role of each module and [evaluation rules](docs/evaluation.md) for the metric definitions. Cluster setup and graph regeneration are covered in [reproduction](docs/reproduction.md).

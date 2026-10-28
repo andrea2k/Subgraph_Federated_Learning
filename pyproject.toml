@@ -7,7 +7,7 @@ name = "fedptha"
 version = "0.1.0"
 description = "Personalized Task Head Aggregation for Federated Graph Learning"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "numpy==1.26.4",
     "pandas==2.2.3",
